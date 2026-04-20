@@ -1,0 +1,176 @@
+'use client'
+import { useState, useRef } from 'react'
+import Link from 'next/link'
+import Image from 'next/image'
+import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
+import { ShoppingBag, Heart, Eye, Star, Zap } from 'lucide-react'
+import { type Product, formatPrice } from '@/lib/products'
+import { useCartStore } from '@/lib/store'
+import toast from 'react-hot-toast'
+
+interface ProductCardProps {
+  product: Product
+  index?: number
+}
+
+export default function ProductCard({ product, index = 0 }: ProductCardProps) {
+  const [wished, setWished] = useState(false)
+  const [imageIdx, setImageIdx] = useState(0)
+  const cardRef = useRef<HTMLDivElement>(null)
+
+  const { addItem, openCart, currency } = useCartStore()
+
+  // 3D tilt
+  const x = useMotionValue(0)
+  const y = useMotionValue(0)
+  const rotateX = useSpring(useTransform(y, [-0.5, 0.5], [8, -8]), { stiffness: 300, damping: 30 })
+  const rotateY = useSpring(useTransform(x, [-0.5, 0.5], [-8, 8]), { stiffness: 300, damping: 30 })
+
+  function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+    if (!cardRef.current) return
+    const rect = cardRef.current.getBoundingClientRect()
+    x.set((e.clientX - rect.left) / rect.width - 0.5)
+    y.set((e.clientY - rect.top) / rect.height - 0.5)
+  }
+  function handleMouseLeave() { x.set(0); y.set(0) }
+
+  function handleAddToCart(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    addItem(product)
+    toast.success(`✨ ${product.name.split(' ').slice(0, 3).join(' ')}... added!`, { duration: 2500 })
+  }
+
+  const badge = product.badge
+  const discountPct = product.originalPrice
+    ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
+    : null
+
+  return (
+    <motion.div
+      ref={cardRef}
+      initial={{ opacity: 0, y: 40 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-50px' }}
+      transition={{ duration: 0.5, delay: index * 0.08, ease: [0.22, 1, 0.36, 1] }}
+      style={{ rotateX, rotateY, transformStyle: 'preserve-3d' }}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      className="perspective-1000"
+    >
+      <div className="card-product group cursor-pointer relative">
+        <Link href={`/product/${product.slug}`}>
+          {/* Image */}
+          <div className="relative overflow-hidden aspect-[3/4] bg-brand-black-3">
+            <Image
+              src={product.images[imageIdx] || product.images[0]}
+              alt={product.name}
+              fill
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+              className="object-cover transition-transform duration-700 group-hover:scale-110"
+            />
+
+            {/* Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-brand-black via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-300" />
+
+            {/* Glow ring on hover */}
+            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+              style={{ boxShadow: 'inset 0 0 40px rgba(212,175,55,0.15)' }} />
+
+            {/* Badge */}
+            {badge && (
+              <span className={
+                badge === 'sale' ? 'badge-sale' :
+                badge === 'new'  ? 'badge-new'  :
+                'badge-hot'
+              }>
+                {badge === 'sale' ? `–${discountPct}%` :
+                 badge === 'new'  ? 'New' :
+                 badge === 'bestseller' ? '⭐ Best' : '🔥 Hot'}
+              </span>
+            )}
+
+            {/* Wishlist */}
+            <motion.button
+              onClick={e => { e.preventDefault(); setWished(!wished) }}
+              whileTap={{ scale: 0.8 }}
+              className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full glass-dark flex items-center justify-center transition-all duration-300"
+            >
+              <Heart
+                size={16}
+                className={`transition-colors duration-300 ${wished ? 'fill-red-500 text-red-500' : 'text-brand-cream/70'}`}
+              />
+            </motion.button>
+
+            {/* Second image on hover (if exists) */}
+            {product.images.length > 1 && (
+              <button
+                className="absolute bottom-3 right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                onMouseEnter={() => setImageIdx(1)}
+                onMouseLeave={() => setImageIdx(0)}
+                onClick={e => e.preventDefault()}
+              >
+                <Eye size={16} className="text-brand-cream/70" />
+              </button>
+            )}
+
+            {/* Quick add – slides up on hover */}
+            <motion.div
+              initial={{ y: 60, opacity: 0 }}
+              whileHover={{ y: 0, opacity: 1 }}
+              className="absolute bottom-0 left-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+            >
+              <button
+                onClick={handleAddToCart}
+                className="w-full py-2.5 bg-gold-gradient text-brand-black text-xs font-body font-bold tracking-widest uppercase flex items-center justify-center gap-2 hover:shadow-gold transition-shadow duration-300"
+              >
+                <ShoppingBag size={14} />
+                Add to Cart
+              </button>
+            </motion.div>
+          </div>
+
+          {/* Info */}
+          <div className="p-4">
+            <p className="font-body text-[10px] tracking-widest text-brand-gold-2/70 uppercase mb-1">{product.categoryLabel}</p>
+            <h3 className="font-heading text-sm font-semibold text-brand-cream mb-2 line-clamp-2 group-hover:text-brand-gold-3 transition-colors duration-300">
+              {product.name}
+            </h3>
+
+            {/* Rating */}
+            <div className="flex items-center gap-2 mb-3">
+              <div className="flex">
+                {Array(5).fill(null).map((_, i) => (
+                  <Star
+                    key={i}
+                    size={10}
+                    className={i < Math.floor(product.rating) ? 'fill-brand-gold-2 text-brand-gold-2' : 'text-brand-gold/20'}
+                  />
+                ))}
+              </div>
+              <span className="font-body text-[10px] text-brand-cream/50">({product.reviews})</span>
+            </div>
+
+            {/* Price */}
+            <div className="flex items-center gap-2">
+              <span className="font-heading text-base font-bold text-brand-gold-3">
+                {formatPrice(product.price, currency)}
+              </span>
+              {product.originalPrice && (
+                <span className="font-body text-xs text-brand-cream/40 line-through">
+                  {formatPrice(product.originalPrice, currency)}
+                </span>
+              )}
+            </div>
+
+            {/* Ships from */}
+            <p className="font-body text-[10px] text-brand-cream/30 mt-2 flex items-center gap-1">
+              <Zap size={9} className="text-brand-gold/40" />
+              {product.deliveryDays} · {product.shipsFrom}
+            </p>
+          </div>
+        </Link>
+      </div>
+    </motion.div>
+  )
+}
