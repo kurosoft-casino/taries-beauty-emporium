@@ -1,8 +1,8 @@
 'use client'
 import Link from 'next/link'
-import Image from 'next/image'
 import { motion } from 'framer-motion'
 import { MapPin, Phone, Mail, Heart } from 'lucide-react'
+import { logoSrc } from '@/lib/assets'
 
 const SocialIcons = {
   Instagram: () => (
@@ -43,6 +43,8 @@ const footerLinks = {
     { label: 'Size Guide',        href: '/size-guide' },
     { label: 'Wig Care Guide',    href: '/wig-care' },
     { label: 'Contact Us',        href: '/contact' },
+    { label: '🏪 Sell with Us',   href: '/vendors' },
+    { label: '🔐 Admin',          href: '/admin' },
   ],
 }
 
@@ -67,7 +69,8 @@ export default function Footer() {
           <div className="lg:col-span-1">
             <Link href="/" className="flex items-center gap-3 mb-6">
               <div className="relative w-14 h-14 rounded-full overflow-hidden border border-brand-gold/40">
-                <Image src="/images/logo.jpg" alt="Taries Beauty" fill className="object-contain" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={logoSrc} alt="Taries Beauty" className="w-full h-full object-contain" />
               </div>
               <div>
                 <p className="font-heading text-base font-bold gold-text leading-tight">TARIES BEAUTY</p>

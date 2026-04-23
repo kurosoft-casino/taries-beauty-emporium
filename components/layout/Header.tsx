@@ -1,11 +1,12 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ShoppingBag, Search, Menu, X, ChevronDown } from 'lucide-react'
 import { useCartStore } from '@/lib/store'
 import { formatPrice } from '@/lib/products'
+import { logoSrc } from '@/lib/assets'
+import { useLang } from '@/lib/lang'
 
 const navLinks = [
   {
@@ -22,6 +23,15 @@ const navLinks = [
   },
   { label: 'Custom Wigs', href: '/custom-wigs' },
   { label: 'About',       href: '/about' },
+  {
+    label: 'Vendors',
+    href: '/vendors',
+    submenu: [
+      { label: '🏪 Become a Vendor',       href: '/vendors' },
+      { label: '📋 Apply / Register',      href: '/vendors/register' },
+      { label: '📊 Vendor Dashboard',      href: '/vendors/dashboard' },
+    ],
+  },
 ]
 
 export default function Header() {
@@ -33,6 +43,7 @@ export default function Header() {
   const searchRef = useRef<HTMLInputElement>(null)
 
   const { getTotalItems, openCart, currency, setCurrency } = useCartStore()
+  const { lang, setLang } = useLang()
   const totalItems = getTotalItems()
 
   useEffect(() => {
@@ -74,11 +85,11 @@ export default function Header() {
               transition={{ type: 'spring', stiffness: 300 }}
               className="relative w-12 h-12"
             >
-              <Image
-                src="/images/logo.jpg"
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={logoSrc}
                 alt="Taries Beauty Emporium"
-                fill
-                className="object-contain rounded-full"
+                className="w-full h-full object-contain rounded-full"
               />
             </motion.div>
             <div className="hidden sm:block">
@@ -151,13 +162,23 @@ export default function Header() {
             {/* Currency Selector */}
             <select
               value={currency}
-              onChange={e => setCurrency(e.target.value as 'NGN' | 'GHS' | 'USD')}
+              onChange={e => setCurrency(e.target.value as 'NGN' | 'GHS' | 'USD' | 'CNY')}
               className="hidden md:block bg-transparent border border-brand-gold/30 text-brand-gold-2 text-xs font-body px-2 py-1 rounded cursor-pointer focus:outline-none focus:border-brand-gold"
             >
               <option value="NGN" className="bg-brand-black-2">₦ NGN</option>
               <option value="GHS" className="bg-brand-black-2">GH₵ GHS</option>
               <option value="USD" className="bg-brand-black-2">$ USD</option>
+              <option value="CNY" className="bg-brand-black-2">¥ CNY</option>
             </select>
+
+            {/* Language Toggle */}
+            <button
+              onClick={() => setLang(lang === 'EN' ? 'ZH' : 'EN')}
+              className="hidden md:flex items-center gap-1 bg-transparent border border-brand-gold/30 text-brand-gold-2 text-xs font-body px-2 py-1 rounded cursor-pointer hover:border-brand-gold transition-colors"
+              title={lang === 'EN' ? '切换到中文' : 'Switch to English'}
+            >
+              {lang === 'EN' ? '🇨🇳 中文' : '🇬🇧 EN'}
+            </button>
 
             {/* Search */}
             <button
@@ -280,7 +301,7 @@ export default function Header() {
             <div className="mt-8">
               <p className="font-body text-xs tracking-widest text-brand-gold-2 uppercase mb-3">Currency</p>
               <div className="flex gap-2">
-                {(['NGN', 'GHS', 'USD'] as const).map(c => (
+                {(['NGN', 'GHS', 'USD', 'CNY'] as const).map(c => (
                   <button
                     key={c}
                     onClick={() => setCurrency(c)}
@@ -291,6 +312,26 @@ export default function Header() {
                     }`}
                   >
                     {c}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Mobile Language Toggle */}
+            <div className="mt-4">
+              <p className="font-body text-xs tracking-widest text-brand-gold-2 uppercase mb-3">Language / 语言</p>
+              <div className="flex gap-2">
+                {(['EN', 'ZH'] as const).map(l => (
+                  <button
+                    key={l}
+                    onClick={() => setLang(l)}
+                    className={`flex-1 py-2 text-xs font-body font-semibold rounded border transition-all ${
+                      lang === l
+                        ? 'bg-gold-gradient text-brand-black border-transparent'
+                        : 'border-brand-gold/30 text-brand-gold-2 hover:border-brand-gold'
+                    }`}
+                  >
+                    {l === 'EN' ? '🇬🇧 English' : '🇨🇳 中文'}
                   </button>
                 ))}
               </div>

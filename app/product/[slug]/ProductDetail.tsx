@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { notFound } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -8,6 +8,7 @@ import { Star, ShoppingBag, Heart, Share2, Truck, Shield, ChevronLeft, ChevronRi
 import { products, formatPrice } from '@/lib/products'
 import ProductCard from '@/components/shop/ProductCard'
 import { useCartStore } from '@/lib/store'
+import { incrementView } from '@/lib/views'
 import toast from 'react-hot-toast'
 
 export default function ProductDetail({ slug }: { slug: string }) {
@@ -23,6 +24,9 @@ export default function ProductDetail({ slug }: { slug: string }) {
 
   const { addItem, openCart, currency } = useCartStore()
   const related = products.filter(p => p.category === product.category && p.id !== product.id).slice(0, 4)
+
+  // Track product view on mount
+  useEffect(() => { incrementView(slug) }, [slug])
 
   function handleAddToCart() {
     for (let i = 0; i < qty; i++) addItem(product, selectedVars)

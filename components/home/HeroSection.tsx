@@ -1,9 +1,9 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion'
 import { ArrowRight, Star, ChevronDown } from 'lucide-react'
+import { logoSrc } from '@/lib/assets'
 
 // Star particle component
 function Stars() {
@@ -69,12 +69,11 @@ export default function HeroSection() {
         >
           <div className="relative w-28 h-28 md:w-36 md:h-36">
             <div className="absolute inset-0 rounded-full animate-pulse-gold" />
-            <Image
-              src="/images/logo.jpg"
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={logoSrc}
               alt="Taries Beauty Emporium"
-              fill
-              className="object-contain rounded-full drop-shadow-[0_0_40px_rgba(212,175,55,0.6)]"
-              priority
+              className="w-full h-full object-contain rounded-full drop-shadow-[0_0_40px_rgba(212,175,55,0.6)]"
             />
           </div>
         </motion.div>

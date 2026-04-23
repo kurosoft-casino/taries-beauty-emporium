@@ -128,7 +128,7 @@ export default function ContactPage() {
                 <p className="font-body text-sm text-brand-cream/60 mb-6">
                   Your message has been opened in WhatsApp. We will respond as soon as possible.
                 </p>
-                <button onClick={() => setSent(false)} className="btn-gold-outline text-sm">
+                <button onClick={() => setSent(false)} className="btn-outline-gold text-sm">
                   Send Another Message
                 </button>
               </div>
@@ -213,7 +213,7 @@ export default function ContactPage() {
             <div className="mt-8 p-6 bg-brand-gold/5 border border-brand-gold/20 rounded text-center">
               <p className="font-heading text-brand-cream mb-2">Still have questions?</p>
               <p className="font-body text-sm text-brand-cream/60 mb-4">Our team typically replies within 1 hour on WhatsApp.</p>
-              <Link href="/custom-wigs" className="btn-gold-outline text-sm">
+              <Link href="/custom-wigs" className="btn-outline-gold text-sm">
                 Order a Custom Wig →
               </Link>
             </div>

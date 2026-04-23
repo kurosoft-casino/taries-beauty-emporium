@@ -28,12 +28,13 @@ export interface Product {
   tags: string[]
 }
 
-export const EXCHANGE_RATES = { NGN: 1620, GHS: 16.2, USD: 1 }
+export const EXCHANGE_RATES = { NGN: 1620, GHS: 16.2, USD: 1, CNY: 7.25 }
 
-export function formatPrice(usd: number, currency: 'NGN' | 'GHS' | 'USD'): string {
+export function formatPrice(usd: number, currency: 'NGN' | 'GHS' | 'USD' | 'CNY'): string {
   const amount = usd * EXCHANGE_RATES[currency]
   if (currency === 'NGN') return `₦${amount.toLocaleString('en-NG', { maximumFractionDigits: 0 })}`
   if (currency === 'GHS') return `GH₵${amount.toLocaleString('en-GH', { maximumFractionDigits: 0 })}`
+  if (currency === 'CNY') return `¥${amount.toFixed(2)}`
   return `$${amount.toFixed(2)}`
 }
 

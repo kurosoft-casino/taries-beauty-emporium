@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Playfair_Display, Poppins, Cormorant_Garamond } from 'next/font/google'
 import './globals.css'
 import { CartProvider } from '@/components/layout/CartProvider'
+import { LangProvider } from '@/lib/lang'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import CartDrawer from '@/components/layout/CartDrawer'
@@ -56,6 +57,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${playfair.variable} ${poppins.variable} ${cormorant.variable}`}>
       <body className="bg-brand-black font-body text-brand-cream antialiased">
+        <LangProvider>
         <CartProvider>
           <Header />
           <CartDrawer />
@@ -74,6 +76,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             }}
           />
         </CartProvider>
+        </LangProvider>
       </body>
     </html>
   )

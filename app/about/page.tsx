@@ -1,5 +1,5 @@
 'use client'
-import Image from 'next/image'
+import { logoSrc } from '@/lib/assets'
 import Link from 'next/link'
 import { Heart, Globe, Award, Users } from 'lucide-react'
 
@@ -12,7 +12,8 @@ export default function AboutPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-20 text-center">
           <div className="flex justify-center mb-8">
             <div className="relative w-28 h-28 rounded-full overflow-hidden border-2 border-brand-gold/40 shadow-gold-xl">
-              <Image src="/images/logo.jpg" alt="Taries Beauty Emporium" fill className="object-contain" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={logoSrc} alt="Taries Beauty Emporium" className="w-full h-full object-contain" />
             </div>
           </div>
           <p className="section-label mb-4">✦ Our Story ✦</p>
@@ -41,7 +42,8 @@ export default function AboutPage() {
           </div>
           <div className="relative">
             <div className="aspect-square bg-brand-black-2 border border-brand-gold/20 flex items-center justify-center p-8">
-              <Image src="/images/logo.jpg" alt="Brand" width={280} height={280} className="object-contain drop-shadow-[0_0_40px_rgba(212,175,55,0.3)]" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={logoSrc} alt="Brand" className="w-full h-full max-w-[280px] object-contain drop-shadow-[0_0_40px_rgba(212,175,55,0.3)]" />
             </div>
             <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-gold-gradient" />
           </div>

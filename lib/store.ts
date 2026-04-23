@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Product } from './products'
 
-export type Currency = 'NGN' | 'GHS' | 'USD'
+export type Currency = 'NGN' | 'GHS' | 'USD' | 'CNY'
 
 export interface CartItem {
   product: Product

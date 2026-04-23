@@ -2,9 +2,10 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Check, ShoppingBag, CreditCard, Smartphone, Building2, ChevronRight } from 'lucide-react'
+import { Check, ShoppingBag, CreditCard, Smartphone, Building2, ChevronRight, FileText } from 'lucide-react'
 import { useCartStore } from '@/lib/store'
 import { formatPrice } from '@/lib/products'
+import { saveOrder } from '@/lib/orders'
 
 const steps = ['Cart', 'Details', 'Payment', 'Confirm']
 const countries = ['Nigeria', 'Ghana']
@@ -64,6 +65,32 @@ export default function CheckoutPage() {
   }
 
   function handlePlaceOrder() {
+    saveOrder({
+      orderId: orderNum,
+      date: new Date().toISOString(),
+      status: 'pending',
+      paymentStatus: form.payMethod === 'transfer' ? 'pending' : 'paid',
+      paymentMethod: form.payMethod,
+      currency,
+      items,
+      subtotalUSD: total,
+      shippingUSD: shipping,
+      grandTotalUSD: grandTotal,
+      customer: {
+        firstName: form.firstName,
+        lastName: form.lastName,
+        email: form.email,
+        phone: form.phone,
+      },
+      shipping: {
+        address: form.address,
+        city: form.city,
+        state: form.state,
+        country: form.country,
+        postalCode: form.postalCode,
+      },
+      notes: form.notes,
+    })
     setOrdered(true)
     clearCart()
   }
@@ -90,7 +117,9 @@ export default function CheckoutPage() {
               <p className="font-body text-sm text-brand-cream/60">💰 Total paid: <span className="text-brand-gold-3 font-bold">{formatPrice(grandTotal, currency)}</span></p>
             </div>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Link href="/" className="btn-gold">Back to Home</Link>
+              <Link href={`/invoice?orderId=${orderNum}`} className="btn-gold flex items-center gap-2 justify-center">
+                <FileText size={16} /> View Invoice
+              </Link>
               <Link href="/shop" className="btn-outline-gold">Continue Shopping</Link>
             </div>
           </motion.div>
