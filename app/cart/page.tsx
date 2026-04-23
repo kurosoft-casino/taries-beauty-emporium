@@ -87,7 +87,7 @@ export default function CartPage() {
     <div className="min-h-screen bg-brand-black pt-28 pb-20">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <div className="mb-8">
-          <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="font-display text-4xl font-bold text-brand-cream">
+          <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="font-display text-3xl sm:text-4xl font-bold text-brand-cream">
             Your <span className="gold-text">Cart</span>
           </motion.h1>
           <p className="font-body text-brand-cream/50 mt-1">{items.reduce((s, i) => s + i.quantity, 0)} items</p>
@@ -104,7 +104,7 @@ export default function CartPage() {
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20, height: 0, marginBottom: 0 }}
-                  className="flex gap-5 p-5 bg-brand-black-2 border border-brand-gold/10 hover:border-brand-gold/25 transition-colors"
+                  className="flex gap-3 sm:gap-5 p-3 sm:p-5 bg-brand-black-2 border border-brand-gold/10 hover:border-brand-gold/25 transition-colors"
                 >
                   <div className="relative w-24 h-28 shrink-0 overflow-hidden">
                     <Image src={item.product.images[0]} alt={item.product.name} fill className="object-cover" sizes="96px" />

@@ -96,7 +96,7 @@ function ShopContent() {
           <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="section-label">
             ✦ Explore Everything ✦
           </motion.p>
-          <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="font-display text-4xl md:text-5xl font-bold text-brand-cream">
+          <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="font-display text-3xl sm:text-4xl md:text-5xl font-bold text-brand-cream">
             Our <span className="gold-text">Collection</span>
           </motion.h1>
           <p className="font-body text-brand-cream/50 mt-2">
@@ -132,7 +132,7 @@ function ShopContent() {
         {/* Toolbar */}
         <div className="flex items-center gap-3 mb-6 flex-wrap">
           {/* Search */}
-          <div className="flex items-center gap-2 bg-brand-black-2 border border-brand-gold/20 px-3 py-2 flex-1 min-w-[200px] max-w-xs">
+          <div className="flex items-center gap-2 bg-brand-black-2 border border-brand-gold/20 px-3 py-2 flex-1 min-w-0">
             <Search size={14} className="text-brand-gold-2 shrink-0" />
             <input
               type="text"
@@ -239,7 +239,7 @@ function ShopContent() {
                   transition={{ delay: i * 0.04 }}
                   className="flex gap-5 bg-brand-black-2 border border-brand-gold/10 hover:border-brand-gold/30 transition-colors p-4"
                 >
-                  <Link href={`/product/${product.slug}`} className="relative w-48 h-48 shrink-0 overflow-hidden">
+                  <Link href={`/product/${product.slug}`} className="relative w-24 h-24 sm:w-48 sm:h-48 shrink-0 overflow-hidden">
                     <Image
                       src={product.images[0]}
                       alt={product.name}
@@ -300,21 +300,21 @@ function ShopContent() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 mt-12">
+          <div className="flex items-center justify-center gap-2 mt-12 overflow-x-auto pb-2">
             <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="flex items-center gap-1 px-4 py-2 border border-brand-gold/20 text-brand-cream/60 text-sm font-body hover:border-brand-gold hover:text-brand-cream transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              className="flex items-center gap-1 px-3 py-2 border border-brand-gold/20 text-brand-cream/60 text-sm font-body hover:border-brand-gold hover:text-brand-cream transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
             >
-              <ChevronLeft size={14} /> Previous
+              <ChevronLeft size={14} /> <span className="hidden sm:inline">Previous</span>
             </button>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 overflow-x-auto">
               {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
                 <button
                   key={page}
                   onClick={() => setCurrentPage(page)}
-                  className={`w-9 h-9 flex items-center justify-center text-sm font-body font-semibold border transition-all ${
+                  className={`w-9 h-9 shrink-0 flex items-center justify-center text-sm font-body font-semibold border transition-all ${
                     currentPage === page
                       ? 'bg-gold-gradient text-brand-black border-transparent'
                       : 'border-brand-gold/20 text-brand-cream/60 hover:border-brand-gold hover:text-brand-cream'
@@ -328,9 +328,9 @@ function ShopContent() {
             <button
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
-              className="flex items-center gap-1 px-4 py-2 border border-brand-gold/20 text-brand-cream/60 text-sm font-body hover:border-brand-gold hover:text-brand-cream transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              className="flex items-center gap-1 px-3 py-2 border border-brand-gold/20 text-brand-cream/60 text-sm font-body hover:border-brand-gold hover:text-brand-cream transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
             >
-              Next <ChevronRight size={14} />
+              <span className="hidden sm:inline">Next</span> <ChevronRight size={14} />
             </button>
           </div>
         )}

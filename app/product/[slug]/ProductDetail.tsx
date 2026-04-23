@@ -106,7 +106,7 @@ export default function ProductDetail({ slug }: { slug: string }) {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-20">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-12 mb-12 sm:mb-20">
           {/* Image gallery */}
           <div className="space-y-4">
             <div className="relative aspect-square overflow-hidden bg-brand-black-2 group">
@@ -156,12 +156,12 @@ export default function ProductDetail({ slug }: { slug: string }) {
             </div>
 
             {product.images.length > 1 && (
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-2">
                 {product.images.map((img, i) => (
                   <button
                     key={i}
                     onClick={() => setActiveImg(i)}
-                    className={`relative w-20 h-20 overflow-hidden border-2 transition-all duration-200 ${
+                    className={`relative w-16 h-16 sm:w-20 sm:h-20 overflow-hidden border-2 transition-all duration-200 ${
                       activeImg === i ? 'border-brand-gold-2' : 'border-brand-gold/20 hover:border-brand-gold/50'
                     }`}
                   >
@@ -190,7 +190,7 @@ export default function ProductDetail({ slug }: { slug: string }) {
               </div>
 
               <div className="flex items-baseline gap-3 mb-6">
-                <span className="font-display text-4xl font-bold gold-text">{formatPrice(product.price, currency)}</span>
+                <span className="font-display text-2xl sm:text-4xl font-bold gold-text">{formatPrice(product.price, currency)}</span>
                 {product.originalPrice && (
                   <span className="font-body text-lg text-brand-cream/30 line-through">{formatPrice(product.originalPrice, currency)}</span>
                 )}
@@ -340,18 +340,20 @@ export default function ProductDetail({ slug }: { slug: string }) {
 
         {/* Tabs */}
         <div className="border border-brand-gold/20 mb-16">
-          <div className="flex border-b border-brand-gold/20">
-            {(['details', 'shipping', 'reviews'] as const).map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-6 py-4 font-body text-sm font-semibold tracking-wider uppercase capitalize transition-all duration-200 ${
-                  activeTab === tab ? 'bg-gold-gradient text-brand-black' : 'text-brand-cream/60 hover:text-brand-cream'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
+          <div className="overflow-x-auto">
+            <div className="flex border-b border-brand-gold/20 min-w-max">
+              {(['details', 'shipping', 'reviews'] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-6 py-4 font-body text-sm font-semibold tracking-wider uppercase capitalize transition-all duration-200 ${
+                    activeTab === tab ? 'bg-gold-gradient text-brand-black' : 'text-brand-cream/60 hover:text-brand-cream'
+                  }`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="p-6 md:p-8">
             {activeTab === 'details' && (

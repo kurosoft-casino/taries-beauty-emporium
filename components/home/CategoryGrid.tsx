@@ -7,7 +7,7 @@ import { categories } from '@/lib/products'
 
 export default function CategoryGrid() {
   return (
-    <section className="py-24 bg-brand-black relative overflow-hidden">
+    <section className="py-16 sm:py-24 bg-brand-black relative overflow-hidden">
       {/* Background decoration */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-0 left-0 right-0 h-px bg-gold-gradient-h opacity-40" />
@@ -16,7 +16,7 @@ export default function CategoryGrid() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         {/* Header */}
-        <div className="text-center mb-16">
+        <div className="text-center mb-8 sm:mb-16">
           <motion.p
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}

@@ -19,7 +19,7 @@ export default function Testimonials() {
   ]
 
   return (
-    <section className="py-24 bg-brand-black relative overflow-hidden">
+    <section className="py-16 sm:py-24 bg-brand-black relative overflow-hidden">
       <div className="orb orb-gold w-80 h-80 top-10 left-10 opacity-10 pointer-events-none" />
       <div className="orb orb-amber w-60 h-60 bottom-10 right-10 opacity-10 pointer-events-none" />
       <div className="absolute top-0 left-0 right-0 h-px bg-gold-gradient opacity-30" />
@@ -29,7 +29,7 @@ export default function Testimonials() {
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-14"
+          className="text-center mb-8 sm:mb-14"
         >
           <p className="section-label">✦ Real Queens, Real Reviews ✦</p>
           <h2 className="section-title text-brand-cream">
@@ -101,7 +101,7 @@ export default function Testimonials() {
           viewport={{ once: true }}
           className="mt-12 text-center"
         >
-          <div className="inline-flex flex-col items-center gap-2 px-8 py-5 bg-brand-black-2 border border-brand-gold/20">
+          <div className="inline-flex flex-col items-center gap-2 px-4 sm:px-8 py-4 sm:py-5 bg-brand-black-2 border border-brand-gold/20">
             <div className="flex gap-1">
               {Array(5).fill(null).map((_, i) => (
                 <Star key={i} size={20} className="fill-brand-gold-2 text-brand-gold-2" />

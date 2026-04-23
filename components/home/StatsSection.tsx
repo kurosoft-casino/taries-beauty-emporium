@@ -31,7 +31,7 @@ function CountUp({ target, decimal = 0, duration = 2000 }: { target: number; dec
 
 export default function StatsSection() {
   return (
-    <section className="py-20 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #111111 50%, #0A0A0A 100%)' }}>
+    <section className="py-12 sm:py-20 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #111111 50%, #0A0A0A 100%)' }}>
       {/* Gold divider lines */}
       <div className="absolute top-0 left-0 right-0 h-px bg-gold-gradient opacity-50" />
       <div className="absolute bottom-0 left-0 right-0 h-px bg-gold-gradient opacity-50" />
@@ -46,7 +46,7 @@ export default function StatsSection() {
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-14"
+          className="text-center mb-8 sm:mb-14"
         >
           <p className="section-label">✦ By The Numbers ✦</p>
           <h2 className="section-title text-brand-cream">
@@ -71,7 +71,7 @@ export default function StatsSection() {
               >
                 {stat.icon}
               </motion.div>
-              <div className="font-display text-4xl md:text-5xl font-bold gold-text-animate mb-2">
+              <div className="font-display text-3xl sm:text-4xl md:text-5xl font-bold gold-text-animate mb-2">
                 {stat.prefix}
                 <CountUp target={stat.value} decimal={stat.decimal} />
                 {stat.suffix}

@@ -161,7 +161,7 @@ export default function CheckoutPage() {
               {step === 1 && (
                 <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
                   <h2 className="font-heading text-2xl text-brand-cream mb-6">Delivery Details</h2>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {[['firstName', 'First Name'], ['lastName', 'Last Name']].map(([k, label]) => (
                       <div key={k}>
                         <label className="font-body text-xs tracking-widest text-brand-gold-2 uppercase block mb-2">{label}</label>
@@ -190,7 +190,7 @@ export default function CheckoutPage() {
                       {countries.map(c => <option key={c} value={c} className="bg-brand-black-2">{c}</option>)}
                     </select>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="font-body text-xs tracking-widest text-brand-gold-2 uppercase block mb-2">
                         {form.country === 'Nigeria' ? 'State' : 'Region'}
@@ -272,9 +272,7 @@ export default function CheckoutPage() {
                           className={`w-full bg-brand-black-2 border ${errors.cardName ? 'border-red-500' : 'border-brand-gold/20'} text-brand-cream font-body text-sm px-4 py-3 focus:outline-none focus:border-brand-gold-2`} />
                         {errors.cardName && <p className="text-red-400 text-xs mt-1">{errors.cardName}</p>}
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="font-body text-xs tracking-widest text-brand-gold-2 uppercase block mb-2">Expiry (MM/YY)</label>
+                      <div className="grid grid-cols-2 sm:grid-cols-2 gap-4">
                           <input value={form.cardExpiry} onChange={e => { let v = e.target.value.replace(/\D/g, ''); if (v.length > 2) v = v.slice(0, 2) + '/' + v.slice(2, 4); update('cardExpiry', v) }} maxLength={5} placeholder="MM/YY"
                             className={`w-full bg-brand-black-2 border ${errors.cardExpiry ? 'border-red-500' : 'border-brand-gold/20'} text-brand-cream font-body text-sm px-4 py-3 focus:outline-none focus:border-brand-gold-2`} />
                           {errors.cardExpiry && <p className="text-red-400 text-xs mt-1">{errors.cardExpiry}</p>}

@@ -392,7 +392,7 @@ export default function Header() {
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'tween', duration: 0.3 }}
-            className="fixed inset-y-0 right-0 z-40 w-80 glass-dark flex flex-col pt-24 px-6 pb-8 overflow-y-auto"
+            className="fixed inset-y-0 right-0 z-40 w-[min(320px,_calc(100vw-40px))] glass-dark flex flex-col pt-24 px-6 pb-8 overflow-y-auto"
           >
             <div className="flex flex-col gap-2">
               {navLinks.map((link, i) => (

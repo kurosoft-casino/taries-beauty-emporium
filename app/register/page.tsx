@@ -133,7 +133,7 @@ export default function RegisterPage() {
             </div>
           ))}
         </div>
-        <div className="flex justify-center gap-16 mb-8">
+        <div className="flex justify-center gap-4 sm:gap-16 mb-8">
           {['Personal Info', 'Password', 'Avatar'].map((label, i) => (
             <span key={label} className={`font-body text-[10px] uppercase tracking-widest transition-colors ${
               i + 1 === step ? 'text-brand-gold' : 'text-brand-cream/30'

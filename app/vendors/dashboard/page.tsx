@@ -3,9 +3,17 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Package, BarChart2, MessageCircle, Settings, LogOut, Plus, X, Eye,
-  Send, Store, CheckCircle2, AlertCircle, Save, ShoppingBag, DollarSign,
+  Send, Store, CheckCircle2, AlertCircle, Save, ShoppingBag, DollarSign, Pencil,
 } from 'lucide-react'
 import { getViews } from '@/lib/views'
+import ProductForm, { emptyFormData, type ProductFormData } from '@/components/ui/ProductForm'
+import {
+  addVendorProduct,
+  updateVendorProduct,
+  deleteVendorProduct,
+  getVendorProducts,
+  type VendorProduct,
+} from '@/lib/productStore'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface VendorSession {
@@ -19,17 +27,6 @@ interface VendorSession {
   status:       'pending' | 'approved' | 'rejected'
   feeStatus:    'unpaid' | 'paid'
   whatsapp?:    string
-}
-
-interface VendorProduct {
-  id:          string
-  name:        string
-  category:    string
-  price:       number
-  description: string
-  whatsapp:    string
-  addedAt:     string
-  active:      boolean
 }
 
 interface Message {
@@ -190,87 +187,114 @@ function LoginGate({ onLogin }: { onLogin: (v: VendorSession) => void }) {
   )
 }
 
-// ── Add Product Modal ─────────────────────────────────────────────────────────
-function AddProductModal({
-  email, onClose, onAdd,
+// ── Product Panel (slide-in) ──────────────────────────────────────────────────
+function ProductPanel({
+  vendor,
+  editing,
+  onClose,
+  onSave,
 }: {
-  email:   string
-  onClose: () => void
-  onAdd:   (p: VendorProduct) => void
+  vendor:   VendorSession
+  editing?: VendorProduct | null
+  onClose:  () => void
+  onSave:   (p: VendorProduct) => void
 }) {
-  const [form, setForm] = useState({
-    name: '', category: '', price: '', description: '', whatsapp: '',
-  })
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  const initialData: Partial<ProductFormData> = editing
+    ? {
+        name:          editing.name,
+        category:      editing.category,
+        price:         String(editing.price),
+        originalPrice: editing.originalPrice ? String(editing.originalPrice) : '',
+        description:   editing.description,
+        shortDesc:     editing.shortDesc ?? '',
+        images:        editing.images ?? [],
+        video:         editing.video ?? '',
+        inStock:       editing.inStock ?? true,
+        stockCount:    editing.stockCount ? String(editing.stockCount) : '',
+        badge:         editing.badge ?? '',
+        whatsapp:      editing.whatsapp,
+        features:      editing.features ?? [],
+        variants:      (editing.variants ?? []).map(v => ({
+          label:   v.label,
+          options: v.options.join(', '),
+        })),
+      }
+    : { whatsapp: vendor.whatsapp ?? vendor.phone }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    const err: Record<string, string> = {}
-    if (!form.name.trim()) err.name = 'Required'
-    if (!form.category)    err.category = 'Required'
-    if (!form.price || isNaN(+form.price) || +form.price <= 0) err.price = 'Valid price required'
-    if (!form.description.trim()) err.description = 'Required'
-    setErrors(err)
-    if (Object.keys(err).length > 0) return
+  function handleSubmit(data: ProductFormData) {
+    const variants = data.variants
+      .filter(v => v.label.trim())
+      .map(v => ({
+        label:   v.label,
+        options: v.options.split(',').map(s => s.trim()).filter(Boolean),
+      }))
 
-    const product: VendorProduct = {
-      id:          'vp-' + Date.now(),
-      name:        form.name,
-      category:    form.category,
-      price:       parseFloat(form.price),
-      description: form.description,
-      whatsapp:    form.whatsapp,
-      addedAt:     new Date().toISOString(),
-      active:      true,
+    if (editing) {
+      updateVendorProduct(vendor.email, editing.id, {
+        name:          data.name,
+        category:      data.category,
+        price:         parseFloat(data.price),
+        originalPrice: data.originalPrice ? parseFloat(data.originalPrice) : undefined,
+        description:   data.description,
+        shortDesc:     data.shortDesc,
+        images:        data.images,
+        video:         data.video,
+        inStock:       data.inStock,
+        stockCount:    data.stockCount ? parseInt(data.stockCount) : undefined,
+        badge:         data.badge as VendorProduct['badge'],
+        whatsapp:      data.whatsapp,
+        features:      data.features,
+        variants,
+        active:        editing.active,
+      })
+      const all = getVendorProducts(vendor.email)
+      onSave(all.find(p => p.id === editing.id) ?? editing)
+    } else {
+      const newProduct = addVendorProduct(vendor.email, {
+        name:          data.name,
+        category:      data.category,
+        price:         parseFloat(data.price),
+        originalPrice: data.originalPrice ? parseFloat(data.originalPrice) : undefined,
+        description:   data.description,
+        shortDesc:     data.shortDesc,
+        images:        data.images,
+        video:         data.video,
+        inStock:       data.inStock,
+        stockCount:    data.stockCount ? parseInt(data.stockCount) : undefined,
+        badge:         data.badge as VendorProduct['badge'],
+        whatsapp:      data.whatsapp,
+        features:      data.features,
+        variants,
+        active:        true,
+      })
+      onSave(newProduct)
     }
-    try {
-      const key      = `taries-vendor-${email}-products`
-      const raw      = localStorage.getItem(key)
-      const existing: VendorProduct[] = raw ? JSON.parse(raw) : []
-      existing.push(product)
-      localStorage.setItem(key, JSON.stringify(existing))
-    } catch {}
-    onAdd(product)
     onClose()
   }
 
-  function field(
-    label: string,
-    key: keyof typeof form,
-    props?: React.InputHTMLAttributes<HTMLInputElement>,
-  ) {
-    return (
-      <div>
-        <label className="text-brand-cream/50 text-xs uppercase tracking-wider block mb-1">
-          {label}
-        </label>
-        <input
-          value={form[key]}
-          onChange={e => { setForm(f => ({ ...f, [key]: e.target.value })); if (errors[key]) setErrors(er => { const n = { ...er }; delete n[key]; return n }) }}
-          {...props}
-          className={`w-full bg-brand-black-3 border rounded-xl px-4 py-2.5 text-brand-cream text-sm placeholder:text-brand-cream/20 focus:outline-none transition-colors ${errors[key] ? 'border-red-500' : 'border-brand-gold/20 focus:border-brand-gold/50'}`}
-        />
-        {errors[key] && <p className="text-red-400 text-xs mt-1">{errors[key]}</p>}
-      </div>
-    )
-  }
-
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-      onClick={e => e.target === e.currentTarget && onClose()}
-    >
+    <>
+      {/* Overlay */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.94, y: 16 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.94, y: 16 }}
-        className="bg-brand-black-2 border border-brand-gold/30 rounded-2xl p-6 w-full max-w-md shadow-gold-xl"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+        onClick={onClose}
+      />
+
+      {/* Panel — right drawer on desktop, bottom drawer on mobile */}
+      <motion.div
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        className="fixed right-0 top-0 bottom-0 w-full sm:w-[520px] lg:w-[580px] z-50 flex flex-col bg-brand-black-2 border-l border-brand-gold/20 shadow-gold-xl"
       >
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-brand-cream font-display font-semibold">Add New Product</h3>
+        <div className="sticky top-0 bg-brand-black-2 border-b border-brand-gold/20 px-5 py-4 flex items-center justify-between flex-shrink-0">
+          <h3 className="text-brand-cream font-display font-semibold">
+            {editing ? 'Edit Product' : 'Add New Product'}
+          </h3>
           <button
             onClick={onClose}
             className="text-brand-cream/35 hover:text-brand-cream transition-colors"
@@ -278,59 +302,16 @@ function AddProductModal({
             <X className="w-5 h-5" />
           </button>
         </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {field('Product Name', 'name', { placeholder: 'e.g. Brazilian Wig 16 inch' })}
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-brand-cream/50 text-xs uppercase tracking-wider block mb-1">
-                Category
-              </label>
-              <select
-                value={form.category}
-                onChange={e => { setForm(f => ({ ...f, category: e.target.value })); if (errors.category) setErrors(er => { const n = { ...er }; delete n.category; return n }) }}
-                className={`w-full bg-brand-black-3 border rounded-xl px-3 py-2.5 text-brand-cream text-sm focus:outline-none transition-colors ${errors.category ? 'border-red-500' : 'border-brand-gold/20'}`}
-              >
-                <option value="">Select</option>
-                {PRODUCT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-              {errors.category && <p className="text-red-400 text-xs mt-1">{errors.category}</p>}
-            </div>
-            {field('Price (USD)', 'price', { type: 'number', min: '0', step: '0.01', placeholder: '0.00' })}
-          </div>
-
-          <div>
-            <label className="text-brand-cream/50 text-xs uppercase tracking-wider block mb-1">
-              Description
-            </label>
-            <textarea
-              value={form.description}
-              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-              rows={3}
-              placeholder="Describe your product…"
-              className={`w-full bg-brand-black-3 border rounded-xl px-4 py-2.5 text-brand-cream text-sm placeholder:text-brand-cream/20 focus:outline-none transition-colors resize-none ${errors.description ? 'border-red-500' : 'border-brand-gold/20 focus:border-brand-gold/50'}`}
-            />
-            {errors.description && <p className="text-red-400 text-xs mt-1">{errors.description}</p>}
-          </div>
-
-          {field('WhatsApp for Inquiries', 'whatsapp', { type: 'tel', placeholder: '+234 800 000 0000' })}
-
-          <div className="flex gap-3 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2.5 border border-brand-gold/20 rounded-xl text-brand-cream/50 text-sm hover:border-brand-gold/40 hover:text-brand-cream/70 transition-all"
-            >
-              Cancel
-            </button>
-            <button type="submit" className="flex-1 btn-gold !py-2.5">
-              Add Product
-            </button>
-          </div>
-        </form>
+        <div className="flex-1 overflow-y-auto p-5">
+          <ProductForm
+            initial={initialData}
+            onSubmit={handleSubmit}
+            onCancel={onClose}
+            submitLabel={editing ? 'Save Changes' : 'List Product'}
+          />
+        </div>
       </motion.div>
-    </motion.div>
+    </>
   )
 }
 
@@ -340,7 +321,8 @@ export default function VendorDashboardPage() {
   const [tab,             setTab]             = useState<'products' | 'analytics' | 'messages' | 'settings'>('products')
   const [products,        setProducts]        = useState<VendorProduct[]>([])
   const [views,           setViews]           = useState<Record<string, number>>({})
-  const [showAddModal,    setShowAddModal]    = useState(false)
+  const [showPanel,       setShowPanel]       = useState<'add' | 'edit' | null>(null)
+  const [editingProduct,  setEditingProduct]  = useState<VendorProduct | null>(null)
   const [messages,        setMessages]        = useState<Message[]>(DEMO_MESSAGES)
   const [activeConvoIdx,  setActiveConvoIdx]  = useState(0)
   const [replyText,       setReplyText]       = useState('')
@@ -370,10 +352,7 @@ export default function VendorDashboardPage() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function loadData(v: VendorSession) {
-    try {
-      const raw = localStorage.getItem(`taries-vendor-${v.email}-products`)
-      setProducts(raw ? JSON.parse(raw) : [])
-    } catch { setProducts([]) }
+    setProducts(getVendorProducts(v.email))
 
     try {
       const raw = localStorage.getItem(`taries-vendor-${v.email}-messages`)
@@ -420,16 +399,16 @@ export default function VendorDashboardPage() {
 
   function toggleProductActive(id: string) {
     if (!vendor) return
-    const updated = products.map(p => p.id === id ? { ...p, active: !p.active } : p)
-    setProducts(updated)
-    try { localStorage.setItem(`taries-vendor-${vendor.email}-products`, JSON.stringify(updated)) } catch {}
+    const p = products.find(p => p.id === id)
+    if (!p) return
+    updateVendorProduct(vendor.email, id, { active: !p.active })
+    setProducts(getVendorProducts(vendor.email))
   }
 
   function deleteProduct(id: string) {
     if (!vendor) return
-    const updated = products.filter(p => p.id !== id)
-    setProducts(updated)
-    try { localStorage.setItem(`taries-vendor-${vendor.email}-products`, JSON.stringify(updated)) } catch {}
+    deleteVendorProduct(vendor.email, id)
+    setProducts(getVendorProducts(vendor.email))
   }
 
   function handleSaveSettings() {
@@ -627,7 +606,7 @@ export default function VendorDashboardPage() {
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-brand-cream font-display font-semibold">My Products</h2>
                   <button
-                    onClick={() => setShowAddModal(true)}
+                    onClick={() => { setEditingProduct(null); setShowPanel('add') }}
                     className="btn-gold flex items-center gap-1.5 !px-5 !py-2 !text-xs"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add Product
@@ -647,7 +626,7 @@ export default function VendorDashboardPage() {
                     <table className="w-full text-sm min-w-[560px]">
                       <thead>
                         <tr className="border-b border-brand-gold/20">
-                          {['Product', 'Category', 'Price', 'Views', 'Status', 'Actions'].map(h => (
+                          {['', 'Product', 'Category', 'Price', 'Views', 'Status', 'Actions'].map(h => (
                             <th key={h} className="text-left py-2.5 px-3 text-brand-gold/55 text-xs uppercase tracking-wider">
                               {h}
                             </th>
@@ -658,11 +637,22 @@ export default function VendorDashboardPage() {
                         {products.map(p => {
                           const slug = p.name.toLowerCase().replace(/\s+/g, '-')
                           const viewCount = views[slug] ?? (views[p.id] ?? 0)
+                          const thumb = p.images?.[0]
                           return (
                             <tr
                               key={p.id}
                               className="border-b border-brand-gold/10 hover:bg-brand-gold/5 transition-colors"
                             >
+                              <td className="py-3 px-3">
+                                {thumb ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={thumb} alt="" className="w-10 h-10 rounded-lg object-cover border border-brand-gold/15 flex-shrink-0" />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-lg bg-brand-black-3 border border-brand-gold/15 flex items-center justify-center flex-shrink-0">
+                                    <Package className="w-4 h-4 text-brand-gold/25" />
+                                  </div>
+                                )}
+                              </td>
                               <td className="py-3 px-3 text-brand-cream font-medium text-sm max-w-[140px] truncate">{p.name}</td>
                               <td className="py-3 px-3 text-brand-cream/55 text-xs">{p.category}</td>
                               <td className="py-3 px-3 text-brand-gold font-semibold text-sm">${p.price.toFixed(2)}</td>
@@ -685,13 +675,22 @@ export default function VendorDashboardPage() {
                                 </button>
                               </td>
                               <td className="py-3 px-3">
-                                <button
-                                  onClick={() => deleteProduct(p.id)}
-                                  className="text-red-400/60 hover:text-red-400 transition-colors"
-                                  title="Delete product"
-                                >
-                                  <X className="w-4 h-4" />
-                                </button>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => { setEditingProduct(p); setShowPanel('edit') }}
+                                    className="text-brand-gold/50 hover:text-brand-gold transition-colors"
+                                    title="Edit product"
+                                  >
+                                    <Pencil className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => deleteProduct(p.id)}
+                                    className="text-red-400/60 hover:text-red-400 transition-colors"
+                                    title="Delete product"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           )
@@ -1014,13 +1013,18 @@ export default function VendorDashboardPage() {
         </AnimatePresence>
       </div>
 
-      {/* ── Add Product Modal ── */}
+      {/* ── Product Panel ── */}
       <AnimatePresence>
-        {showAddModal && (
-          <AddProductModal
-            email={vendor.email}
-            onClose={() => setShowAddModal(false)}
-            onAdd={p => setProducts(prev => [...prev, p])}
+        {showPanel !== null && vendor && (
+          <ProductPanel
+            vendor={vendor}
+            editing={showPanel === 'edit' ? editingProduct : null}
+            onClose={() => { setShowPanel(null); setEditingProduct(null) }}
+            onSave={saved => {
+              setProducts(getVendorProducts(vendor.email))
+              setShowPanel(null)
+              setEditingProduct(null)
+            }}
           />
         )}
       </AnimatePresence>

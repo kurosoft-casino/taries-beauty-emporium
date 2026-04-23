@@ -5,14 +5,14 @@ import { Plane, Clock, MapPin, Package } from 'lucide-react'
 
 export default function ShippingBanner() {
   return (
-    <section className="py-20 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0A0500 0%, #1A0E00 50%, #0A0500 100%)' }}>
+    <section className="py-12 sm:py-20 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0A0500 0%, #1A0E00 50%, #0A0500 100%)' }}>
       {/* Gold glow */}
       <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, rgba(212,175,55,0.08) 0%, transparent 70%)' }} />
       <div className="absolute top-0 left-0 right-0 h-px bg-gold-gradient opacity-60" />
       <div className="absolute bottom-0 left-0 right-0 h-px bg-gold-gradient opacity-60" />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
-        <div className="text-center mb-12">
+        <div className="text-center mb-8 sm:mb-12">
           <motion.p
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -95,7 +95,7 @@ export default function ShippingBanner() {
         </div>
 
         <div className="text-center">
-          <Link href="/shop" className="btn-gold inline-flex items-center gap-2 text-base px-12 py-4">
+          <Link href="/shop" className="btn-gold inline-flex items-center gap-2 text-base px-6 sm:px-12 py-4">
             Shop & Ship Now ✈️
           </Link>
         </div>

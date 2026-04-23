@@ -23,11 +23,11 @@ export default function FeaturedProducts({
   const featured = products.filter(filter).slice(0, limit)
 
   return (
-    <section className="py-24 bg-brand-black-2 relative overflow-hidden">
+    <section className="py-16 sm:py-24 bg-brand-black-2 relative overflow-hidden">
       <div className="orb orb-gold w-96 h-96 top-0 right-0 opacity-10 pointer-events-none" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-12">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8 sm:mb-12">
           <div>
             <motion.p
               initial={{ opacity: 0, y: 20 }}

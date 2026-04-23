@@ -37,7 +37,7 @@ const features = [
 
 export default function WhyUs() {
   return (
-    <section className="py-24 bg-brand-black-2 relative overflow-hidden">
+    <section className="py-16 sm:py-24 bg-brand-black-2 relative overflow-hidden">
       <div className="absolute top-0 left-0 right-0 h-px bg-gold-gradient opacity-40" />
       <div className="orb orb-gold w-80 h-80 bottom-0 left-0 opacity-10 pointer-events-none" />
 
@@ -46,7 +46,7 @@ export default function WhyUs() {
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-14"
+          className="text-center mb-8 sm:mb-14"
         >
           <p className="section-label">✦ The Taries Difference ✦</p>
           <h2 className="section-title text-brand-cream">
@@ -63,7 +63,7 @@ export default function WhyUs() {
               viewport={{ once: true, margin: '-40px' }}
               transition={{ delay: i * 0.1, duration: 0.5 }}
               whileHover={{ y: -4 }}
-              className="gold-border-rounded p-7 bg-brand-black group transition-all duration-300 hover:bg-brand-black-3"
+              className="gold-border-rounded p-5 sm:p-7 bg-brand-black group transition-all duration-300 hover:bg-brand-black-3"
             >
               <div className="w-12 h-12 rounded-full bg-gold-gradient flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300">
                 <feat.icon size={20} className="text-brand-black" />
