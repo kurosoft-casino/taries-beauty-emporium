@@ -35,7 +35,7 @@ export default function FirstTimeBuyerBanner() {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 120, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 280, damping: 28 }}
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[90] w-[calc(100%-2rem)] max-w-md"
+          className="fixed bottom-4 left-3 right-3 z-[90] sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-[calc(100%-2rem)] sm:max-w-md"
         >
           <div className="relative bg-brand-black-2 border border-brand-gold/50 shadow-gold-xl p-5">
             {/* gold top bar */}
