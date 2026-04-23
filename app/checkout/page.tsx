@@ -272,7 +272,9 @@ export default function CheckoutPage() {
                           className={`w-full bg-brand-black-2 border ${errors.cardName ? 'border-red-500' : 'border-brand-gold/20'} text-brand-cream font-body text-sm px-4 py-3 focus:outline-none focus:border-brand-gold-2`} />
                         {errors.cardName && <p className="text-red-400 text-xs mt-1">{errors.cardName}</p>}
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="font-body text-xs tracking-widest text-brand-gold-2 uppercase block mb-2">Expiry (MM/YY)</label>
                           <input value={form.cardExpiry} onChange={e => { let v = e.target.value.replace(/\D/g, ''); if (v.length > 2) v = v.slice(0, 2) + '/' + v.slice(2, 4); update('cardExpiry', v) }} maxLength={5} placeholder="MM/YY"
                             className={`w-full bg-brand-black-2 border ${errors.cardExpiry ? 'border-red-500' : 'border-brand-gold/20'} text-brand-cream font-body text-sm px-4 py-3 focus:outline-none focus:border-brand-gold-2`} />
                           {errors.cardExpiry && <p className="text-red-400 text-xs mt-1">{errors.cardExpiry}</p>}

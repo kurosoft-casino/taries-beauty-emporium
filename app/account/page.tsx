@@ -276,7 +276,7 @@ export default function AccountPage() {
                 </div>
 
                 {/* Quick actions */}
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
                   <Link href="/shop" className="bg-brand-black-2 border border-brand-gold/10 hover:border-brand-gold/30 rounded-xl p-4 text-center transition-all group">
                     <p className="text-2xl mb-1">🛍️</p>
                     <p className="font-body text-xs text-brand-cream/60 group-hover:text-brand-cream">Browse Shop</p>
@@ -494,7 +494,7 @@ export default function AccountPage() {
                 <div className="bg-brand-black-2 border border-brand-gold/20 rounded-xl p-5">
                   <h3 className="font-heading text-base text-brand-gold mb-4">Edit Profile</h3>
                   <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block font-body text-xs text-brand-gold-2 uppercase tracking-wider mb-1">First Name</label>
                         <input value={editFirstName} onChange={e => setEditFirstName(e.target.value)} className="w-full bg-brand-black-3 border border-brand-gold/20 rounded-lg px-3 py-2 font-body text-sm text-brand-cream focus:outline-none focus:border-brand-gold" />
