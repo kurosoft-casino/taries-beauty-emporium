@@ -3,12 +3,14 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ShoppingBag, Search, Menu, X, ChevronDown, Heart } from 'lucide-react'
+import { ShoppingBag, Search, Menu, X, ChevronDown, Heart, User } from 'lucide-react'
 import { useCartStore } from '@/lib/store'
 import { products, formatPrice } from '@/lib/products'
 import { logoSrc } from '@/lib/assets'
 import { useLang } from '@/lib/lang'
 import { getWishlist } from '@/lib/wishlist'
+import { getCurrentUser } from '@/lib/auth'
+import type { User as AuthUser } from '@/lib/auth'
 
 const navLinks = [
   {
@@ -43,6 +45,7 @@ export default function Header() {
   const [searchOpen,    setSearchOpen]    = useState(false)
   const [searchQuery,   setSearchQuery]   = useState('')
   const [wishlistCount, setWishlistCount] = useState(0)
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
   const { getTotalItems, openCart, currency, setCurrency } = useCartStore()
@@ -79,6 +82,13 @@ export default function Header() {
       window.removeEventListener('storage', handleStorage)
       clearInterval(interval)
     }
+  }, [])
+
+  useEffect(() => {
+    setCurrentUser(getCurrentUser())
+    const handleStorage = () => setCurrentUser(getCurrentUser())
+    window.addEventListener('storage', handleStorage)
+    return () => window.removeEventListener('storage', handleStorage)
   }, [])
 
   return (
@@ -235,6 +245,21 @@ export default function Header() {
                 )}
               </AnimatePresence>
             </Link>
+
+            {/* Account */}
+            {currentUser ? (
+              <Link href="/account" className="flex items-center gap-1.5 text-brand-cream hover:text-brand-gold-3 transition-colors" title={`${currentUser.firstName} ${currentUser.lastName}`}>
+                <span className="text-lg leading-none">{currentUser.avatar || '👑'}</span>
+                <span className="hidden md:block font-body text-xs font-medium text-brand-gold-2 max-w-[80px] truncate">
+                  {currentUser.firstName.slice(0, 10)}
+                </span>
+              </Link>
+            ) : (
+              <Link href="/login" className="hidden md:flex items-center gap-1 text-brand-cream hover:text-brand-gold-3 transition-colors" aria-label="Sign In">
+                <User size={20} />
+                <span className="font-body text-xs font-medium">Sign In</span>
+              </Link>
+            )}
 
             {/* Cart */}
             <motion.button
@@ -397,6 +422,16 @@ export default function Header() {
                   )}
                 </div>
               ))}
+              {/* Mobile: Account link */}
+              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+                <Link
+                  href={currentUser ? '/account' : '/login'}
+                  className="block py-4 font-heading text-xl text-brand-cream hover:text-brand-gold-3 transition-colors border-b border-brand-gold/20"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  {currentUser ? `${currentUser.avatar || '👑'} ${currentUser.firstName}` : '👤 Sign In'}
+                </Link>
+              </motion.div>
             </div>
 
             {/* Mobile currency */}

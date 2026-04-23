@@ -6,23 +6,23 @@ import { logoSrc } from '@/lib/assets'
 
 const SocialIcons = {
   Instagram: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
     </svg>
   ),
   Facebook: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
     </svg>
   ),
-  Twitter: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 4l16 16M4 20 20 4"/>
+  Youtube: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58A2.78 2.78 0 0 0 3.41 19.6C5.12 20 12 20 12 20s6.88 0 8.59-.4a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02"/>
     </svg>
   ),
-  Youtube: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58A2.78 2.78 0 0 0 3.41 19.6C5.12 20 12 20 12 20s6.88 0 8.59-.4a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02"/>
+  TikTok: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"/>
     </svg>
   ),
 }
@@ -38,21 +38,23 @@ const footerLinks = {
   ],
   info: [
     { label: 'About Us',          href: '/about' },
+    { label: 'FAQ',               href: '/faq' },
     { label: 'Shipping Policy',   href: '/shipping' },
     { label: 'Returns & Refunds', href: '/returns' },
+    { label: 'Privacy Policy',    href: '/privacy' },
     { label: 'Size Guide',        href: '/size-guide' },
     { label: 'Wig Care Guide',    href: '/wig-care' },
+    { label: 'Track My Order',    href: '/track-order' },
     { label: 'Contact Us',        href: '/contact' },
     { label: '🏪 Sell with Us',   href: '/vendors' },
-    { label: '🔐 Admin',          href: '/admin' },
   ],
 }
 
 const socials = [
-  { icon: SocialIcons.Instagram, href: '#', label: 'Instagram' },
-  { icon: SocialIcons.Facebook,  href: '#', label: 'Facebook' },
-  { icon: SocialIcons.Twitter,   href: '#', label: 'Twitter/X' },
-  { icon: SocialIcons.Youtube,   href: '#', label: 'YouTube' },
+  { icon: SocialIcons.Instagram, href: 'https://www.instagram.com/taries_beauty_emporium?igsh=dGhkc2Z0NGl0Z28z', label: 'Instagram' },
+  { icon: SocialIcons.Facebook,  href: 'https://www.facebook.com/profile.php?id=61562398227659&mibextid=wwXIfr', label: 'Facebook' },
+  { icon: SocialIcons.Youtube,   href: 'https://www.youtube.com/@Taries_beauty_channel', label: 'YouTube' },
+  { icon: SocialIcons.TikTok,    href: '#', label: 'TikTok' },
 ]
 
 export default function Footer() {
@@ -86,9 +88,11 @@ export default function Footer() {
                   key={label}
                   href={href}
                   aria-label={label}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   whileHover={{ scale: 1.15, y: -2 }}
                   whileTap={{ scale: 0.9 }}
-                  className="w-9 h-9 rounded-full border border-brand-gold/30 flex items-center justify-center text-brand-gold-2 hover:bg-gold-gradient hover:text-brand-black hover:border-transparent transition-all duration-300"
+                  className="w-10 h-10 rounded-full border border-brand-gold/30 flex items-center justify-center text-brand-gold-2 hover:bg-gold-gradient hover:text-brand-black hover:border-transparent transition-all duration-300"
                 >
                   <Icon />
                 </motion.a>

@@ -5,13 +5,13 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   ShieldCheck, Package, Eye, Store, Search,
   LogOut, Users, BarChart2, Lock, Download,
-  Boxes, Check,
+  Boxes, Check, TrendingUp, DollarSign, ShoppingCart, Star,
 } from 'lucide-react'
 import { logoSrc } from '@/lib/assets'
 import { getAllOrders, formatOrderDate, updateOrderStatus } from '@/lib/orders'
 import type { Order } from '@/lib/orders'
-import { products } from '@/lib/products'
-import { getViews } from '@/lib/views'
+import { products, formatPrice } from '@/lib/products'
+import { getAllViewsSorted, getViews } from '@/lib/views'
 import { getInventory, setInventoryItem } from '@/lib/inventory'
 import type { InventoryItem } from '@/lib/inventory'
 
@@ -612,16 +612,171 @@ function InventoryTab() {
   )
 }
 
+// ── Analytics Tab ─────────────────────────────────────────────────────────────
+function AnalyticsTab() {
+  const [orders, setOrders] = useState<Order[]>([])
+  const [views, setViews] = useState<{ slug: string; views: number }[]>([])
+
+  useEffect(() => {
+    setOrders(getAllOrders())
+    setViews(getAllViewsSorted())
+  }, [])
+
+  const totalRevenue = orders.reduce((sum, o) => sum + (o.grandTotalUSD ?? 0), 0)
+  const totalOrders  = orders.length
+  const avgOrderVal  = totalOrders > 0 ? totalRevenue / totalOrders : 0
+  const totalViews   = views.reduce((s, v) => s + v.views, 0)
+
+  // Unique customers
+  const uniqueEmails = new Set(orders.map(o => o.customer?.email).filter(Boolean))
+  const totalCustomers = uniqueEmails.size
+
+  // Revenue by category
+  const catRevenue: Record<string, number> = {}
+  orders.forEach(o => {
+    o.items?.forEach(item => {
+      const cat = item.product?.categoryLabel ?? 'Other'
+      catRevenue[cat] = (catRevenue[cat] ?? 0) + item.product.price * item.quantity
+    })
+  })
+  const catEntries = Object.entries(catRevenue).sort((a, b) => b[1] - a[1])
+  const maxCatRev  = catEntries[0]?.[1] ?? 1
+
+  // Top customers
+  const customerMap: Record<string, { name: string; orders: number; spent: number }> = {}
+  orders.forEach(o => {
+    const email = o.customer?.email
+    if (!email) return
+    const name = `${o.customer.firstName} ${o.customer.lastName}`
+    if (!customerMap[email]) customerMap[email] = { name, orders: 0, spent: 0 }
+    customerMap[email].orders++
+    customerMap[email].spent += o.grandTotalUSD ?? 0
+  })
+  const topCustomers = Object.values(customerMap).sort((a, b) => b.spent - a.spent).slice(0, 5)
+
+  const statCards = [
+    { icon: DollarSign,   label: 'Total Revenue',     value: formatPrice(totalRevenue, 'USD'),  sub: 'All confirmed orders' },
+    { icon: ShoppingCart, label: 'Total Orders',       value: totalOrders,                       sub: 'All time' },
+    { icon: TrendingUp,   label: 'Avg Order Value',    value: formatPrice(avgOrderVal, 'USD'),   sub: 'Per order' },
+    { icon: Users,        label: 'Unique Customers',   value: totalCustomers,                    sub: 'Distinct emails' },
+    { icon: Eye,          label: 'Total Product Views',value: totalViews,                        sub: 'Across all products' },
+    { icon: Star,         label: 'Products Listed',    value: products.length,                   sub: 'In catalogue' },
+  ]
+
+  return (
+    <div className="space-y-10">
+      {/* KPI cards */}
+      <div>
+        <h3 className="font-heading text-lg font-bold text-brand-cream mb-5">Overview</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {statCards.map((c, i) => (
+            <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+              className="bg-brand-black-3 border border-brand-gold/15 rounded-xl p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <c.icon size={16} className="text-brand-gold-2" />
+                <span className="font-body text-xs text-brand-cream/50 uppercase tracking-wider">{c.label}</span>
+              </div>
+              <p className="font-display text-2xl font-bold gold-text">{c.value}</p>
+              <p className="font-body text-[10px] text-brand-cream/30 mt-1">{c.sub}</p>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+
+      {/* Revenue by category */}
+      {catEntries.length > 0 && (
+        <div>
+          <h3 className="font-heading text-lg font-bold text-brand-cream mb-5">Revenue by Category</h3>
+          <div className="space-y-3">
+            {catEntries.map(([cat, rev], i) => (
+              <div key={cat} className="flex items-center gap-4">
+                <span className="font-body text-xs text-brand-cream/60 w-36 shrink-0 truncate">{cat}</span>
+                <div className="flex-1 h-5 bg-brand-black-3 rounded overflow-hidden">
+                  <motion.div
+                    initial={{ width: 0 }} animate={{ width: `${(rev / maxCatRev) * 100}%` }}
+                    transition={{ delay: i * 0.07, duration: 0.6 }}
+                    className="h-full bg-gold-gradient rounded"
+                  />
+                </div>
+                <span className="font-body text-xs font-semibold text-brand-gold-2 w-20 text-right shrink-0">{formatPrice(rev, 'USD')}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Top products by views */}
+      <div>
+        <h3 className="font-heading text-lg font-bold text-brand-cream mb-5">Top Products by Views</h3>
+        {views.length === 0 ? (
+          <p className="font-body text-sm text-brand-cream/40">No views tracked yet. Views accumulate as customers browse products.</p>
+        ) : (
+          <div className="space-y-3">
+            {views.slice(0, 8).map((v, i) => {
+              const p = products.find(p => p.slug === v.slug)
+              const maxV = views[0]?.views ?? 1
+              return (
+                <div key={v.slug} className="flex items-center gap-4">
+                  <span className="font-body text-[10px] text-brand-gold/50 w-4">{i + 1}</span>
+                  <span className="font-body text-xs text-brand-cream/70 w-48 shrink-0 truncate">{p?.name ?? v.slug}</span>
+                  <div className="flex-1 h-4 bg-brand-black-3 rounded overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }} animate={{ width: `${(v.views / maxV) * 100}%` }}
+                      transition={{ delay: i * 0.06, duration: 0.5 }}
+                      className="h-full bg-gold-gradient/60 rounded"
+                    />
+                  </div>
+                  <span className="font-body text-xs text-brand-cream/50 w-16 text-right">{v.views} views</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Top customers */}
+      <div>
+        <h3 className="font-heading text-lg font-bold text-brand-cream mb-5">Top Customers</h3>
+        {topCustomers.length === 0 ? (
+          <p className="font-body text-sm text-brand-cream/40">Customer data will appear here once orders are placed.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[400px]">
+              <thead>
+                <tr className="border-b border-brand-gold/20">
+                  {['Customer', 'Orders', 'Total Spent'].map(h => (
+                    <th key={h} className="text-left py-3 px-4 text-brand-gold/60 font-medium text-xs uppercase tracking-wider">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {topCustomers.map((c, i) => (
+                  <tr key={i} className="border-b border-brand-gold/10">
+                    <td className="py-3 px-4 text-brand-cream">{c.name}</td>
+                    <td className="py-3 px-4 text-brand-cream/60">{c.orders}</td>
+                    <td className="py-3 px-4 font-semibold text-brand-gold-2">{formatPrice(c.spent, 'USD')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Main Page ────────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState(false)
-  const [tab, setTab] = useState<'orders' | 'products' | 'vendors' | 'inventory'>('orders')
+  const [tab, setTab] = useState<'orders' | 'products' | 'vendors' | 'inventory' | 'analytics'>('orders')
 
   const tabs = [
-    { id: 'orders'    as const, label: 'Orders',           icon: Package  },
-    { id: 'products'  as const, label: 'Products & Views', icon: BarChart2 },
-    { id: 'vendors'   as const, label: 'Vendors',          icon: Store    },
-    { id: 'inventory' as const, label: 'Inventory',        icon: Boxes    },
+    { id: 'orders'    as const, label: 'Orders',           icon: Package    },
+    { id: 'products'  as const, label: 'Products & Views', icon: BarChart2  },
+    { id: 'vendors'   as const, label: 'Vendors',          icon: Store      },
+    { id: 'inventory' as const, label: 'Inventory',        icon: Boxes      },
+    { id: 'analytics' as const, label: 'Analytics',        icon: TrendingUp },
   ]
 
   if (!authenticated) {
@@ -690,6 +845,7 @@ export default function AdminPage() {
             {tab === 'products'  && <ProductsTab />}
             {tab === 'vendors'   && <VendorsTab />}
             {tab === 'inventory' && <InventoryTab />}
+            {tab === 'analytics' && <AnalyticsTab />}
           </motion.div>
         </AnimatePresence>
       </div>

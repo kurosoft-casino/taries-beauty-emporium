@@ -6,6 +6,8 @@ import { LangProvider } from '@/lib/lang'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import CartDrawer from '@/components/layout/CartDrawer'
+import FirstTimeBuyerBanner from '@/components/ui/FirstTimeBuyerBanner'
+import ChatWidget from '@/components/ui/ChatWidget'
 import { Toaster } from 'react-hot-toast'
 
 const playfair = Playfair_Display({
@@ -71,6 +73,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <CartDrawer />
           <main>{children}</main>
           <Footer />
+          <FirstTimeBuyerBanner />
           <Toaster
             position="top-right"
             toastOptions={{
@@ -83,6 +86,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               success: { iconTheme: { primary: '#D4AF37', secondary: '#0A0A0A' } },
             }}
           />
+          <ChatWidget />
         </CartProvider>
         </LangProvider>
       </body>
