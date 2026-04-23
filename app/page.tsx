@@ -7,6 +7,7 @@ import StatsSection from '@/components/home/StatsSection'
 import Testimonials from '@/components/home/Testimonials'
 import WhyUs from '@/components/home/WhyUs'
 import ShippingBanner from '@/components/home/ShippingBanner'
+import RecentlyViewedBar from '@/components/shop/RecentlyViewedBar'
 import { products } from '@/lib/products'
 
 export default function HomePage() {
@@ -32,6 +33,7 @@ export default function HomePage() {
       <WhyUs />
       <Testimonials />
       <ShippingBanner />
+      <RecentlyViewedBar />
     </>
   )
 }

@@ -297,6 +297,16 @@ export default function InvoiceClient() {
           </div>
         )}
 
+        {/* ── GIFT MESSAGE ──────────────────────────────────────────── */}
+        {order.giftMessage && (
+          <div className="px-8 pb-6">
+            <div className="p-4 bg-brand-black-2 print:bg-gray-50 border border-brand-gold/20 print:border-yellow-200 rounded">
+              <p className="font-body text-[10px] tracking-[0.3em] text-brand-gold-2 print:text-yellow-600 uppercase mb-1">🎁 Gift Message</p>
+              <p className="font-body text-sm text-brand-cream/70 print:text-gray-700 italic">"{order.giftMessage}"</p>
+            </div>
+          </div>
+        )}
+
         {/* ── PAYMENT NOTE (if transfer pending) ───────────────────── */}
         {order.paymentMethod === 'transfer' && order.paymentStatus === 'pending' && (
           <div className="px-8 pb-6">

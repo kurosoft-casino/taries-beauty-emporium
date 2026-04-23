@@ -1,12 +1,14 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ShoppingBag, Search, Menu, X, ChevronDown } from 'lucide-react'
+import { ShoppingBag, Search, Menu, X, ChevronDown, Heart } from 'lucide-react'
 import { useCartStore } from '@/lib/store'
-import { formatPrice } from '@/lib/products'
+import { products, formatPrice } from '@/lib/products'
 import { logoSrc } from '@/lib/assets'
 import { useLang } from '@/lib/lang'
+import { getWishlist } from '@/lib/wishlist'
 
 const navLinks = [
   {
@@ -35,16 +37,28 @@ const navLinks = [
 ]
 
 export default function Header() {
-  const [scrolled,     setScrolled]     = useState(false)
-  const [mobileOpen,   setMobileOpen]   = useState(false)
-  const [megaOpen,     setMegaOpen]     = useState(false)
-  const [searchOpen,   setSearchOpen]   = useState(false)
-  const [searchQuery,  setSearchQuery]  = useState('')
+  const [scrolled,      setScrolled]      = useState(false)
+  const [mobileOpen,    setMobileOpen]    = useState(false)
+  const [megaOpen,      setMegaOpen]      = useState(false)
+  const [searchOpen,    setSearchOpen]    = useState(false)
+  const [searchQuery,   setSearchQuery]   = useState('')
+  const [wishlistCount, setWishlistCount] = useState(0)
   const searchRef = useRef<HTMLInputElement>(null)
 
   const { getTotalItems, openCart, currency, setCurrency } = useCartStore()
   const { lang, setLang } = useLang()
   const totalItems = getTotalItems()
+  const router = useRouter()
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return []
+    const q = searchQuery.toLowerCase()
+    return products.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      p.description.toLowerCase().includes(q) ||
+      p.tags.some(t => t.includes(q))
+    ).slice(0, 6)
+  }, [searchQuery])
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 40)
@@ -55,6 +69,17 @@ export default function Header() {
   useEffect(() => {
     if (searchOpen) setTimeout(() => searchRef.current?.focus(), 100)
   }, [searchOpen])
+
+  useEffect(() => {
+    setWishlistCount(getWishlist().length)
+    const handleStorage = () => setWishlistCount(getWishlist().length)
+    window.addEventListener('storage', handleStorage)
+    const interval = setInterval(() => setWishlistCount(getWishlist().length), 1000)
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+      clearInterval(interval)
+    }
+  }, [])
 
   return (
     <>
@@ -189,6 +214,28 @@ export default function Header() {
               <Search size={20} />
             </button>
 
+            {/* Wishlist */}
+            <Link
+              href="/wishlist"
+              className="relative text-brand-cream hover:text-brand-gold-3 transition-colors"
+              aria-label="Wishlist"
+            >
+              <Heart size={20} />
+              <AnimatePresence>
+                {wishlistCount > 0 && (
+                  <motion.span
+                    key={wishlistCount}
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    exit={{ scale: 0 }}
+                    className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center text-[10px] font-bold text-white font-body"
+                  >
+                    {wishlistCount > 9 ? '9+' : wishlistCount}
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </Link>
+
             {/* Cart */}
             <motion.button
               onClick={openCart}
@@ -231,26 +278,81 @@ export default function Header() {
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden glass-dark border-t border-brand-gold/20"
             >
-              <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
-                <Search size={18} className="text-brand-gold-2 shrink-0" />
-                <input
-                  ref={searchRef}
-                  type="text"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Search wigs, bundles, beauty products..."
-                  className="flex-1 bg-transparent text-brand-cream placeholder-brand-gold/40 font-body text-sm focus:outline-none"
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && searchQuery.trim()) {
-                      window.location.href = `/shop?search=${encodeURIComponent(searchQuery)}`
-                      setSearchOpen(false)
-                    }
-                    if (e.key === 'Escape') setSearchOpen(false)
-                  }}
-                />
-                <button onClick={() => setSearchOpen(false)}>
-                  <X size={18} className="text-brand-gold-2 hover:text-brand-gold-3" />
-                </button>
+              <div className="max-w-2xl mx-auto px-4 py-4">
+                {/* Input row */}
+                <div className="flex items-center gap-3">
+                  <Search size={18} className="text-brand-gold-2 shrink-0" />
+                  <input
+                    ref={searchRef}
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Search wigs, bundles, beauty products..."
+                    className="flex-1 bg-transparent text-brand-cream placeholder-brand-gold/40 font-body text-sm focus:outline-none"
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && searchQuery.trim()) {
+                        router.push(`/shop?search=${encodeURIComponent(searchQuery)}`)
+                        setSearchOpen(false)
+                        setSearchQuery('')
+                      }
+                      if (e.key === 'Escape') setSearchOpen(false)
+                    }}
+                  />
+                  <button onClick={() => { setSearchOpen(false); setSearchQuery('') }}>
+                    <X size={18} className="text-brand-gold-2 hover:text-brand-gold-3" />
+                  </button>
+                </div>
+
+                {/* Autocomplete dropdown */}
+                <AnimatePresence>
+                  {searchResults.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.15 }}
+                      className="mt-2 border border-brand-gold/20 bg-brand-black divide-y divide-brand-gold/10"
+                    >
+                      {searchResults.map(product => (
+                        <button
+                          key={product.id}
+                          onClick={() => {
+                            router.push(`/product/${product.slug}`)
+                            setSearchOpen(false)
+                            setSearchQuery('')
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-brand-gold/5 transition-colors text-left"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={product.images[0]}
+                            alt={product.name}
+                            className="w-10 h-10 object-cover shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-body text-sm text-brand-cream truncate">{product.name}</p>
+                            <span className="inline-block text-[10px] font-body font-semibold text-brand-gold-2/70 uppercase tracking-wider">
+                              {product.categoryLabel}
+                            </span>
+                          </div>
+                          <span className="font-heading text-sm font-bold text-brand-gold-3 shrink-0">
+                            {formatPrice(product.price, currency)}
+                          </span>
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => {
+                          router.push(`/shop?search=${encodeURIComponent(searchQuery)}`)
+                          setSearchOpen(false)
+                          setSearchQuery('')
+                        }}
+                        className="w-full px-4 py-2.5 text-center font-body text-xs text-brand-gold-2 hover:text-brand-gold-3 transition-colors"
+                      >
+                        View all results for &ldquo;{searchQuery}&rdquo; →
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </motion.div>
           )}

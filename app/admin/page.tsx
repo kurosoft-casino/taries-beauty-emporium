@@ -4,13 +4,16 @@ import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ShieldCheck, Package, Eye, Store, Search,
-  LogOut, Users, BarChart2, Lock,
+  LogOut, Users, BarChart2, Lock, Download,
+  Boxes, Check,
 } from 'lucide-react'
 import { logoSrc } from '@/lib/assets'
-import { getAllOrders, formatOrderDate } from '@/lib/orders'
+import { getAllOrders, formatOrderDate, updateOrderStatus } from '@/lib/orders'
 import type { Order } from '@/lib/orders'
 import { products } from '@/lib/products'
 import { getViews } from '@/lib/views'
+import { getInventory, setInventoryItem } from '@/lib/inventory'
+import type { InventoryItem } from '@/lib/inventory'
 
 const ADMIN_PIN = '8520'
 
@@ -154,13 +157,78 @@ function OrderStatusPill({ status }: { status: Order['status'] }) {
   )
 }
 
+// ── Toast ────────────────────────────────────────────────────────────────────
+function Toast({ message, onDone }: { message: string; onDone: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 3000)
+    return () => clearTimeout(t)
+  }, [onDone])
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20, x: '-50%' }}
+      animate={{ opacity: 1, y: 0, x: '-50%' }}
+      exit={{ opacity: 0, y: 20, x: '-50%' }}
+      className="fixed bottom-8 left-1/2 z-50 flex items-center gap-2 px-5 py-3 bg-brand-black-2 border border-brand-gold/40 shadow-gold-xl text-brand-cream font-body text-sm"
+    >
+      <Check size={15} className="text-green-400" />
+      {message}
+    </motion.div>
+  )
+}
+
 // ── Orders Tab ───────────────────────────────────────────────────────────────
 function OrdersTab() {
   const [orders, setOrders] = useState<Order[]>([])
+  const [toast, setToast] = useState('')
 
   useEffect(() => {
     setOrders(getAllOrders())
   }, [])
+
+  function handleStatusChange(orderId: string, status: Order['status']) {
+    updateOrderStatus(orderId, status)
+    setOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, status } : o))
+    setToast(`Order #${orderId} updated to ${status.charAt(0).toUpperCase() + status.slice(1)}`)
+  }
+
+  function exportCSV() {
+    const headers = [
+      'Order ID', 'Date', 'Customer Name', 'Email', 'Phone',
+      'Items Count', 'Subtotal USD', 'Shipping USD', 'Grand Total USD',
+      'Currency', 'Status', 'Payment Status', 'Address', 'City', 'Country',
+    ]
+    const escape = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`
+    const rows = orders.map(o => [
+      o.orderId,
+      o.date,
+      `${o.customer.firstName} ${o.customer.lastName}`,
+      o.customer.email,
+      o.customer.phone,
+      o.items.reduce((a, it) => a + it.quantity, 0),
+      o.subtotalUSD.toFixed(2),
+      o.shippingUSD.toFixed(2),
+      o.grandTotalUSD.toFixed(2),
+      o.currency,
+      o.status,
+      o.paymentStatus,
+      o.shipping.address,
+      o.shipping.city,
+      o.shipping.country,
+    ].map(escape).join(','))
+
+    const csv = [headers.map(escape).join(','), ...rows].join('\n')
+    try {
+      const blob = new Blob([csv], { type: 'text/csv' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `taries-orders-${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      // download not supported
+    }
+  }
 
   if (orders.length === 0) {
     return (
@@ -175,48 +243,74 @@ function OrdersTab() {
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm min-w-[700px]">
-        <thead>
-          <tr className="border-b border-brand-gold/20">
-            {['Order ID', 'Date', 'Customer', 'Items', 'Grand Total', 'Status', 'Payment'].map(h => (
-              <th key={h} className="text-left py-3 px-4 text-brand-gold/60 font-medium text-xs uppercase tracking-wider">
-                {h}
-              </th>
+    <>
+      <div className="flex items-center justify-between mb-5">
+        <p className="font-body text-sm text-brand-cream/50">{orders.length} order{orders.length !== 1 ? 's' : ''}</p>
+        <button
+          onClick={exportCSV}
+          className="flex items-center gap-2 px-4 py-2 bg-brand-gold/15 border border-brand-gold/30 text-brand-gold-2 font-body text-sm font-semibold hover:bg-brand-gold/25 transition-all"
+        >
+          <Download className="w-4 h-4" /> Export CSV
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[800px]">
+          <thead>
+            <tr className="border-b border-brand-gold/20">
+              {['Order ID', 'Date', 'Customer', 'Items', 'Grand Total', 'Status', 'Payment'].map(h => (
+                <th key={h} className="text-left py-3 px-4 text-brand-gold/60 font-medium text-xs uppercase tracking-wider">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {orders.map((o, i) => (
+              <motion.tr
+                key={o.orderId}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.04 }}
+                className="border-b border-brand-gold/10 hover:bg-brand-gold/5 transition-colors"
+              >
+                <td className="py-3 px-4 text-brand-gold font-mono text-xs">{o.orderId}</td>
+                <td className="py-3 px-4 text-brand-cream/60 text-xs">{formatOrderDate(o.date)}</td>
+                <td className="py-3 px-4 text-brand-cream font-medium">{o.customer.firstName} {o.customer.lastName}</td>
+                <td className="py-3 px-4 text-brand-cream/60 text-center">
+                  {o.items.reduce((a, it) => a + it.quantity, 0)}
+                </td>
+                <td className="py-3 px-4 text-brand-gold font-semibold">${o.grandTotalUSD.toFixed(2)}</td>
+                <td className="py-3 px-4">
+                  <select
+                    value={o.status}
+                    onChange={e => handleStatusChange(o.orderId, e.target.value as Order['status'])}
+                    className="bg-brand-black-3 border border-brand-gold/20 text-brand-cream text-xs px-2 py-1.5 focus:outline-none focus:border-brand-gold/50 cursor-pointer"
+                  >
+                    {(['pending', 'processing', 'shipped', 'delivered'] as Order['status'][]).map(s => (
+                      <option key={s} value={s} className="bg-brand-black-2">
+                        {s.charAt(0).toUpperCase() + s.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td className="py-3 px-4">
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${
+                    o.paymentStatus === 'paid'
+                      ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                      : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                  }`}>
+                    {o.paymentStatus === 'paid' ? 'Paid' : 'Pending'}
+                  </span>
+                </td>
+              </motion.tr>
             ))}
-          </tr>
-        </thead>
-        <tbody>
-          {orders.map((o, i) => (
-            <motion.tr
-              key={o.orderId}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.04 }}
-              className="border-b border-brand-gold/10 hover:bg-brand-gold/5 transition-colors"
-            >
-              <td className="py-3 px-4 text-brand-gold font-mono text-xs">{o.orderId}</td>
-              <td className="py-3 px-4 text-brand-cream/60 text-xs">{formatOrderDate(o.date)}</td>
-              <td className="py-3 px-4 text-brand-cream font-medium">{o.customer.firstName} {o.customer.lastName}</td>
-              <td className="py-3 px-4 text-brand-cream/60 text-center">
-                {o.items.reduce((a, it) => a + it.quantity, 0)}
-              </td>
-              <td className="py-3 px-4 text-brand-gold font-semibold">${o.grandTotalUSD.toFixed(2)}</td>
-              <td className="py-3 px-4"><OrderStatusPill status={o.status} /></td>
-              <td className="py-3 px-4">
-                <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${
-                  o.paymentStatus === 'paid'
-                    ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                    : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-                }`}>
-                  {o.paymentStatus === 'paid' ? 'Paid' : 'Pending'}
-                </span>
-              </td>
-            </motion.tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </tbody>
+        </table>
+      </div>
+      <AnimatePresence>
+        {toast && <Toast message={toast} onDone={() => setToast('')} />}
+      </AnimatePresence>
+    </>
   )
 }
 
@@ -411,15 +505,123 @@ function VendorsTab() {
   )
 }
 
+// ── Inventory Tab ────────────────────────────────────────────────────────────
+function InventoryTab() {
+  const [inventory, setInventory] = useState<Record<string, InventoryItem>>({})
+
+  useEffect(() => {
+    setInventory(getInventory())
+  }, [])
+
+  function toggleStock(slug: string, current: boolean) {
+    const existing = inventory[slug]
+    const item: InventoryItem = {
+      inStock: !current,
+      notes: existing?.notes ?? '',
+    }
+    setInventoryItem(slug, item)
+    setInventory(prev => ({ ...prev, [slug]: item }))
+  }
+
+  function saveNotes(slug: string, notes: string) {
+    const existing = inventory[slug]
+    const item: InventoryItem = {
+      inStock: existing?.inStock ?? true,
+      notes,
+    }
+    setInventoryItem(slug, item)
+    setInventory(prev => ({ ...prev, [slug]: item }))
+  }
+
+  function getStock(slug: string, defaultInStock: boolean): boolean {
+    if (slug in inventory) return inventory[slug].inStock
+    return defaultInStock
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-5">
+        <p className="font-body text-sm text-brand-cream/50">{products.length} products</p>
+        <p className="font-body text-xs text-brand-cream/30">Changes save automatically</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[700px]">
+          <thead>
+            <tr className="border-b border-brand-gold/20">
+              {['Product', 'Category', 'Price', 'SKU', 'In Stock', 'Stock Notes'].map(h => (
+                <th key={h} className="text-left py-3 px-4 text-brand-gold/60 font-medium text-xs uppercase tracking-wider">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {products.map((p, i) => {
+              const inStock = getStock(p.slug, p.inStock)
+              const notes = inventory[p.slug]?.notes ?? ''
+              return (
+                <motion.tr
+                  key={p.id}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.02 }}
+                  className="border-b border-brand-gold/10 hover:bg-brand-gold/5 transition-colors"
+                >
+                  <td className="py-3 px-4 text-brand-cream font-medium max-w-[180px] truncate">{p.name}</td>
+                  <td className="py-3 px-4">
+                    <span className="px-2 py-0.5 rounded-full text-xs border border-brand-gold/20 text-brand-gold/70 whitespace-nowrap">
+                      {p.categoryLabel}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-brand-gold font-semibold">${p.price}</td>
+                  <td className="py-3 px-4 font-mono text-xs text-brand-cream/50">{p.slug}</td>
+                  <td className="py-3 px-4">
+                    {/* Gold toggle switch */}
+                    <button
+                      onClick={() => toggleStock(p.slug, inStock)}
+                      className={`relative w-11 h-6 rounded-full transition-all duration-300 focus:outline-none ${
+                        inStock ? 'bg-gold-gradient shadow-gold-xl' : 'bg-brand-black-3 border border-brand-gold/20'
+                      }`}
+                      title={inStock ? 'In Stock — click to mark out of stock' : 'Out of Stock — click to mark in stock'}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full transition-all duration-300 ${
+                          inStock ? 'translate-x-5 bg-brand-black' : 'translate-x-0 bg-brand-gold/40'
+                        }`}
+                      />
+                    </button>
+                    <span className={`ml-2 text-xs font-body ${inStock ? 'text-green-400' : 'text-red-400'}`}>
+                      {inStock ? 'In Stock' : 'Out'}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4">
+                    <input
+                      defaultValue={notes}
+                      onBlur={e => saveNotes(p.slug, e.target.value)}
+                      placeholder="Add note…"
+                      className="w-full bg-transparent border-b border-brand-gold/10 focus:border-brand-gold/40 text-brand-cream/70 text-xs py-1 focus:outline-none placeholder:text-brand-cream/20 min-w-[120px]"
+                    />
+                  </td>
+                </motion.tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 // ── Main Page ────────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState(false)
-  const [tab, setTab] = useState<'orders' | 'products' | 'vendors'>('orders')
+  const [tab, setTab] = useState<'orders' | 'products' | 'vendors' | 'inventory'>('orders')
 
   const tabs = [
-    { id: 'orders'   as const, label: 'Orders',           icon: Package  },
-    { id: 'products' as const, label: 'Products & Views', icon: BarChart2 },
-    { id: 'vendors'  as const, label: 'Vendors',          icon: Store    },
+    { id: 'orders'    as const, label: 'Orders',           icon: Package  },
+    { id: 'products'  as const, label: 'Products & Views', icon: BarChart2 },
+    { id: 'vendors'   as const, label: 'Vendors',          icon: Store    },
+    { id: 'inventory' as const, label: 'Inventory',        icon: Boxes    },
   ]
 
   if (!authenticated) {
@@ -454,7 +656,7 @@ export default function AdminPage() {
         </motion.div>
 
         {/* Tab Nav */}
-        <div className="flex gap-1 bg-brand-black-2 border border-brand-gold/20 rounded-xl p-1 mb-8 w-fit">
+        <div className="flex flex-wrap gap-1 bg-brand-black-2 border border-brand-gold/20 rounded-xl p-1 mb-8 w-fit">
           {tabs.map(t => {
             const Icon = t.icon
             return (
@@ -484,9 +686,10 @@ export default function AdminPage() {
             transition={{ duration: 0.2 }}
             className="bg-brand-black-2 border border-brand-gold/20 rounded-2xl p-6 shadow-gold-xl"
           >
-            {tab === 'orders'   && <OrdersTab />}
-            {tab === 'products' && <ProductsTab />}
-            {tab === 'vendors'  && <VendorsTab />}
+            {tab === 'orders'    && <OrdersTab />}
+            {tab === 'products'  && <ProductsTab />}
+            {tab === 'vendors'   && <VendorsTab />}
+            {tab === 'inventory' && <InventoryTab />}
           </motion.div>
         </AnimatePresence>
       </div>

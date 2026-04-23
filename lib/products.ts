@@ -15,12 +15,15 @@ export interface Product {
   price: number        // USD base price
   originalPrice?: number
   images: string[]
+  video?: string       // YouTube video ID or full URL (shows hair movement)
   badge?: 'new' | 'sale' | 'hot' | 'bestseller'
   description: string
   shortDesc: string
   features: string[]
   variants?: { label: string; options: string[] }[]
   inStock: boolean
+  stockCount?: number  // show "Only X left" when low
+  weightKg: number
   rating: number
   reviews: number
   shipsFrom: string
@@ -51,7 +54,10 @@ export const products: Product[] = [
     images: [
       'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=800&q=80',
       'https://images.unsplash.com/photo-1560869713-7d0a29430803?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1595476108010-b4d1f102b1b1?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1580618672591-eb180b1a973f?auto=format&fit=crop&w=800&q=80',
     ],
+    video: 'https://www.youtube.com/embed/dDrpDkTcFss',
     badge: 'bestseller',
     shortDesc: '100% virgin Brazilian human hair. HD lace for undetectable hairline.',
     description: 'Experience the ultimate in luxury with our Brazilian Straight HD Lace Front Wig. Crafted from 100% virgin human hair, this wig features an ultra-thin HD lace that melts seamlessly into any skin tone for a completely natural, undetectable hairline. Perfect for queens who demand the best.',
@@ -70,6 +76,7 @@ export const products: Product[] = [
       { label: 'Cap Size', options: ['Small (21")', 'Medium (22")', 'Large (23")'] },
     ],
     inStock: true,
+    weightKg: 0.35,
     rating: 4.9,
     reviews: 247,
     shipsFrom: 'Guangzhou, China',
@@ -87,7 +94,10 @@ export const products: Product[] = [
     images: [
       'https://images.unsplash.com/photo-1595476108010-b4d1f102b1b1?auto=format&fit=crop&w=800&q=80',
       'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1580618672591-eb180b1a973f?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1500917293891-ef795e70e1f6?auto=format&fit=crop&w=800&q=80',
     ],
+    video: 'https://www.youtube.com/embed/AioSHE9Zv2w',
     badge: 'hot',
     shortDesc: 'Stunning deep wave pattern. Full lace for versatile parting.',
     description: 'Turn heads with our Deep Wave Full Lace Wig — luscious, bouncy waves that command attention. Full lace construction allows you to part anywhere, pull up into a ponytail, or style as you please. 100% human hair responds beautifully to heat and moisture.',
@@ -105,6 +115,7 @@ export const products: Product[] = [
       { label: 'Density', options: ['130%', '150%', '180%', '200%'] },
     ],
     inStock: true,
+    weightKg: 0.35,
     rating: 4.8,
     reviews: 183,
     shipsFrom: 'Guangzhou, China',
@@ -140,6 +151,7 @@ export const products: Product[] = [
       { label: 'Density', options: ['150%', '180%', '200%'] },
     ],
     inStock: true,
+    weightKg: 0.35,
     rating: 4.7,
     reviews: 129,
     shipsFrom: 'Guangzhou, China',
@@ -173,6 +185,7 @@ export const products: Product[] = [
       { label: 'Density', options: ['150%', '180%', '250%'] },
     ],
     inStock: true,
+    weightKg: 0.35,
     rating: 4.9,
     reviews: 312,
     shipsFrom: 'Guangzhou, China',
@@ -206,6 +219,7 @@ export const products: Product[] = [
       { label: 'Density', options: ['150%', '180%'] },
     ],
     inStock: true,
+    weightKg: 0.35,
     rating: 4.8,
     reviews: 198,
     shipsFrom: 'Guangzhou, China',
@@ -242,6 +256,7 @@ export const products: Product[] = [
       { label: 'Length Combo', options: ['10/12/14"', '12/14/16"', '14/16/18"', '16/18/20"', '18/20/22"', '20/22/24"', '22/24/26"'] },
     ],
     inStock: true,
+    weightKg: 0.15,
     rating: 4.9,
     reviews: 421,
     shipsFrom: 'Guangzhou, China',
@@ -274,6 +289,7 @@ export const products: Product[] = [
       { label: 'Length Combo', options: ['12/14/16/18"', '14/16/18/20"', '16/18/20/22"', '18/20/22/24"', '20/22/24/26"'] },
     ],
     inStock: true,
+    weightKg: 0.15,
     rating: 4.8,
     reviews: 287,
     shipsFrom: 'Guangzhou, China',
@@ -306,6 +322,7 @@ export const products: Product[] = [
       { label: 'Length Combo', options: ['10/12/14"', '12/14/16"', '14/16/18"', '16/18/20"', '18/20/22"'] },
     ],
     inStock: true,
+    weightKg: 0.15,
     rating: 4.7,
     reviews: 156,
     shipsFrom: 'Guangzhou, China',
@@ -344,6 +361,7 @@ export const products: Product[] = [
       { label: 'Density', options: ['130%', '150%', '180%', '200%', '250%'] },
     ],
     inStock: true,
+    weightKg: 0.4,
     rating: 5.0,
     reviews: 89,
     shipsFrom: 'Guangzhou, China',
@@ -376,6 +394,7 @@ export const products: Product[] = [
       { label: 'Length', options: ['14"', '16"', '18"', '20"', '22"', '24"', '26"'] },
     ],
     inStock: true,
+    weightKg: 0.4,
     rating: 4.9,
     reviews: 62,
     shipsFrom: 'Guangzhou, China',
@@ -409,6 +428,7 @@ export const products: Product[] = [
       '50ml bottle',
     ],
     inStock: true,
+    weightKg: 0.55,
     rating: 4.8,
     reviews: 312,
     shipsFrom: 'Guangzhou, China',
@@ -438,6 +458,7 @@ export const products: Product[] = [
       '300ml jar',
     ],
     inStock: true,
+    weightKg: 0.55,
     rating: 4.7,
     reviews: 218,
     shipsFrom: 'Guangzhou, China',
@@ -467,6 +488,7 @@ export const products: Product[] = [
       '250ml bottle',
     ],
     inStock: true,
+    weightKg: 0.55,
     rating: 4.9,
     reviews: 147,
     shipsFrom: 'Guangzhou, China',
@@ -497,6 +519,7 @@ export const products: Product[] = [
       'Complete care guide booklet',
     ],
     inStock: true,
+    weightKg: 0.55,
     rating: 4.8,
     reviews: 264,
     shipsFrom: 'Guangzhou, China',
@@ -532,6 +555,7 @@ export const products: Product[] = [
       { label: 'Shade Set', options: ['Nude Royale', 'Berry Queen', 'African Sunset', 'Deep Plum', 'Cocoa Dream', 'Full Set (All 6)'] },
     ],
     inStock: true,
+    weightKg: 0.3,
     rating: 4.8,
     reviews: 389,
     shipsFrom: 'Guangzhou, China',
@@ -561,6 +585,7 @@ export const products: Product[] = [
       '30ml airless pump bottle',
     ],
     inStock: true,
+    weightKg: 0.3,
     rating: 4.9,
     reviews: 276,
     shipsFrom: 'Guangzhou, China',
@@ -593,6 +618,7 @@ export const products: Product[] = [
       { label: 'Shade', options: ['N10', 'N20', 'N30', 'N40 (Medium)', 'N50', 'N60', 'N70 (Deep)', 'N80', 'N85', 'N90 (Deep Ebony)'] },
     ],
     inStock: true,
+    weightKg: 0.3,
     rating: 4.7,
     reviews: 445,
     shipsFrom: 'Guangzhou, China',
@@ -621,6 +647,7 @@ export const products: Product[] = [
       '100ml each',
     ],
     inStock: true,
+    weightKg: 0.3,
     rating: 4.8,
     reviews: 203,
     shipsFrom: 'Guangzhou, China',
@@ -657,6 +684,7 @@ export const products: Product[] = [
       { label: 'Colour', options: ['Classic Camel', 'Jet Black', 'Ivory Cream'] },
     ],
     inStock: true,
+    weightKg: 0.9,
     rating: 4.9,
     reviews: 178,
     shipsFrom: 'Guangzhou, China',
@@ -689,6 +717,7 @@ export const products: Product[] = [
       { label: 'Colour', options: ['Jet Black', 'Deep Burgundy', 'Cognac Brown'] },
     ],
     inStock: true,
+    weightKg: 0.9,
     rating: 4.7,
     reviews: 234,
     shipsFrom: 'Guangzhou, China',
@@ -722,6 +751,7 @@ export const products: Product[] = [
       { label: 'Colour', options: ['Champagne Gold', 'Midnight Black', 'Deep Wine', 'Forest Green'] },
     ],
     inStock: true,
+    weightKg: 0.9,
     rating: 4.8,
     reviews: 112,
     shipsFrom: 'Guangzhou, China',

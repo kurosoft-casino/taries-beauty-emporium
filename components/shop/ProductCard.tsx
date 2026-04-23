@@ -1,11 +1,12 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { ShoppingBag, Heart, Eye, Star, Zap } from 'lucide-react'
 import { type Product, formatPrice } from '@/lib/products'
 import { useCartStore } from '@/lib/store'
+import { toggleWishlist, isWishlisted } from '@/lib/wishlist'
 import toast from 'react-hot-toast'
 
 interface ProductCardProps {
@@ -19,6 +20,10 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
   const cardRef = useRef<HTMLDivElement>(null)
 
   const { addItem, openCart, currency } = useCartStore()
+
+  useEffect(() => {
+    setWished(isWishlisted(product.slug))
+  }, [product.slug])
 
   // 3D tilt
   const x = useMotionValue(0)
@@ -92,7 +97,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
 
             {/* Wishlist */}
             <motion.button
-              onClick={e => { e.preventDefault(); setWished(!wished) }}
+              onClick={e => { e.preventDefault(); setWished(toggleWishlist(product.slug)) }}
               whileTap={{ scale: 0.8 }}
               className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full glass-dark flex items-center justify-center transition-all duration-300"
             >

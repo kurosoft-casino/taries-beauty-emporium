@@ -29,6 +29,7 @@ interface VendorProduct {
   description: string
   whatsapp:    string
   addedAt:     string
+  active:      boolean
 }
 
 interface Message {
@@ -37,6 +38,7 @@ interface Message {
   text:      string
   timestamp: string
   isOwn:     boolean
+  read:      boolean
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -58,10 +60,19 @@ const DEMO_VENDOR: VendorSession = {
 const DEMO_MESSAGES: Message[] = [
   {
     id:        'msg-demo-1',
-    from:      'Sarah K.',
-    text:      "Hi, I'm interested in your products! Can you send more details?",
+    from:      'Amara O.',
+    text:      'Hi! I love your products. Do you ship to Abuja?',
     timestamp: new Date(Date.now() - 3_600_000).toISOString(),
     isOwn:     false,
+    read:      false,
+  },
+  {
+    id:        'msg-demo-2',
+    from:      'Kofi A.',
+    text:      'Can I get a discount for bulk order of 5 wigs?',
+    timestamp: new Date(Date.now() - 7_200_000).toISOString(),
+    isOwn:     false,
+    read:      true,
   },
 ]
 
@@ -93,8 +104,12 @@ function LoginGate({ onLogin }: { onLogin: (v: VendorSession) => void }) {
         const vendors: VendorSession[] = JSON.parse(raw)
         const found = vendors.find(v => v.email.toLowerCase() === email.toLowerCase())
         if (found) {
-          if (found.status !== 'approved') {
-            setError(`Your application is "${found.status}". Only approved vendors can access the dashboard.`)
+          if (found.status === 'pending') {
+            setError('Your application is pending admin approval. Check back in 24–48 hours.')
+            return
+          }
+          if (found.status === 'rejected') {
+            setError('Your application was not approved. Contact us on WhatsApp.')
             return
           }
           vendor = { ...found, whatsapp: found.phone }
@@ -206,6 +221,7 @@ function AddProductModal({
       description: form.description,
       whatsapp:    form.whatsapp,
       addedAt:     new Date().toISOString(),
+      active:      true,
     }
     try {
       const key      = `taries-vendor-${email}-products`
@@ -320,16 +336,22 @@ function AddProductModal({
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function VendorDashboardPage() {
-  const [vendor,       setVendor]       = useState<VendorSession | null>(null)
-  const [tab,          setTab]          = useState<'products' | 'analytics' | 'messages' | 'settings'>('products')
-  const [products,     setProducts]     = useState<VendorProduct[]>([])
-  const [views,        setViews]        = useState<Record<string, number>>({})
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [messages,     setMessages]     = useState<Message[]>(DEMO_MESSAGES)
-  const [replyText,    setReplyText]    = useState('')
-  const [settings,     setSettings]     = useState({ businessName: '', whatsapp: '', description: '' })
-  const [savedAlert,   setSavedAlert]   = useState(false)
-  const [mounted,      setMounted]      = useState(false)
+  const [vendor,          setVendor]          = useState<VendorSession | null>(null)
+  const [tab,             setTab]             = useState<'products' | 'analytics' | 'messages' | 'settings'>('products')
+  const [products,        setProducts]        = useState<VendorProduct[]>([])
+  const [views,           setViews]           = useState<Record<string, number>>({})
+  const [showAddModal,    setShowAddModal]    = useState(false)
+  const [messages,        setMessages]        = useState<Message[]>(DEMO_MESSAGES)
+  const [activeConvoIdx,  setActiveConvoIdx]  = useState(0)
+  const [replyText,       setReplyText]       = useState('')
+  const [settings,        setSettings]        = useState({ businessName: '', whatsapp: '', category: '', description: '' })
+  const [savedAlert,      setSavedAlert]      = useState(false)
+  const [pinForm,         setPinForm]         = useState({ current: '', next: '', confirm: '' })
+  const [pinError,        setPinError]        = useState('')
+  const [pinSuccess,      setPinSuccess]      = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteConfirm,   setDeleteConfirm]   = useState('')
+  const [mounted,         setMounted]         = useState(false)
 
   // Initialise on mount
   useEffect(() => {
@@ -361,6 +383,7 @@ export default function VendorDashboardPage() {
     setSettings({
       businessName: v.businessName,
       whatsapp:     v.whatsapp ?? v.phone,
+      category:     v.category,
       description:  v.description,
     })
   }
@@ -375,6 +398,12 @@ export default function VendorDashboardPage() {
     setVendor(null)
   }
 
+  function saveMessages(updated: Message[]) {
+    if (!vendor) return
+    setMessages(updated)
+    try { localStorage.setItem(`taries-vendor-${vendor.email}-messages`, JSON.stringify(updated)) } catch {}
+  }
+
   function handleSendMessage() {
     if (!replyText.trim() || !vendor) return
     const msg: Message = {
@@ -383,13 +412,24 @@ export default function VendorDashboardPage() {
       text:      replyText,
       timestamp: new Date().toISOString(),
       isOwn:     true,
+      read:      true,
     }
-    const updated = [...messages, msg]
-    setMessages(updated)
+    saveMessages([...messages, msg])
     setReplyText('')
-    try {
-      localStorage.setItem(`taries-vendor-${vendor.email}-messages`, JSON.stringify(updated))
-    } catch {}
+  }
+
+  function toggleProductActive(id: string) {
+    if (!vendor) return
+    const updated = products.map(p => p.id === id ? { ...p, active: !p.active } : p)
+    setProducts(updated)
+    try { localStorage.setItem(`taries-vendor-${vendor.email}-products`, JSON.stringify(updated)) } catch {}
+  }
+
+  function deleteProduct(id: string) {
+    if (!vendor) return
+    const updated = products.filter(p => p.id !== id)
+    setProducts(updated)
+    try { localStorage.setItem(`taries-vendor-${vendor.email}-products`, JSON.stringify(updated)) } catch {}
   }
 
   function handleSaveSettings() {
@@ -398,21 +438,65 @@ export default function VendorDashboardPage() {
       ...vendor,
       businessName: settings.businessName,
       whatsapp:     settings.whatsapp,
+      category:     settings.category,
       description:  settings.description,
     }
     setVendor(updated)
     try { localStorage.setItem('taries-vendor-session', JSON.stringify(updated)) } catch {}
+    // Update vendors list
+    try {
+      const raw = localStorage.getItem('taries-vendors')
+      if (raw) {
+        const vendors: VendorSession[] = JSON.parse(raw)
+        const idx = vendors.findIndex(v => v.email.toLowerCase() === updated.email.toLowerCase())
+        if (idx !== -1) {
+          vendors[idx] = { ...vendors[idx], ...updated }
+          localStorage.setItem('taries-vendors', JSON.stringify(vendors))
+        }
+      }
+    } catch {}
     setSavedAlert(true)
     setTimeout(() => setSavedAlert(false), 2500)
+  }
+
+  function handleChangePin() {
+    if (!vendor) return
+    const storedPin = localStorage.getItem(`taries-vendor-pin-${vendor.email}`) ?? DEMO_PIN
+    if (pinForm.current !== storedPin) { setPinError('Current PIN is incorrect'); return }
+    if (!/^\d{4}$/.test(pinForm.next)) { setPinError('New PIN must be exactly 4 digits'); return }
+    if (pinForm.next !== pinForm.confirm) { setPinError('PINs do not match'); return }
+    try { localStorage.setItem(`taries-vendor-pin-${vendor.email}`, pinForm.next) } catch {}
+    setPinError('')
+    setPinForm({ current: '', next: '', confirm: '' })
+    setPinSuccess(true)
+    setTimeout(() => setPinSuccess(false), 3000)
+  }
+
+  function handleDeleteAccount() {
+    if (!vendor || deleteConfirm !== vendor.email) return
+    try {
+      localStorage.removeItem('taries-vendor-session')
+      localStorage.removeItem(`taries-vendor-${vendor.email}-products`)
+      localStorage.removeItem(`taries-vendor-${vendor.email}-messages`)
+      const raw = localStorage.getItem('taries-vendors')
+      if (raw) {
+        const vendors: VendorSession[] = JSON.parse(raw)
+        localStorage.setItem('taries-vendors', JSON.stringify(vendors.filter(v => v.email !== vendor.email)))
+      }
+    } catch {}
+    setVendor(null)
   }
 
   // Prevent SSR mismatch
   if (!mounted) return null
   if (!vendor)  return <LoginGate onLogin={handleLogin} />
 
-  // Analytics data
+  // Analytics data — use slug for view lookup
   const analyticsData = products.length > 0
-    ? products.map(p => ({ name: p.name, views: views[p.id] ?? 0 }))
+    ? products.map(p => ({
+        name:  p.name,
+        views: views[p.name.toLowerCase().replace(/\s+/g, '-')] ?? (views[p.id] ?? 0),
+      }))
     : [
         { name: 'Sample Wig A',      views: 47 },
         { name: 'Sample Serum B',    views: 31 },
@@ -420,11 +504,28 @@ export default function VendorDashboardPage() {
       ]
   const maxViews = Math.max(...analyticsData.map(a => a.views), 1)
 
+  // Fake sparkline heights seeded from email hash
+  const emailHash = vendor.email.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) & 0xffff, 7)
+  const sparkHeights = Array.from({ length: 7 }, (_, i) => {
+    const seed = (emailHash + i * 137) % 100
+    return Math.max(20, seed)
+  })
+
+  const unreadCount = messages.filter(m => !m.isOwn && !m.read).length
+
+  // Group messages by sender (simple: just show unique non-own senders)
+  const convos = Array.from(
+    messages.reduce((acc, m) => {
+      if (!m.isOwn) acc.set(m.from, m)
+      return acc
+    }, new Map<string, Message>())
+  ).map(([from, last]) => ({ from, last }))
+
   const tabs = [
-    { id: 'products'  as const, label: 'My Products', icon: Package       },
-    { id: 'analytics' as const, label: 'Analytics',   icon: BarChart2     },
-    { id: 'messages'  as const, label: 'Messages',    icon: MessageCircle },
-    { id: 'settings'  as const, label: 'Settings',    icon: Settings      },
+    { id: 'products'  as const, label: 'My Products', icon: Package,       badge: 0           },
+    { id: 'analytics' as const, label: 'Analytics',   icon: BarChart2,     badge: 0           },
+    { id: 'messages'  as const, label: 'Messages',    icon: MessageCircle, badge: unreadCount },
+    { id: 'settings'  as const, label: 'Settings',    icon: Settings,      badge: 0           },
   ]
 
   const statCards = [
@@ -493,7 +594,7 @@ export default function VendorDashboardPage() {
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all duration-200 ${
+                className={`flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all duration-200 relative ${
                   tab === t.id
                     ? 'bg-gold-gradient text-brand-black font-semibold shadow-gold-xl'
                     : 'text-brand-cream/50 hover:text-brand-gold'
@@ -501,6 +602,11 @@ export default function VendorDashboardPage() {
               >
                 <Icon className="w-4 h-4" />
                 {t.label}
+                {t.badge > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+                    {t.badge}
+                  </span>
+                )}
               </button>
             )
           })}
@@ -541,7 +647,7 @@ export default function VendorDashboardPage() {
                     <table className="w-full text-sm min-w-[560px]">
                       <thead>
                         <tr className="border-b border-brand-gold/20">
-                          {['Product', 'Category', 'Price', 'Views', 'Added'].map(h => (
+                          {['Product', 'Category', 'Price', 'Views', 'Status', 'Actions'].map(h => (
                             <th key={h} className="text-left py-2.5 px-3 text-brand-gold/55 text-xs uppercase tracking-wider">
                               {h}
                             </th>
@@ -549,27 +655,47 @@ export default function VendorDashboardPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {products.map(p => (
-                          <tr
-                            key={p.id}
-                            className="border-b border-brand-gold/10 hover:bg-brand-gold/5 transition-colors"
-                          >
-                            <td className="py-3 px-3 text-brand-cream font-medium">{p.name}</td>
-                            <td className="py-3 px-3 text-brand-cream/55 text-xs">{p.category}</td>
-                            <td className="py-3 px-3 text-brand-gold font-semibold">${p.price.toFixed(2)}</td>
-                            <td className="py-3 px-3">
-                              <span className="flex items-center gap-1 text-brand-cream/55 text-xs">
-                                <Eye className="w-3 h-3 text-brand-gold" />
-                                {views[p.id] ?? 0}
-                              </span>
-                            </td>
-                            <td className="py-3 px-3 text-brand-cream/35 text-xs">
-                              {new Date(p.addedAt).toLocaleDateString('en-GB', {
-                                day: 'numeric', month: 'short',
-                              })}
-                            </td>
-                          </tr>
-                        ))}
+                        {products.map(p => {
+                          const slug = p.name.toLowerCase().replace(/\s+/g, '-')
+                          const viewCount = views[slug] ?? (views[p.id] ?? 0)
+                          return (
+                            <tr
+                              key={p.id}
+                              className="border-b border-brand-gold/10 hover:bg-brand-gold/5 transition-colors"
+                            >
+                              <td className="py-3 px-3 text-brand-cream font-medium text-sm max-w-[140px] truncate">{p.name}</td>
+                              <td className="py-3 px-3 text-brand-cream/55 text-xs">{p.category}</td>
+                              <td className="py-3 px-3 text-brand-gold font-semibold text-sm">${p.price.toFixed(2)}</td>
+                              <td className="py-3 px-3">
+                                <span className="flex items-center gap-1 text-brand-cream/55 text-xs">
+                                  <Eye className="w-3 h-3 text-brand-gold" />
+                                  {viewCount}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3">
+                                <button
+                                  onClick={() => toggleProductActive(p.id)}
+                                  className={`text-[10px] font-semibold px-2.5 py-1 rounded-full transition-colors ${
+                                    p.active !== false
+                                      ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
+                                      : 'bg-brand-cream/10 text-brand-cream/35 hover:bg-brand-cream/20'
+                                  }`}
+                                >
+                                  {p.active !== false ? 'Active' : 'Inactive'}
+                                </button>
+                              </td>
+                              <td className="py-3 px-3">
+                                <button
+                                  onClick={() => deleteProduct(p.id)}
+                                  className="text-red-400/60 hover:text-red-400 transition-colors"
+                                  title="Delete product"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -579,55 +705,73 @@ export default function VendorDashboardPage() {
 
             {/* ══ ANALYTICS ════════════════════════════════════════════════════ */}
             {tab === 'analytics' && (
-              <div className="bg-brand-black-2 border border-brand-gold/20 rounded-2xl p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-brand-cream font-display font-semibold">Product Views</h2>
-                  <span className="text-brand-cream/35 text-xs border border-brand-gold/20 px-3 py-1 rounded-full">
-                    Last 7 days
-                  </span>
-                </div>
-
-                <div className="space-y-5">
-                  {analyticsData.map((item, i) => (
-                    <motion.div
-                      key={item.name}
-                      initial={{ opacity: 0, x: -16 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.1 }}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-brand-cream/75 text-sm truncate max-w-[60%]">
-                          {item.name}
-                        </span>
-                        <span className="text-brand-gold font-semibold text-sm">
-                          {item.views} views
-                        </span>
-                      </div>
-                      <div className="w-full h-3 bg-brand-black-3 rounded-full overflow-hidden">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${(item.views / maxViews) * 100}%` }}
-                          transition={{ duration: 0.9, delay: i * 0.1, ease: 'easeOut' }}
-                          className="h-full bg-gold-gradient rounded-full"
-                        />
-                      </div>
+              <div className="space-y-6">
+                {/* Summary cards */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  {[
+                    { label: 'Total Products', value: products.length,                                          color: 'text-brand-gold'  },
+                    { label: 'Total Views',     value: analyticsData.reduce((a, b) => a + b.views, 0),          color: 'text-blue-400'    },
+                    { label: 'Messages',        value: messages.filter(m => !m.isOwn).length,                   color: 'text-green-400'   },
+                    { label: 'Revenue',         value: '$0',                                                     color: 'text-purple-400'  },
+                  ].map((c, i) => (
+                    <motion.div key={c.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
+                      className="bg-brand-black-2 border border-brand-gold/20 rounded-xl p-4">
+                      <p className="text-brand-cream/40 text-xs mb-2">{c.label}</p>
+                      <p className={`text-2xl font-display font-bold ${c.color}`}>{c.value}</p>
                     </motion.div>
                   ))}
                 </div>
 
-                <div className="mt-8 grid grid-cols-2 gap-4">
-                  <div className="bg-brand-black-3 border border-brand-gold/20 rounded-xl p-4">
-                    <p className="text-brand-cream/35 text-xs mb-1">Total Views</p>
-                    <p className="text-brand-gold text-2xl font-display font-bold">
-                      {analyticsData.reduce((a, b) => a + b.views, 0)}
-                    </p>
+                {/* Top products bar chart */}
+                <div className="bg-brand-black-2 border border-brand-gold/20 rounded-2xl p-6">
+                  <h2 className="text-brand-cream font-display font-semibold mb-6">Top Products by Views</h2>
+                  <div className="space-y-4">
+                    {analyticsData.map((item, i) => (
+                      <motion.div key={item.name} initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }}>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-brand-cream/75 text-sm truncate max-w-[60%]">
+                            {item.name.length > 20 ? item.name.slice(0, 20) + '…' : item.name}
+                          </span>
+                          <span className="text-brand-gold font-semibold text-sm">{item.views}</span>
+                        </div>
+                        <div className="w-full h-3 bg-brand-black-3 rounded-full overflow-hidden">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${(item.views / maxViews) * 100}%` }}
+                            transition={{ duration: 0.9, delay: i * 0.1, ease: 'easeOut' }}
+                            className="h-full bg-gold-gradient rounded-full"
+                          />
+                        </div>
+                      </motion.div>
+                    ))}
                   </div>
-                  <div className="bg-brand-black-3 border border-brand-gold/20 rounded-xl p-4">
-                    <p className="text-brand-cream/35 text-xs mb-1">Top Product</p>
-                    <p className="text-brand-cream text-sm font-semibold truncate">
-                      {analyticsData[0]?.name ?? '—'}
-                    </p>
+                </div>
+
+                {/* Page visits sparkline */}
+                <div className="bg-brand-black-2 border border-brand-gold/20 rounded-2xl p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-brand-cream font-display font-semibold">Page Visits This Week</h2>
+                    <span className="text-brand-cream/35 text-xs border border-brand-gold/20 px-3 py-1 rounded-full">Last 7 days</span>
                   </div>
+                  <div className="flex items-end gap-2 h-20">
+                    {sparkHeights.map((h, i) => {
+                      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+                      return (
+                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                          <motion.div
+                            initial={{ height: 0 }}
+                            animate={{ height: `${h}%` }}
+                            transition={{ duration: 0.7, delay: i * 0.08, ease: 'easeOut' }}
+                            className="w-full bg-gold-gradient rounded-t-sm min-h-[4px]"
+                            style={{ height: `${h}%` }}
+                            title={`${h} visits`}
+                          />
+                          <span className="text-[9px] text-brand-cream/30 font-body">{days[i]}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <p className="text-brand-cream/25 text-xs mt-3 text-center">Based on estimated page activity</p>
                 </div>
               </div>
             )}
@@ -635,155 +779,237 @@ export default function VendorDashboardPage() {
             {/* ══ MESSAGES ═════════════════════════════════════════════════════ */}
             {tab === 'messages' && (
               <div className="bg-brand-black-2 border border-brand-gold/20 rounded-2xl overflow-hidden">
-                <div className="flex" style={{ height: '520px' }}>
+                <div className="flex" style={{ minHeight: '520px' }}>
                   {/* Conversations list */}
-                  <div className="w-64 border-r border-brand-gold/20 flex flex-col flex-shrink-0">
-                    <div className="px-4 py-3.5 border-b border-brand-gold/20">
+                  <div className="w-56 sm:w-64 border-r border-brand-gold/20 flex flex-col flex-shrink-0">
+                    <div className="px-4 py-3.5 border-b border-brand-gold/20 flex items-center justify-between">
                       <h2 className="text-brand-cream font-display font-semibold text-sm">Inbox</h2>
+                      {unreadCount > 0 && (
+                        <span className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                          {unreadCount}
+                        </span>
+                      )}
                     </div>
                     <div className="flex-1 overflow-y-auto">
-                      <button className="w-full text-left p-4 bg-brand-gold/8 border-l-2 border-brand-gold hover:bg-brand-gold/12 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-brand-gold/20 flex items-center justify-center text-brand-gold text-xs font-bold flex-shrink-0">
-                            SK
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-brand-cream text-xs font-semibold">Sarah K.</p>
-                            <p className="text-brand-cream/35 text-xs truncate">
-                              Interested in products
-                            </p>
-                          </div>
-                        </div>
-                      </button>
+                      {convos.map((convo, idx) => {
+                        const isUnread = !convo.last.read
+                        const initials = convo.from.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
+                        return (
+                          <button
+                            key={convo.from}
+                            onClick={() => {
+                              setActiveConvoIdx(idx)
+                              const updated = messages.map(m => m.from === convo.from ? { ...m, read: true } : m)
+                              saveMessages(updated)
+                            }}
+                            className={`w-full text-left p-4 transition-colors border-b border-brand-gold/10 ${
+                              activeConvoIdx === idx
+                                ? 'bg-brand-gold/10 border-l-2 border-l-brand-gold'
+                                : 'hover:bg-brand-gold/5 border-l-2 border-l-transparent'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-full bg-brand-gold/20 flex items-center justify-center text-brand-gold text-xs font-bold flex-shrink-0 relative">
+                                {initials}
+                                {isUnread && (
+                                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 border border-brand-black-2" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-xs font-semibold ${isUnread ? 'text-brand-cream' : 'text-brand-cream/60'}`}>
+                                  {convo.from}
+                                </p>
+                                <p className="text-brand-cream/35 text-xs truncate">{convo.last.text}</p>
+                              </div>
+                            </div>
+                          </button>
+                        )
+                      })}
+                      {convos.length === 0 && (
+                        <p className="text-brand-cream/25 text-xs text-center py-8 px-4">No messages yet</p>
+                      )}
                     </div>
                   </div>
 
                   {/* Message thread */}
-                  <div className="flex-1 flex flex-col min-w-0">
-                    <div className="px-5 py-3.5 border-b border-brand-gold/20">
-                      <p className="text-brand-cream text-sm font-semibold">Sarah K.</p>
-                      <p className="text-brand-cream/35 text-xs">Customer</p>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                      {messages.map(msg => (
-                        <div
-                          key={msg.id}
-                          className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'}`}
-                        >
+                  {convos.length > 0 && (
+                    <div className="flex-1 flex flex-col min-w-0">
+                      <div className="px-5 py-3.5 border-b border-brand-gold/20">
+                        <p className="text-brand-cream text-sm font-semibold">{convos[activeConvoIdx]?.from ?? ''}</p>
+                        <p className="text-brand-cream/35 text-xs">Customer</p>
+                      </div>
+                      <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ maxHeight: '380px' }}>
+                        {messages
+                          .filter(m => m.from === convos[activeConvoIdx]?.from || m.isOwn)
+                          .map(msg => (
                           <div
-                            className={`max-w-[72%] rounded-2xl px-4 py-3 text-sm ${
-                              msg.isOwn
-                                ? 'bg-brand-gold/20 text-brand-cream rounded-br-none'
-                                : 'bg-brand-black-3 text-brand-cream/75 rounded-bl-none'
-                            }`}
+                            key={msg.id}
+                            className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'}`}
                           >
-                            <p>{msg.text}</p>
-                            <p className="text-[10px] mt-1 opacity-45">
-                              {new Date(msg.timestamp).toLocaleTimeString('en-US', {
-                                hour: '2-digit', minute: '2-digit',
-                              })}
-                            </p>
+                            <div
+                              className={`max-w-[72%] rounded-2xl px-4 py-3 text-sm ${
+                                msg.isOwn
+                                  ? 'bg-brand-gold/20 text-brand-cream rounded-br-none'
+                                  : 'bg-brand-black-3 text-brand-cream/75 rounded-bl-none'
+                              }`}
+                            >
+                              {!msg.isOwn && (
+                                <p className="text-brand-gold/60 text-[10px] font-semibold mb-1">{msg.from}</p>
+                              )}
+                              <p>{msg.text}</p>
+                              <p className="text-[10px] mt-1 opacity-45">
+                                {new Date(msg.timestamp).toLocaleTimeString('en-US', {
+                                  hour: '2-digit', minute: '2-digit',
+                                })}
+                              </p>
+                            </div>
                           </div>
+                        ))}
+                      </div>
+                      <div className="px-4 py-3 border-t border-brand-gold/20">
+                        <div className="flex gap-2">
+                          <input
+                            value={replyText}
+                            onChange={e => setReplyText(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
+                            placeholder="Type a reply…"
+                            className="flex-1 bg-brand-black-3 border border-brand-gold/20 rounded-xl px-4 py-2.5 text-brand-cream text-sm placeholder:text-brand-cream/20 focus:outline-none focus:border-brand-gold/40 transition-colors"
+                          />
+                          <button
+                            onClick={handleSendMessage}
+                            className="w-10 h-10 rounded-xl bg-gold-gradient flex items-center justify-center text-brand-black flex-shrink-0 hover:opacity-90 transition-opacity"
+                          >
+                            <Send className="w-4 h-4" />
+                          </button>
                         </div>
-                      ))}
-                    </div>
-                    <div className="px-4 py-3 border-t border-brand-gold/20">
-                      <div className="flex gap-2">
-                        <input
-                          value={replyText}
-                          onChange={e => setReplyText(e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
-                          placeholder="Type a reply…"
-                          className="flex-1 bg-brand-black-3 border border-brand-gold/20 rounded-xl px-4 py-2.5 text-brand-cream text-sm placeholder:text-brand-cream/20 focus:outline-none focus:border-brand-gold/40 transition-colors"
-                        />
-                        <button
-                          onClick={handleSendMessage}
-                          className="w-10 h-10 rounded-xl bg-gold-gradient flex items-center justify-center text-brand-black flex-shrink-0 hover:opacity-90 transition-opacity"
-                        >
-                          <Send className="w-4 h-4" />
-                        </button>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             )}
 
             {/* ══ SETTINGS ═════════════════════════════════════════════════════ */}
             {tab === 'settings' && (
-              <div className="bg-brand-black-2 border border-brand-gold/20 rounded-2xl p-6">
-                <h2 className="text-brand-cream font-display font-semibold mb-6">Profile Settings</h2>
+              <div className="space-y-6">
+                {/* Profile */}
+                <div className="bg-brand-black-2 border border-brand-gold/20 rounded-2xl p-6">
+                  <h2 className="text-brand-cream font-display font-semibold mb-6">Profile Settings</h2>
+                  <div className="max-w-lg space-y-4">
+                    <div>
+                      <label className="text-brand-cream/50 text-xs uppercase tracking-wider block mb-1.5">Business Name</label>
+                      <input value={settings.businessName} onChange={e => setSettings(s => ({ ...s, businessName: e.target.value }))}
+                        className="w-full bg-brand-black-3 border border-brand-gold/20 rounded-xl px-4 py-3 text-brand-cream text-sm focus:outline-none focus:border-brand-gold/50 transition-colors" />
+                    </div>
+                    <div>
+                      <label className="text-brand-cream/50 text-xs uppercase tracking-wider block mb-1.5">WhatsApp Number</label>
+                      <input type="tel" value={settings.whatsapp} onChange={e => setSettings(s => ({ ...s, whatsapp: e.target.value }))}
+                        className="w-full bg-brand-black-3 border border-brand-gold/20 rounded-xl px-4 py-3 text-brand-cream text-sm focus:outline-none focus:border-brand-gold/50 transition-colors" />
+                    </div>
+                    <div>
+                      <label className="text-brand-cream/50 text-xs uppercase tracking-wider block mb-1.5">Business Category</label>
+                      <select value={settings.category} onChange={e => setSettings(s => ({ ...s, category: e.target.value }))}
+                        className="w-full bg-brand-black-3 border border-brand-gold/20 rounded-xl px-4 py-3 text-brand-cream text-sm focus:outline-none focus:border-brand-gold/50 transition-colors">
+                        {PRODUCT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-brand-cream/50 text-xs uppercase tracking-wider block mb-1.5">Business Description</label>
+                      <textarea value={settings.description} onChange={e => setSettings(s => ({ ...s, description: e.target.value }))}
+                        rows={4} className="w-full bg-brand-black-3 border border-brand-gold/20 rounded-xl px-4 py-3 text-brand-cream text-sm focus:outline-none focus:border-brand-gold/50 transition-colors resize-none" />
+                    </div>
+                    <div className="pt-2">
+                      <button onClick={handleSaveSettings} className="btn-gold flex items-center gap-2">
+                        {savedAlert ? <><CheckCircle2 className="w-4 h-4" /> Saved!</> : <><Save className="w-4 h-4" /> Save Changes</>}
+                      </button>
+                    </div>
+                  </div>
+                </div>
 
-                <div className="max-w-lg space-y-4">
-                  <div>
-                    <label className="text-brand-cream/50 text-xs uppercase tracking-wider block mb-1.5">
-                      Business Name
-                    </label>
-                    <input
-                      value={settings.businessName}
-                      onChange={e => setSettings(s => ({ ...s, businessName: e.target.value }))}
-                      className="w-full bg-brand-black-3 border border-brand-gold/20 rounded-xl px-4 py-3 text-brand-cream text-sm focus:outline-none focus:border-brand-gold/50 transition-colors"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-brand-cream/50 text-xs uppercase tracking-wider block mb-1.5">
-                      WhatsApp Number
-                    </label>
-                    <input
-                      type="tel"
-                      value={settings.whatsapp}
-                      onChange={e => setSettings(s => ({ ...s, whatsapp: e.target.value }))}
-                      className="w-full bg-brand-black-3 border border-brand-gold/20 rounded-xl px-4 py-3 text-brand-cream text-sm focus:outline-none focus:border-brand-gold/50 transition-colors"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-brand-cream/50 text-xs uppercase tracking-wider block mb-1.5">
-                      Business Description
-                    </label>
-                    <textarea
-                      value={settings.description}
-                      onChange={e => setSettings(s => ({ ...s, description: e.target.value }))}
-                      rows={4}
-                      className="w-full bg-brand-black-3 border border-brand-gold/20 rounded-xl px-4 py-3 text-brand-cream text-sm focus:outline-none focus:border-brand-gold/50 transition-colors resize-none"
-                    />
-                  </div>
-                  <div className="pt-2">
-                    <button
-                      onClick={handleSaveSettings}
-                      className="btn-gold flex items-center gap-2"
-                    >
-                      {savedAlert
-                        ? <><CheckCircle2 className="w-4 h-4" /> Saved!</>
-                        : <><Save className="w-4 h-4" /> Save Changes</>
-                      }
+                {/* Change PIN */}
+                <div className="bg-brand-black-2 border border-brand-gold/20 rounded-2xl p-6">
+                  <h3 className="text-brand-cream font-display font-semibold mb-5">Change PIN</h3>
+                  <div className="max-w-xs space-y-3">
+                    {[
+                      { label: 'Current PIN', key: 'current' as const },
+                      { label: 'New PIN (4 digits)', key: 'next' as const },
+                      { label: 'Confirm New PIN', key: 'confirm' as const },
+                    ].map(f => (
+                      <div key={f.key}>
+                        <label className="text-brand-cream/50 text-xs uppercase tracking-wider block mb-1">{f.label}</label>
+                        <input
+                          type="password"
+                          maxLength={4}
+                          value={pinForm[f.key]}
+                          onChange={e => { setPinForm(p => ({ ...p, [f.key]: e.target.value.replace(/\D/g, '') })); setPinError('') }}
+                          className="w-full bg-brand-black-3 border border-brand-gold/20 rounded-xl px-4 py-2.5 text-brand-cream text-sm tracking-[0.5em] focus:outline-none focus:border-brand-gold/50 transition-colors"
+                          placeholder="••••"
+                        />
+                      </div>
+                    ))}
+                    <AnimatePresence>
+                      {pinError && (
+                        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                          className="text-red-400 text-xs flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" /> {pinError}
+                        </motion.p>
+                      )}
+                      {pinSuccess && (
+                        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                          className="text-green-400 text-xs flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" /> PIN updated successfully!
+                        </motion.p>
+                      )}
+                    </AnimatePresence>
+                    <button onClick={handleChangePin} className="btn-gold !py-2 !text-xs flex items-center gap-1.5">
+                      <Save className="w-3.5 h-3.5" /> Update PIN
                     </button>
                   </div>
                 </div>
 
-                {/* Account info (read-only) */}
-                <div className="mt-8 pt-6 border-t border-brand-gold/20">
-                  <h3 className="text-brand-cream/40 text-xs uppercase tracking-widest font-semibold mb-4">
-                    Account Info
-                  </h3>
-                  <div className="grid grid-cols-2 gap-3 max-w-lg">
-                    {[
-                      { label: 'Email',      value: vendor.email                                    },
-                      { label: 'Owner',      value: vendor.ownerName                                },
-                      { label: 'Category',   value: vendor.category                                 },
-                      { label: 'Fee Status', value: vendor.feeStatus === 'paid' ? '✓ Paid' : 'Unpaid' },
-                    ].map(item => (
-                      <div
-                        key={item.label}
-                        className="bg-brand-black-3 border border-brand-gold/10 rounded-xl p-3"
-                      >
-                        <p className="text-brand-cream/30 text-xs mb-0.5">{item.label}</p>
-                        <p className="text-brand-cream text-sm font-medium truncate">{item.value}</p>
-                      </div>
-                    ))}
-                  </div>
+                {/* Danger zone */}
+                <div className="bg-brand-black-2 border border-red-500/30 rounded-2xl p-6">
+                  <h3 className="text-red-400 font-display font-semibold mb-2">Danger Zone</h3>
+                  <p className="text-brand-cream/35 text-xs mb-4">Permanently delete your vendor account and all associated data. This action cannot be undone.</p>
+                  <button onClick={() => setShowDeleteModal(true)}
+                    className="border border-red-500/40 text-red-400 hover:bg-red-500/10 px-4 py-2 text-sm font-body font-semibold rounded-xl transition-all">
+                    Delete Account
+                  </button>
                 </div>
               </div>
             )}
+
+            {/* ── Delete Confirmation Modal ── */}
+            <AnimatePresence>
+              {showDeleteModal && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                  onClick={e => e.target === e.currentTarget && setShowDeleteModal(false)}>
+                  <motion.div initial={{ scale: 0.94, y: 16 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.94 }}
+                    className="bg-brand-black-2 border border-red-500/40 rounded-2xl p-6 w-full max-w-sm shadow-gold-xl">
+                    <h3 className="text-red-400 font-display font-semibold mb-2">Delete Account?</h3>
+                    <p className="text-brand-cream/50 text-sm mb-4">Type your email address to confirm deletion:</p>
+                    <p className="text-brand-gold text-xs font-mono mb-3">{vendor.email}</p>
+                    <input
+                      value={deleteConfirm}
+                      onChange={e => setDeleteConfirm(e.target.value)}
+                      placeholder="Enter your email"
+                      className="w-full bg-brand-black-3 border border-red-500/30 rounded-xl px-4 py-2.5 text-brand-cream text-sm mb-4 focus:outline-none focus:border-red-500/60 transition-colors"
+                    />
+                    <div className="flex gap-3">
+                      <button onClick={() => { setShowDeleteModal(false); setDeleteConfirm('') }}
+                        className="flex-1 py-2.5 border border-brand-gold/20 rounded-xl text-brand-cream/50 text-sm hover:text-brand-cream/70 transition-all">
+                        Cancel
+                      </button>
+                      <button onClick={handleDeleteAccount} disabled={deleteConfirm !== vendor.email}
+                        className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                        Delete Forever
+                      </button>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         </AnimatePresence>
       </div>

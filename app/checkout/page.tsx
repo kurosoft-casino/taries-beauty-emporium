@@ -2,10 +2,11 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Check, ShoppingBag, CreditCard, Smartphone, Building2, ChevronRight, FileText } from 'lucide-react'
+import { Check, ShoppingBag, CreditCard, Smartphone, Building2, ChevronRight, FileText, Plane, Package } from 'lucide-react'
 import { useCartStore } from '@/lib/store'
 import { formatPrice } from '@/lib/products'
 import { saveOrder } from '@/lib/orders'
+import { estimateWeight, calcShipping, getCargoType } from '@/lib/shipping'
 
 const steps = ['Cart', 'Details', 'Payment', 'Confirm']
 const countries = ['Nigeria', 'Ghana']
@@ -19,6 +20,7 @@ export default function CheckoutPage() {
     firstName: '', lastName: '', email: '', phone: '',
     country: 'Nigeria', state: '', city: '', address: '', postalCode: '',
     notes: '',
+    giftMessage: '',
     payMethod: 'card',
     cardNumber: '', cardName: '', cardExpiry: '', cardCvv: '',
     bankRef: '',
@@ -28,7 +30,10 @@ export default function CheckoutPage() {
   const [orderNum] = useState(() => 'TBE-' + Math.random().toString(36).slice(2, 8).toUpperCase())
 
   const total = getTotalUSD()
-  const shipping = total >= 200 ? 0 : 25
+  const cargoType = getCargoType(items)
+  const weightKg = estimateWeight(items)
+  const shippingCalc = calcShipping(weightKg, cargoType)
+  const shipping = items.length > 0 ? shippingCalc.totalUsdEquiv : 0
   const grandTotal = total + shipping
 
   function update(k: string, v: string) { setForm(f => ({ ...f, [k]: v })) }
@@ -90,6 +95,7 @@ export default function CheckoutPage() {
         postalCode: form.postalCode,
       },
       notes: form.notes,
+      giftMessage: form.giftMessage || undefined,
     })
     setOrdered(true)
     clearCart()
@@ -215,6 +221,18 @@ export default function CheckoutPage() {
                     <label className="font-body text-xs tracking-widest text-brand-gold-2 uppercase block mb-2">Order Notes (optional)</label>
                     <textarea value={form.notes} onChange={e => update('notes', e.target.value)} rows={3} placeholder="Any special instructions..."
                       className="w-full bg-brand-black-2 border border-brand-gold/20 text-brand-cream font-body text-sm px-4 py-3 focus:outline-none focus:border-brand-gold-2 resize-none" />
+                  </div>
+                  <div>
+                    <label className="font-body text-xs tracking-widest text-brand-gold-2 uppercase block mb-2">🎁 Gift Message (optional)</label>
+                    <textarea
+                      value={form.giftMessage}
+                      onChange={e => { if (e.target.value.length <= 200) update('giftMessage', e.target.value) }}
+                      rows={3}
+                      placeholder="Write a personal message for the recipient..."
+                      maxLength={200}
+                      className="w-full bg-brand-black-2 border border-brand-gold/20 text-brand-cream font-body text-sm px-4 py-3 focus:outline-none focus:border-brand-gold-2 resize-none"
+                    />
+                    <p className="font-body text-xs text-brand-cream/30 text-right mt-1">{form.giftMessage.length}/200</p>
                   </div>
                 </motion.div>
               )}
@@ -344,9 +362,25 @@ export default function CheckoutPage() {
                   <span className="text-brand-cream/60">Subtotal</span>
                   <span className="text-brand-cream">{formatPrice(total, currency)}</span>
                 </div>
-                <div className="flex justify-between font-body text-sm">
-                  <span className="text-brand-cream/60">Shipping</span>
-                  <span className={shipping === 0 ? 'text-green-400' : 'text-brand-cream'}>{shipping === 0 ? 'FREE ✈️' : formatPrice(shipping, currency)}</span>
+                {/* Real shipping breakdown */}
+                <div className="p-3 bg-brand-black-3 border border-brand-gold/10 space-y-1.5">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Plane size={12} className="text-brand-gold-2" />
+                    <span className="font-body text-xs text-brand-gold-2 font-semibold">Shipping from Guangzhou, China</span>
+                  </div>
+                  <p className="font-body text-xs text-brand-cream/50">
+                    Estimated weight: {weightKg.toFixed(1)} kg{weightKg === 10 ? ' (minimum 10 kg)' : ''}
+                  </p>
+                  <p className="font-body text-xs text-brand-cream/50">
+                    {cargoType === 'sensitive' ? '⚗️ Sensitive goods' : '📦 General cargo'}
+                  </p>
+                  <p className="font-body text-xs text-brand-cream/50">
+                    ${shippingCalc.usd.toFixed(2)} USD + ₦{shippingCalc.ngn.toLocaleString()} NGN
+                  </p>
+                  <div className="flex justify-between font-body text-sm pt-1 border-t border-brand-gold/10">
+                    <span className="text-brand-cream/60">Shipping</span>
+                    <span className="text-brand-cream">{formatPrice(shipping, currency)}</span>
+                  </div>
                 </div>
                 <div className="flex justify-between font-heading font-bold pt-2 border-t border-brand-gold/20">
                   <span className="text-brand-cream">Total</span>

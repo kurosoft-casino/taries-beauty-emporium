@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { notFound } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -7,8 +7,13 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Star, ShoppingBag, Heart, Share2, Truck, Shield, ChevronLeft, ChevronRight, Check, Plus, Minus, MessageCircle } from 'lucide-react'
 import { products, formatPrice } from '@/lib/products'
 import ProductCard from '@/components/shop/ProductCard'
+import ProductReviews from '@/components/shop/ProductReviews'
 import { useCartStore } from '@/lib/store'
 import { incrementView } from '@/lib/views'
+import { toggleWishlist, isWishlisted } from '@/lib/wishlist'
+import { getAverageRating, getReviewCount, seedReviewsIfEmpty } from '@/lib/reviews'
+import { addRecentlyViewed } from '@/lib/recentlyViewed'
+import FlashSaleTimer from '@/components/shop/FlashSaleTimer'
 import toast from 'react-hot-toast'
 
 export default function ProductDetail({ slug }: { slug: string }) {
@@ -21,17 +26,65 @@ export default function ProductDetail({ slug }: { slug: string }) {
   const [qty,          setQty]          = useState(1)
   const [wished,       setWished]       = useState(false)
   const [activeTab,    setActiveTab]    = useState<'details' | 'shipping' | 'reviews'>('details')
+  const [liveRating,   setLiveRating]   = useState(product.rating)
+  const [liveCount,    setLiveCount]    = useState(product.reviews)
+  const [shareOpen,    setShareOpen]    = useState(false)
+  const shareRef = useRef<HTMLDivElement>(null)
 
   const { addItem, openCart, currency } = useCartStore()
   const related = products.filter(p => p.category === product.category && p.id !== product.id).slice(0, 4)
 
-  // Track product view on mount
-  useEffect(() => { incrementView(slug) }, [slug])
+  // Track product view on mount, seed reviews, init wishlist, record recently viewed
+  useEffect(() => {
+    incrementView(slug)
+    addRecentlyViewed(slug)
+    seedReviewsIfEmpty()
+    setWished(isWishlisted(slug))
+    const avg = getAverageRating(slug)
+    const cnt = getReviewCount(slug)
+    if (avg > 0) setLiveRating(avg)
+    if (cnt > 0) setLiveCount(cnt)
+  }, [slug])
+
+  // Close share dropdown on outside click
+  useEffect(() => {
+    if (!shareOpen) return
+    function handleOutsideClick(e: MouseEvent) {
+      if (shareRef.current && !shareRef.current.contains(e.target as Node)) {
+        setShareOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => document.removeEventListener('mousedown', handleOutsideClick)
+  }, [shareOpen])
 
   function handleAddToCart() {
     for (let i = 0; i < qty; i++) addItem(product, selectedVars)
     toast.success('✨ Added to your cart!', { duration: 2500 })
     openCart()
+  }
+
+  function handleCopyLink() {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      toast.success('🔗 Link copied to clipboard!')
+      setShareOpen(false)
+    })
+  }
+
+  function handleShareWhatsApp() {
+    window.open(
+      `https://wa.me/?text=${encodeURIComponent(`Check out this product: ${product.name} - ${window.location.href}`)}`,
+      '_blank'
+    )
+    setShareOpen(false)
+  }
+
+  function handleShareTwitter() {
+    window.open(
+      `https://twitter.com/intent/tweet?text=${encodeURIComponent(`Check out ${product.name}`)}&url=${encodeURIComponent(window.location.href)}`,
+      '_blank'
+    )
+    setShareOpen(false)
   }
 
   const allVarsSelected = !product.variants || product.variants.every(v => selectedVars[v.label])
@@ -129,10 +182,10 @@ export default function ProductDetail({ slug }: { slug: string }) {
               <div className="flex items-center gap-3 mb-5">
                 <div className="flex">
                   {Array(5).fill(null).map((_, i) => (
-                    <Star key={i} size={16} className={i < Math.floor(product.rating) ? 'fill-brand-gold-2 text-brand-gold-2' : 'text-brand-gold/20'} />
+                    <Star key={i} size={16} className={i < Math.floor(liveRating) ? 'fill-brand-gold-2 text-brand-gold-2' : 'text-brand-gold/20'} />
                   ))}
                 </div>
-                <span className="font-body text-sm text-brand-cream/60">{product.rating} · {product.reviews} reviews</span>
+                <span className="font-body text-sm text-brand-cream/60">{liveRating.toFixed(1)} · {liveCount} reviews</span>
               </div>
 
               <div className="flex items-baseline gap-3 mb-6">
@@ -148,6 +201,8 @@ export default function ProductDetail({ slug }: { slug: string }) {
               </div>
 
               <p className="font-body text-sm text-brand-cream/60 leading-relaxed mb-6">{product.shortDesc}</p>
+
+              {product.badge === 'sale' && <FlashSaleTimer />}
 
               {product.variants?.map(variant => (
                 <div key={variant.label} className="mb-5">
@@ -196,12 +251,62 @@ export default function ProductDetail({ slug }: { slug: string }) {
                   {allVarsSelected ? 'Add to Cart' : 'Select Options'}
                 </motion.button>
                 <motion.button
-                  onClick={() => setWished(!wished)}
+                  onClick={() => setWished(toggleWishlist(slug))}
                   whileTap={{ scale: 0.9 }}
                   className="w-14 h-14 border border-brand-gold/30 flex items-center justify-center text-brand-cream hover:border-brand-gold hover:text-brand-gold-3 transition-all duration-200"
                 >
                   <Heart size={18} className={wished ? 'fill-red-500 text-red-500' : ''} />
                 </motion.button>
+
+                {/* Share button */}
+                <div className="relative" ref={shareRef}>
+                  <motion.button
+                    onClick={() => setShareOpen(prev => !prev)}
+                    whileTap={{ scale: 0.9 }}
+                    className={`w-14 h-14 border flex items-center justify-center transition-all duration-200 ${
+                      shareOpen
+                        ? 'border-brand-gold text-brand-gold-3 bg-brand-gold/10'
+                        : 'border-brand-gold/30 text-brand-cream hover:border-brand-gold hover:text-brand-gold-3'
+                    }`}
+                    aria-label="Share product"
+                  >
+                    <Share2 size={18} />
+                  </motion.button>
+
+                  <AnimatePresence>
+                    {shareOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute bottom-full right-0 mb-2 bg-brand-black-2 border border-brand-gold/20 shadow-gold-xl min-w-[200px] z-20 py-1"
+                      >
+                        <button
+                          onClick={handleCopyLink}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm font-body text-brand-cream hover:bg-brand-gold/10 transition-colors"
+                        >
+                          <Check size={15} className="text-brand-gold-2" />
+                          Copy Link
+                        </button>
+                        <button
+                          onClick={handleShareWhatsApp}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm font-body text-brand-cream hover:bg-brand-gold/10 transition-colors"
+                        >
+                          <span className="text-base leading-none">💬</span>
+                          WhatsApp
+                        </button>
+                        <button
+                          onClick={handleShareTwitter}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm font-body text-brand-cream hover:bg-brand-gold/10 transition-colors"
+                        >
+                          <span className="font-bold text-sm text-brand-cream/80">𝕏</span>
+                          X (Twitter)
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
 
               <a
@@ -284,35 +389,7 @@ export default function ProductDetail({ slug }: { slug: string }) {
               </div>
             )}
             {activeTab === 'reviews' && (
-              <div>
-                <div className="flex items-center gap-6 mb-8 p-5 bg-brand-black-2 border border-brand-gold/20">
-                  <div className="text-center">
-                    <p className="font-display text-5xl font-bold gold-text">{product.rating}</p>
-                    <div className="flex justify-center my-1">
-                      {Array(5).fill(null).map((_, i) => (
-                        <Star key={i} size={14} className={i < Math.floor(product.rating) ? 'fill-brand-gold-2 text-brand-gold-2' : 'text-brand-gold/20'} />
-                      ))}
-                    </div>
-                    <p className="font-body text-xs text-brand-cream/40">{product.reviews} reviews</p>
-                  </div>
-                  <div className="flex-1 space-y-2">
-                    {[5, 4, 3, 2, 1].map(star => {
-                      const pct = star === 5 ? 78 : star === 4 ? 15 : star === 3 ? 5 : star === 2 ? 1 : 1
-                      return (
-                        <div key={star} className="flex items-center gap-2">
-                          <span className="font-body text-xs text-brand-cream/40 w-2">{star}</span>
-                          <Star size={10} className="fill-brand-gold-2 text-brand-gold-2" />
-                          <div className="flex-1 h-1.5 bg-brand-black-3 rounded overflow-hidden">
-                            <div className="h-full bg-gold-gradient" style={{ width: `${pct}%` }} />
-                          </div>
-                          <span className="font-body text-xs text-brand-cream/40 w-7">{pct}%</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-                <p className="font-body text-sm text-brand-cream/40 text-center">Reviews are verified from customers who purchased this product.</p>
-              </div>
+              <ProductReviews slug={slug} />
             )}
           </div>
         </div>

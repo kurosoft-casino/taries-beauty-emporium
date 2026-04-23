@@ -56,6 +56,14 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${playfair.variable} ${poppins.variable} ${cormorant.variable}`}>
+      <head>
+        <link rel="manifest" href="/taries-beauty-emporium/manifest.json" />
+        <meta name="theme-color" content="#D4AF37" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Taries Beauty" />
+        <link rel="apple-touch-icon" href="/taries-beauty-emporium/images/logo.jpg" />
+      </head>
       <body className="bg-brand-black font-body text-brand-cream antialiased">
         <LangProvider>
         <CartProvider>

@@ -25,6 +25,7 @@ export interface Order {
     postalCode: string
   }
   notes?: string
+  giftMessage?: string
 }
 
 export function saveOrder(order: Order): void {
@@ -56,6 +57,17 @@ export function getAllOrders(): Order[] {
     return raw ? JSON.parse(raw) : []
   } catch {
     return []
+  }
+}
+
+export function updateOrderStatus(orderId: string, status: Order['status']): void {
+  if (typeof window === 'undefined') return
+  try {
+    const orders = getAllOrders()
+    const updated = orders.map(o => o.orderId === orderId ? { ...o, status } : o)
+    localStorage.setItem('taries-orders', JSON.stringify(updated))
+  } catch {
+    // localStorage unavailable
   }
 }
 

@@ -1,0 +1,20 @@
+{
+  "name": "Taries Beauty Emporium",
+  "short_name": "Taries Beauty",
+  "description": "Luxury 100% human hair wigs, bundles & beauty products — direct from Guangzhou, China",
+  "start_url": "/taries-beauty-emporium/",
+  "scope": "/taries-beauty-emporium/",
+  "display": "standalone",
+  "background_color": "#0A0A0A",
+  "theme_color": "#D4AF37",
+  "orientation": "portrait-primary",
+  "categories": ["shopping", "beauty", "fashion"],
+  "lang": "en",
+  "icons": [
+    { "src": "/taries-beauty-emporium/images/logo.jpg", "sizes": "192x192", "type": "image/jpeg", "purpose": "any maskable" },
+    { "src": "/taries-beauty-emporium/images/logo.jpg", "sizes": "512x512", "type": "image/jpeg", "purpose": "any maskable" }
+  ],
+  "screenshots": [
+    { "src": "/taries-beauty-emporium/images/logo.jpg", "sizes": "1280x720", "type": "image/jpeg", "form_factor": "wide" }
+  ]
+}
