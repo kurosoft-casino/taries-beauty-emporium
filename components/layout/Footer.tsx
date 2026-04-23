@@ -132,15 +132,15 @@ export default function Footer() {
                 <p className="font-body text-sm text-brand-cream/60">Ships from Guangzhou, China<br />Delivers to Nigeria & Ghana</p>
               </li>
               <li>
-                <a href="https://wa.me/+8613800138000" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 font-body text-sm text-brand-cream/60 hover:text-brand-gold-3 transition-colors">
+                <a href="https://wa.me/2349035412919" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 font-body text-sm text-brand-cream/60 hover:text-brand-gold-3 transition-colors">
                   <Phone size={16} className="text-brand-gold-2 shrink-0" />
-                  WhatsApp: +86 138 0013 8000
+                  WhatsApp: +234 903 541 2919
                 </a>
               </li>
               <li>
-                <a href="mailto:hello@tariesbeauty.com" className="flex items-center gap-3 font-body text-sm text-brand-cream/60 hover:text-brand-gold-3 transition-colors">
+                <a href="mailto:tariesbeautye@gmail.com" className="flex items-center gap-3 font-body text-sm text-brand-cream/60 hover:text-brand-gold-3 transition-colors">
                   <Mail size={16} className="text-brand-gold-2 shrink-0" />
-                  hello@tariesbeauty.com
+                  tariesbeautye@gmail.com
                 </a>
               </li>
             </ul>

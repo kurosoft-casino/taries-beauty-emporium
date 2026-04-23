@@ -297,7 +297,7 @@ export default function Header() {
             </div>
 
             <a
-              href="https://wa.me/+8613800138000"
+              href="https://wa.me/2349035412919"
               target="_blank"
               rel="noopener noreferrer"
               className="mt-8 btn-gold text-center block"

@@ -52,7 +52,7 @@ export default function CustomWigsPage() {
             Our wig specialists will review your specifications and reach out within 24 hours via <strong className="text-brand-cream">{form.email}</strong> and WhatsApp to confirm details, pricing and timeline. Custom wigs take 14–21 days to craft.
           </p>
           <a
-            href={`https://wa.me/+8613800138000?text=${encodeURIComponent(waMessage)}`}
+            href={`https://wa.me/2349035412919?text=${encodeURIComponent(waMessage)}`}
             target="_blank"
             rel="noopener noreferrer"
             className="btn-gold inline-flex items-center gap-2 mb-3"
@@ -159,7 +159,7 @@ export default function CustomWigsPage() {
               <Sparkles size={18} /> Submit Custom Wig Order
             </button>
             <a
-              href={`https://wa.me/+8613800138000?text=${encodeURIComponent('Hi! I want to discuss a custom wig order.')}`}
+              href={`https://wa.me/2349035412919?text=${encodeURIComponent('Hi! I want to discuss a custom wig order.')}`}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full flex items-center justify-center gap-2 py-3 border border-green-500/30 text-green-400 hover:bg-green-500/10 transition-all font-body text-sm font-semibold"

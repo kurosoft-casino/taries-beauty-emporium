@@ -201,7 +201,7 @@ export default function ProductDetail({ slug }: { slug: string }) {
               </div>
 
               <a
-                href={`https://wa.me/+8613800138000?text=Hi! I'd like to order: ${encodeURIComponent(product.name)}`}
+                href={`https://wa.me/2349035412919?text=Hi! I'd like to order: ${encodeURIComponent(product.name)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full flex items-center justify-center gap-2 py-3 border border-green-500/30 text-green-400 hover:bg-green-500/10 transition-all duration-200 font-body text-sm font-semibold mb-6"

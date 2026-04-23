@@ -130,7 +130,7 @@ export default function CartPage() {
               </Link>
 
               <a
-                href={`https://wa.me/+8613800138000?text=I'd like to order: ${items.map(i => `${i.product.name} x${i.quantity}`).join(', ')}`}
+                href={`https://wa.me/2349035412919?text=I'd like to order: ${items.map(i => `${i.product.name} x${i.quantity}`).join(', ')}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full flex items-center justify-center gap-2 py-3 border border-green-500/30 text-green-400 hover:bg-green-500/10 transition-all font-body text-sm font-semibold"
