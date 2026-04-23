@@ -15,6 +15,7 @@ import { toggleWishlist, isWishlisted } from '@/lib/wishlist'
 import { getAverageRating, getReviewCount, seedReviewsIfEmpty } from '@/lib/reviews'
 import { addRecentlyViewed } from '@/lib/recentlyViewed'
 import FlashSaleTimer from '@/components/shop/FlashSaleTimer'
+import RecentlyViewedBar from '@/components/shop/RecentlyViewedBar'
 import toast from 'react-hot-toast'
 
 export default function ProductDetail({ slug }: { slug: string }) {
@@ -30,6 +31,8 @@ export default function ProductDetail({ slug }: { slug: string }) {
   const [liveRating,   setLiveRating]   = useState(product.rating)
   const [liveCount,    setLiveCount]    = useState(product.reviews)
   const [shareOpen,    setShareOpen]    = useState(false)
+  const [notifyEmail,  setNotifyEmail]  = useState('')
+  const [notifySent,   setNotifySent]   = useState(false)
   const shareRef = useRef<HTMLDivElement>(null)
 
   const { addItem, openCart, currency } = useCartStore()
@@ -320,6 +323,42 @@ export default function ProductDetail({ slug }: { slug: string }) {
                 Order via WhatsApp
               </a>
 
+              {/* Notify Me — shown when out of stock */}
+              {!product.inStock && (
+                <div className="mb-6 p-4 bg-brand-black-3 border border-brand-gold/20">
+                  <p className="font-heading text-sm font-semibold text-brand-cream mb-3">🔔 Out of Stock — Get Notified</p>
+                  {notifySent ? (
+                    <p className="font-body text-xs text-brand-gold-3">✓ You're on the list! We'll email you when this is back.</p>
+                  ) : (
+                    <form
+                      onSubmit={e => {
+                        e.preventDefault()
+                        if (!notifyEmail.trim()) return
+                        const key = 'taries-notify-me'
+                        const list = JSON.parse(localStorage.getItem(key) || '[]')
+                        list.push({ slug, email: notifyEmail.trim(), addedAt: new Date().toISOString() })
+                        localStorage.setItem(key, JSON.stringify(list))
+                        setNotifySent(true)
+                        toast.success('You\'ll be notified when it\'s back!')
+                      }}
+                      className="flex gap-2"
+                    >
+                      <input
+                        type="email"
+                        value={notifyEmail}
+                        onChange={e => setNotifyEmail(e.target.value)}
+                        placeholder="your@email.com"
+                        required
+                        className="flex-1 bg-brand-black border border-brand-gold/20 px-3 py-2 font-body text-xs text-brand-cream placeholder-brand-cream/30 focus:outline-none focus:border-brand-gold/50"
+                      />
+                      <button type="submit" className="btn-gold px-4 py-2 text-xs font-semibold shrink-0">
+                        Notify Me
+                      </button>
+                    </form>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 {[
                   { icon: Truck,   label: product.deliveryDays, sub: `Ships from ${product.shipsFrom}` },
@@ -408,6 +447,7 @@ export default function ProductDetail({ slug }: { slug: string }) {
           </div>
         )}
       </div>
+      <RecentlyViewedBar />
     </div>
   )
 }

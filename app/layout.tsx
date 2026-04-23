@@ -8,6 +8,8 @@ import Footer from '@/components/layout/Footer'
 import CartDrawer from '@/components/layout/CartDrawer'
 import FirstTimeBuyerBanner from '@/components/ui/FirstTimeBuyerBanner'
 import ChatWidget from '@/components/ui/ChatWidget'
+import CookieConsent from '@/components/ui/CookieConsent'
+import ExitIntentPopup from '@/components/ui/ExitIntentPopup'
 import { Toaster } from 'react-hot-toast'
 
 const playfair = Playfair_Display({
@@ -87,6 +89,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             }}
           />
           <ChatWidget />
+          <CookieConsent />
+          <ExitIntentPopup />
         </CartProvider>
         </LangProvider>
       </body>
