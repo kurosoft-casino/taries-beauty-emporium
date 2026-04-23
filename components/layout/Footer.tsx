@@ -66,7 +66,7 @@ export default function Footer() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10">
         {/* Top section */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 pb-12 border-b border-brand-gold/20">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 sm:gap-12 pb-12 border-b border-brand-gold/20">
           {/* Brand col */}
           <div className="lg:col-span-1">
             <Link href="/" className="flex items-center gap-3 mb-6">

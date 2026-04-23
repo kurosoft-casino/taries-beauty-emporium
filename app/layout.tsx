@@ -66,7 +66,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-title" content="Taries Beauty" />
         <link rel="apple-touch-icon" href="/taries-beauty-emporium/images/logo.jpg" />
       </head>
-      <body className="bg-brand-black font-body text-brand-cream antialiased">
+      <body className="bg-brand-black font-body text-brand-cream antialiased overflow-x-hidden">
         <LangProvider>
         <CartProvider>
           <Header />

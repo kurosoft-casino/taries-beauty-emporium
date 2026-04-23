@@ -778,9 +778,9 @@ export default function VendorDashboardPage() {
             {/* ══ MESSAGES ═════════════════════════════════════════════════════ */}
             {tab === 'messages' && (
               <div className="bg-brand-black-2 border border-brand-gold/20 rounded-2xl overflow-hidden">
-                <div className="flex" style={{ minHeight: '520px' }}>
+                <div className="flex overflow-x-auto" style={{ minHeight: '520px' }}>
                   {/* Conversations list */}
-                  <div className="w-56 sm:w-64 border-r border-brand-gold/20 flex flex-col flex-shrink-0">
+                  <div className="w-44 sm:w-56 md:w-64 border-r border-brand-gold/20 flex flex-col flex-shrink-0">
                     <div className="px-4 py-3.5 border-b border-brand-gold/20 flex items-center justify-between">
                       <h2 className="text-brand-cream font-display font-semibold text-sm">Inbox</h2>
                       {unreadCount > 0 && (
