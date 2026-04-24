@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ShoppingBag, Search, Menu, X, ChevronDown, Heart, User } from 'lucide-react'
 import { useCartStore } from '@/lib/store'
@@ -30,6 +30,7 @@ export default function Header() {
   const { lang, setLang, t } = useLang()
   const totalItems = getTotalItems()
   const router = useRouter()
+  const pathname = usePathname()
   const shopCategories = useMemo(() => [
     { icon: '👑', id: 'wigs', href: '/shop?category=wigs' },
     { icon: '✨', id: 'bundles', href: '/shop?category=bundles' },
@@ -111,6 +112,8 @@ export default function Header() {
     refresh()
     return subscribeStoreSettings(refresh)
   }, [])
+
+  if (pathname.startsWith('/admin')) return null
 
   return (
     <>

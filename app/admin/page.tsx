@@ -19,6 +19,7 @@ import { getInventory, setInventoryItem } from '@/lib/inventory'
 import type { InventoryItem } from '@/lib/inventory'
 import { ADMIN_EMAILS, getAdminLevel, getCurrentUser, isAdminUser, type AdminLevel, type User } from '@/lib/auth'
 import { logoSrc } from '@/lib/assets'
+import { useLang } from '@/lib/lang'
 import { DEFAULT_STORE_SETTINGS, getMaintenanceMode, getStoreSettings, saveMaintenanceMode, saveStoreSettings } from '@/lib/storeSettings'
 import { appendAuditEvent, getAdminRoleLabel, readSupportThreads } from '@/lib/adminConsole'
 import { AuditLogTab, MarketingTab, SupportInboxTab } from '@/components/admin/OperationsTabs'
@@ -41,6 +42,94 @@ interface StoreSettings { storeName: string; whatsapp: string; email: string; an
 interface VendorProduct {
   id: string; name: string; vendorId: string; vendorName?: string; category: string
   price: number; status: 'pending' | 'approved' | 'featured' | 'removed'; createdAt: string
+}
+
+const adminTranslations = {
+  EN: {
+    dashboard: 'Dashboard',
+    orders: 'Orders',
+    users: 'Users',
+    products: 'Products',
+    vendors: 'Vendors',
+    analytics: 'Analytics',
+    inventory: 'Inventory',
+    support: 'Support',
+    marketing: 'Marketing',
+    audit: 'Audit Log',
+    settings: 'Settings',
+    adminPanel: 'Admin Panel',
+    adminShort: 'Admin',
+    logout: 'Log Out',
+    localDataNotice: 'Registered users, orders, and vendor records on this GitHub Pages build are stored in this browser. This dashboard shows the accounts created or used on this device.',
+    usersNotice: 'This list shows accounts currently stored in this browser for the live site. If another device registered a user, it will not appear here until account data is moved to the backend.',
+    totalRevenue: 'Total Revenue',
+    totalOrders: 'Total Orders',
+    totalUsers: 'Total Users',
+    onlineNow: 'Online Now',
+    supportInbox: 'Support Inbox',
+    pendingVendors: 'Pending Vendors',
+    ordersCount: 'orders',
+    pendingCount: 'pending',
+    onlineCount: 'online',
+    last15Min: 'last 15 min',
+    needResponse: 'need response',
+    awaitingReview: 'awaiting review',
+    recentActivity: 'Recent Activity',
+    registered: 'registered',
+    noActivityYet: 'No activity yet',
+    topProductsByViews: 'Top Products by Views',
+    noViewDataYet: 'No view data yet',
+    quickActions: 'Quick Actions',
+    exportCsv: 'Export CSV',
+    registeredUsers: 'Registered Users',
+    broadcastsPromos: 'Broadcasts & Promos',
+    manageProducts: 'Manage Products',
+  },
+  ZH: {
+    dashboard: '控制台',
+    orders: '订单',
+    users: '用户',
+    products: '产品',
+    vendors: '商家',
+    analytics: '数据分析',
+    inventory: '库存',
+    support: '客服',
+    marketing: '营销',
+    audit: '审计日志',
+    settings: '设置',
+    adminPanel: '管理后台',
+    adminShort: '管理',
+    logout: '退出登录',
+    localDataNotice: '当前 GitHub Pages 版本中的用户、订单和商家数据保存在此浏览器中。此控制台显示的是在本设备上创建或使用过的账户数据。',
+    usersNotice: '此列表显示当前浏览器中保存的站点账户。如果其他设备注册了用户，在账户数据迁移到后端前，这里不会显示。',
+    totalRevenue: '总收入',
+    totalOrders: '总订单数',
+    totalUsers: '总用户数',
+    onlineNow: '当前在线',
+    supportInbox: '客服收件箱',
+    pendingVendors: '待审核商家',
+    ordersCount: '笔订单',
+    pendingCount: '待处理',
+    onlineCount: '在线',
+    last15Min: '最近15分钟',
+    needResponse: '待回复',
+    awaitingReview: '等待审核',
+    recentActivity: '最近动态',
+    registered: '已注册',
+    noActivityYet: '暂无动态',
+    topProductsByViews: '浏览量最高的产品',
+    noViewDataYet: '暂无浏览数据',
+    quickActions: '快捷操作',
+    exportCsv: '导出 CSV',
+    registeredUsers: '注册用户',
+    broadcastsPromos: '广播与优惠活动',
+    manageProducts: '管理产品',
+  },
+} as const
+
+function useAdminText() {
+  const { lang } = useLang()
+  return adminTranslations[lang]
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -311,17 +400,28 @@ function AdminAccountGate({ user }: { user: User | null }) {
 
 // ── DashboardTab ──────────────────────────────────────────────────────────────
 function DashboardTab({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
+  const text = useAdminText()
   const [orders, setOrders] = useState<Order[]>([])
   const [users, setUsers] = useState<AdminUser[]>([])
   const [vendors, setVendors] = useState<Vendor[]>([])
   const [topViews, setTopViews] = useState<{ slug: string; views: number }[]>([])
 
   useEffect(() => {
-    localStorage.setItem('taries-presence-admin', Date.now().toString())
-    setOrders(getAllOrders())
-    setUsers(readUsers())
-    setVendors(readVendors())
-    setTopViews(getAllViewsSorted().slice(0, 5))
+    const refresh = () => {
+      localStorage.setItem('taries-presence-admin', Date.now().toString())
+      setOrders(getAllOrders())
+      setUsers(readUsers())
+      setVendors(readVendors())
+      setTopViews(getAllViewsSorted().slice(0, 5))
+    }
+
+    refresh()
+    window.addEventListener('storage', refresh)
+    window.addEventListener('focus', refresh)
+    return () => {
+      window.removeEventListener('storage', refresh)
+      window.removeEventListener('focus', refresh)
+    }
   }, [])
 
   const totalRevenue  = useMemo(() => orders.reduce((s, o) => s + o.grandTotalUSD, 0), [orders])
@@ -334,24 +434,27 @@ function DashboardTab({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
     type Item = { icon: string; text: string; date: string }
     const items: Item[] = [
       ...orders.slice(0, 20).map(o => ({ icon: '📦', text: `Order #${o.orderId.slice(-6)} — ${o.customer.firstName} ${o.customer.lastName}`, date: o.date })),
-      ...users.slice(0, 20).map(u => ({ icon: '👤', text: `${u.firstName} ${u.lastName} registered`, date: u.createdAt })),
+      ...users.slice(0, 20).map(u => ({ icon: '👤', text: `${u.firstName} ${u.lastName} ${text.registered}`, date: u.createdAt })),
       ...vendors.slice(0, 20).map(v => ({ icon: '🏪', text: `${v.businessName} applied as vendor`, date: v.appliedAt })),
     ]
     return items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10)
-  }, [orders, users, vendors])
+  }, [orders, text.registered, users, vendors])
 
   const kpis = useMemo(() => [
-    { label: 'Total Revenue',   value: `$${totalRevenue.toFixed(2)}`, icon: '💰', sub: `${orders.length} orders` },
-    { label: 'Total Orders',    value: String(orders.length),          icon: '📦', sub: `${orders.filter(o => o.status === 'pending').length} pending` },
-    { label: 'Total Users',     value: String(users.length),           icon: '👥', sub: `${onlineCount} online` },
-    { label: 'Online Now',      value: String(onlineCount),            icon: '🟢', sub: 'last 15 min' },
-    { label: 'Support Inbox',   value: String(openSupport),            icon: '💬', sub: 'need response' },
-    { label: 'Pending Vendors', value: String(pendingVendors),         icon: '🏪', sub: 'awaiting review' },
-  ], [totalRevenue, orders, users, onlineCount, openSupport, pendingVendors])
+    { label: text.totalRevenue,   value: `$${totalRevenue.toFixed(2)}`, icon: '💰', sub: `${orders.length} ${text.ordersCount}` },
+    { label: text.totalOrders,    value: String(orders.length),         icon: '📦', sub: `${orders.filter(o => o.status === 'pending').length} ${text.pendingCount}` },
+    { label: text.totalUsers,     value: String(users.length),          icon: '👥', sub: `${onlineCount} ${text.onlineCount}` },
+    { label: text.onlineNow,      value: String(onlineCount),           icon: '🟢', sub: text.last15Min },
+    { label: text.supportInbox,   value: String(openSupport),           icon: '💬', sub: text.needResponse },
+    { label: text.pendingVendors, value: String(pendingVendors),        icon: '🏪', sub: text.awaitingReview },
+  ], [totalRevenue, orders, users, onlineCount, openSupport, pendingVendors, text])
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      <h1 className="font-display text-2xl gold-text">Dashboard</h1>
+      <h1 className="font-display text-2xl gold-text">{text.dashboard}</h1>
+      <div className="rounded-xl border border-brand-gold/20 bg-brand-gold/5 px-4 py-3 text-sm text-brand-cream/70">
+        {text.localDataNotice}
+      </div>
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         {kpis.map((kpi, i) => (
           <motion.div key={kpi.label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
@@ -366,8 +469,8 @@ function DashboardTab({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
 
       <div className="grid lg:grid-cols-2 gap-6">
         <div className="bg-brand-black-2 border border-brand-gold/20 rounded-xl p-5">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-brand-gold mb-4">🕐 Recent Activity</h2>
-          {activity.length === 0 && <p className="text-white/40 text-sm">No activity yet</p>}
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-brand-gold mb-4">🕐 {text.recentActivity}</h2>
+          {activity.length === 0 && <p className="text-white/40 text-sm">{text.noActivityYet}</p>}
           <div className="space-y-1">
             {activity.map((item, i) => (
               <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
@@ -380,9 +483,9 @@ function DashboardTab({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
         </div>
         <div className="bg-brand-black-2 border border-brand-gold/20 rounded-xl p-5">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-brand-gold mb-4 flex items-center gap-1.5">
-            <Eye className="w-3.5 h-3.5" /> Top Products by Views
+            <Eye className="w-3.5 h-3.5" /> {text.topProductsByViews}
           </h2>
-          {topViews.length === 0 && <p className="text-white/40 text-sm">No view data yet</p>}
+          {topViews.length === 0 && <p className="text-white/40 text-sm">{text.noViewDataYet}</p>}
           <div className="space-y-3">
             {topViews.map((v, i) => {
               const pct = Math.round((v.views / maxViews) * 100)
@@ -405,14 +508,14 @@ function DashboardTab({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
       </div>
 
       <div className="bg-brand-black-2 border border-brand-gold/20 rounded-xl p-5">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-brand-gold mb-4">Quick Actions</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-brand-gold mb-4">{text.quickActions}</h2>
         <div className="flex flex-wrap gap-3">
           <button onClick={() => exportBlob(ordersToCSV(orders), 'taries-orders.csv', 'text/csv')}
             className="btn-outline-gold flex items-center gap-2 text-sm">
-            <Download className="w-4 h-4" /> Export CSV
+            <Download className="w-4 h-4" /> {text.exportCsv}
           </button>
           <button onClick={() => onNavigate('vendors')} className="btn-outline-gold relative flex items-center gap-2 text-sm">
-            <Store className="w-4 h-4" /> Pending Vendors
+            <Store className="w-4 h-4" /> {text.pendingVendors}
             {pendingVendors > 0 && (
               <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center px-1">
                 {pendingVendors}
@@ -420,16 +523,16 @@ function DashboardTab({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
             )}
           </button>
           <button onClick={() => onNavigate('users')} className="btn-outline-gold flex items-center gap-2 text-sm">
-            <Users className="w-4 h-4" /> Registered Users
+            <Users className="w-4 h-4" /> {text.registeredUsers}
           </button>
           <button onClick={() => onNavigate('support')} className="btn-outline-gold flex items-center gap-2 text-sm">
-            <MessageCircle className="w-4 h-4" /> Support Inbox
+            <MessageCircle className="w-4 h-4" /> {text.supportInbox}
           </button>
           <button onClick={() => onNavigate('marketing')} className="btn-outline-gold flex items-center gap-2 text-sm">
-            <Tag className="w-4 h-4" /> Broadcasts & Promos
+            <Tag className="w-4 h-4" /> {text.broadcastsPromos}
           </button>
           <button onClick={() => onNavigate('products')} className="btn-gold flex items-center gap-2 text-sm">
-            <Plus className="w-4 h-4" /> Manage Products
+            <Plus className="w-4 h-4" /> {text.manageProducts}
           </button>
         </div>
       </div>
@@ -675,13 +778,27 @@ function OrdersTab() {
 
 // ── UsersTab ──────────────────────────────────────────────────────────────────
 function UsersTab() {
+  const text = useAdminText()
   const [allOrders, setAllOrders] = useState<Order[]>([])
   const [users, setUsers] = useState<AdminUser[]>([])
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'active' | 'suspended' | 'highspender'>('all')
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
 
-  useEffect(() => { setUsers(readUsers()); setAllOrders(getAllOrders()) }, [])
+  useEffect(() => {
+    const refresh = () => {
+      setUsers(readUsers())
+      setAllOrders(getAllOrders())
+    }
+
+    refresh()
+    window.addEventListener('storage', refresh)
+    window.addEventListener('focus', refresh)
+    return () => {
+      window.removeEventListener('storage', refresh)
+      window.removeEventListener('focus', refresh)
+    }
+  }, [])
 
   const getUserStats = useCallback((email: string) => {
     const uo = allOrders.filter(o => o.customer.email.toLowerCase() === email.toLowerCase())
@@ -726,7 +843,10 @@ function UsersTab() {
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      <h1 className="font-display text-2xl gold-text">Users</h1>
+      <h1 className="font-display text-2xl gold-text">{text.users}</h1>
+      <div className="rounded-xl border border-brand-gold/20 bg-brand-gold/5 px-4 py-3 text-sm text-brand-cream/70">
+        {text.usersNotice}
+      </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[{label:'Total Users',value:stats.total},{label:'Online Now',value:stats.online},{label:'New This Week',value:stats.newThisWeek},{label:'Suspended',value:stats.suspended}].map(s => (
           <div key={s.label} className="bg-brand-black-2 border border-brand-gold/20 rounded-xl p-4 text-center">
@@ -1606,6 +1726,7 @@ function SettingsTab() {
 
 // ── AdminPage ─────────────────────────────────────────────────────────────────
 export default function AdminPage() {
+  const text = useAdminText()
   const [authenticated, setAuthenticated] = useState(false)
   const [activeTab, setActiveTab] = useState<TabId>('dashboard')
   const [orderBadge, setOrderBadge] = useState(0)
@@ -1635,14 +1756,17 @@ export default function AdminPage() {
   if (!authenticated) return <PinEntry onSuccess={() => setAuthenticated(true)} />
 
   const tabs: { id: TabId; label: string; icon: React.ReactNode; badge?: number }[] = [
-    { id: 'dashboard',  label: 'Dashboard',  icon: <LayoutDashboard className="w-4 h-4" /> },
-    { id: 'orders',     label: 'Orders',     icon: <Package className="w-4 h-4" />,  badge: orderBadge  },
-    { id: 'users',      label: 'Users',      icon: <Users className="w-4 h-4" /> },
-    { id: 'products',   label: 'Products',   icon: <Tag className="w-4 h-4" /> },
-    { id: 'vendors',    label: 'Vendors',    icon: <Store className="w-4 h-4" />,    badge: vendorBadge },
-    { id: 'analytics',  label: 'Analytics',  icon: <BarChart2 className="w-4 h-4" /> },
-    { id: 'inventory',  label: 'Inventory',  icon: <Boxes className="w-4 h-4" /> },
-    { id: 'settings',   label: 'Settings',   icon: <Settings className="w-4 h-4" /> },
+    { id: 'dashboard',  label: text.dashboard, icon: <LayoutDashboard className="w-4 h-4" /> },
+    { id: 'orders',     label: text.orders,    icon: <Package className="w-4 h-4" />,  badge: orderBadge  },
+    { id: 'users',      label: text.users,     icon: <Users className="w-4 h-4" /> },
+    { id: 'products',   label: text.products,  icon: <Tag className="w-4 h-4" /> },
+    { id: 'vendors',    label: text.vendors,   icon: <Store className="w-4 h-4" />,    badge: vendorBadge },
+    { id: 'analytics',  label: text.analytics, icon: <BarChart2 className="w-4 h-4" /> },
+    { id: 'inventory',  label: text.inventory, icon: <Boxes className="w-4 h-4" /> },
+    { id: 'support',    label: text.support,   icon: <MessageCircle className="w-4 h-4" /> },
+    { id: 'marketing',  label: text.marketing, icon: <ExternalLink className="w-4 h-4" /> },
+    { id: 'audit',      label: text.audit,     icon: <Eye className="w-4 h-4" /> },
+    { id: 'settings',   label: text.settings,  icon: <Settings className="w-4 h-4" /> },
   ]
 
   function renderTab() {
@@ -1654,6 +1778,9 @@ export default function AdminPage() {
       case 'vendors':    return <VendorsTab />
       case 'analytics':  return <AnalyticsTab />
       case 'inventory':  return <InventoryTab />
+      case 'support':    return <SupportInboxTab adminEmail={adminUser?.email ?? 'unknown-admin'} />
+      case 'marketing':  return <MarketingTab adminEmail={adminUser?.email ?? 'unknown-admin'} />
+      case 'audit':      return <AuditLogTab />
       case 'settings':   return <SettingsTab />
     }
   }
@@ -1691,9 +1818,9 @@ export default function AdminPage() {
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <Image src={logoSrc} alt="Taries" width={28} height={28} unoptimized className="rounded-full border border-brand-gold/40" />
-            <span className="font-heading text-sm text-brand-gold font-bold">🔐 Admin</span>
+            <span className="font-heading text-sm text-brand-gold font-bold">🔐 {text.adminShort}</span>
           </div>
-          <button onClick={() => setAuthenticated(false)} className="p-2 text-white/50 hover:text-red-400 transition-colors"><LogOut className="w-4 h-4" /></button>
+          <button aria-label={text.logout} onClick={() => setAuthenticated(false)} className="p-2 text-white/50 hover:text-red-400 transition-colors"><LogOut className="w-4 h-4" /></button>
         </div>
         <div className="flex overflow-x-auto pb-2 px-3 gap-2" style={{ scrollbarWidth: 'none' }}>
           {tabs.map(tab => (
@@ -1710,9 +1837,9 @@ export default function AdminPage() {
 
       <main className="lg:ml-64 min-h-screen">
         <header className="hidden lg:flex items-center justify-between px-6 py-4 border-b border-brand-gold/10 bg-brand-black-2/50 backdrop-blur-sm sticky top-0 z-30">
-          <p className="font-heading text-sm text-white/50">🔐 ADMIN PANEL — <span className="text-brand-gold">Taries Beauty Emporium</span></p>
+          <p className="font-heading text-sm text-white/50">🔐 {text.adminPanel} — <span className="text-brand-gold">Taries Beauty Emporium</span></p>
           <button onClick={() => setAuthenticated(false)} className="flex items-center gap-2 text-sm text-white/40 hover:text-red-400 transition-colors">
-            <LogOut className="w-4 h-4" /> Log Out
+            <LogOut className="w-4 h-4" /> {text.logout}
           </button>
         </header>
         <AnimatePresence mode="wait">

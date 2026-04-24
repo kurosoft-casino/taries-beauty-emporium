@@ -1,5 +1,6 @@
 'use client'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { MapPin, Phone, Mail, Heart } from 'lucide-react'
@@ -45,6 +46,7 @@ export default function Footer() {
   const [newsletterEmail, setNewsletterEmail] = useState('')
   const [subscribing, setSubscribing] = useState(false)
   const { lang } = useLang()
+  const pathname = usePathname()
   const footerLinks = {
     shop: categories.map(category => ({
       label: getCategoryCopy(category.id, lang)?.label ?? category.label,
@@ -70,6 +72,8 @@ export default function Footer() {
     refresh()
     return subscribeStoreSettings(refresh)
   }, [])
+
+  if (pathname.startsWith('/admin')) return null
 
   async function handleSubscribe(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
