@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
+import Link from 'next/link'
 import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast, { Toaster } from 'react-hot-toast'
 import {
   LayoutDashboard, Package, Users, Tag, Store, BarChart2, Boxes, Settings,
   LogOut, Lock, Search, Eye, Pencil, Trash2, Check, X, ChevronUp, ChevronDown,
-  ExternalLink, Phone, Download, AlertTriangle, Plus,
+  ExternalLink, Phone, Download, AlertTriangle, Plus, MessageCircle,
 } from 'lucide-react'
 import { getAllOrders, updateOrderStatus, formatOrderDate } from '@/lib/orders'
 import type { Order } from '@/lib/orders'
@@ -16,11 +17,14 @@ import type { Product } from '@/lib/products'
 import { getAllViewsSorted } from '@/lib/views'
 import { getInventory, setInventoryItem } from '@/lib/inventory'
 import type { InventoryItem } from '@/lib/inventory'
-import type { User } from '@/lib/auth'
+import { ADMIN_EMAILS, getAdminLevel, getCurrentUser, isAdminUser, type AdminLevel, type User } from '@/lib/auth'
 import { logoSrc } from '@/lib/assets'
+import { DEFAULT_STORE_SETTINGS, getMaintenanceMode, getStoreSettings, saveMaintenanceMode, saveStoreSettings } from '@/lib/storeSettings'
+import { appendAuditEvent, getAdminRoleLabel, readSupportThreads } from '@/lib/adminConsole'
+import { AuditLogTab, MarketingTab, SupportInboxTab } from '@/components/admin/OperationsTabs'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type TabId = 'dashboard' | 'orders' | 'users' | 'products' | 'vendors' | 'analytics' | 'inventory' | 'settings'
+type TabId = 'dashboard' | 'orders' | 'users' | 'products' | 'vendors' | 'analytics' | 'inventory' | 'support' | 'marketing' | 'audit' | 'settings'
 type AdminUser = User & { suspended?: boolean }
 type StatusFilterOption = Order['status'] | 'all' | 'cancelled'
 
@@ -54,8 +58,8 @@ function timeAgo(isoString: string): string {
   return `${Math.floor(hrs / 24)}d ago`
 }
 function getAdminPin(): string {
-  if (typeof window === 'undefined') return '8520'
-  return localStorage.getItem('taries-admin-pin') || '8520'
+  if (typeof window === 'undefined') return ''
+  return localStorage.getItem('taries-admin-pin') || ''
 }
 function readUsers(): AdminUser[] {
   if (typeof window === 'undefined') return []
@@ -127,6 +131,15 @@ function saveVendorProductStatus(vendorId: string, productId: string, status: Ve
   } catch { /* ignore */ }
 }
 
+function recordAdminAction(action: string, target: string, detail?: string) {
+  appendAuditEvent({
+    actor: getCurrentUser()?.email ?? 'unknown-admin',
+    action,
+    target,
+    detail,
+  })
+}
+
 const statusColor: Record<Order['status'], string> = {
   pending:    'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
   processing: 'bg-blue-500/20 text-blue-400 border border-blue-500/30',
@@ -140,12 +153,19 @@ function PinEntry({ onSuccess }: { onSuccess: () => void }) {
   const [pin, setPin] = useState('')
   const [shake, setShake] = useState(false)
   const [error, setError] = useState(false)
+  const [needsSetup, setNeedsSetup] = useState(false)
+  const [setupForm, setSetupForm] = useState({ next: '', confirm: '' })
+  const [setupError, setSetupError] = useState('')
+
+  useEffect(() => {
+    setNeedsSetup(!getAdminPin())
+  }, [])
 
   const handleDigit = useCallback((d: string) => {
-    if (pin.length >= 4) return
+    if (pin.length >= 6) return
     const next = pin + d
     setPin(next); setError(false)
-    if (next.length === 4) {
+    if (next.length === 6) {
       if (next === getAdminPin()) {
         setTimeout(() => onSuccess(), 300)
       } else {
@@ -158,6 +178,55 @@ function PinEntry({ onSuccess }: { onSuccess: () => void }) {
   const handleBack = useCallback(() => { setPin(p => p.slice(0, -1)); setError(false) }, [])
   const keys = ['1','2','3','4','5','6','7','8','9','','0','⌫']
 
+  function handleSetup() {
+    if (!/^\d{6}$/.test(setupForm.next)) {
+      setSetupError('Create a secure 6-digit admin PIN')
+      return
+    }
+    if (setupForm.next !== setupForm.confirm) {
+      setSetupError('PINs do not match')
+      return
+    }
+    localStorage.setItem('taries-admin-pin', setupForm.next)
+    toast.success('Admin PIN created')
+    onSuccess()
+  }
+
+  if (needsSetup) {
+    return (
+      <div className="min-h-screen bg-brand-black flex items-center justify-center px-4">
+        <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm">
+          <div className="text-center mb-8">
+            <Image src={logoSrc} alt="Taries Beauty" width={72} height={72} unoptimized
+              className="rounded-full mx-auto mb-4 border-2 border-brand-gold shadow-gold" />
+            <p className="text-xs tracking-widest text-brand-gold/60 uppercase mb-1">First-Time Setup</p>
+            <h1 className="text-2xl font-display font-bold gold-text">Create Admin PIN</h1>
+          </div>
+          <div className="bg-brand-black-2 border border-brand-gold/20 rounded-2xl p-8 shadow-gold space-y-4">
+            <input
+              type="password"
+              maxLength={6}
+              value={setupForm.next}
+              onChange={e => { setSetupForm(form => ({ ...form, next: e.target.value.replace(/\D/g, '').slice(0, 6) })); setSetupError('') }}
+              placeholder="New 6-digit PIN"
+              className="w-full px-4 py-3 bg-brand-black-3 border border-brand-gold/20 rounded-xl text-white focus:outline-none focus:border-brand-gold/50 tracking-[0.4em]"
+            />
+            <input
+              type="password"
+              maxLength={6}
+              value={setupForm.confirm}
+              onChange={e => { setSetupForm(form => ({ ...form, confirm: e.target.value.replace(/\D/g, '').slice(0, 6) })); setSetupError('') }}
+              placeholder="Confirm PIN"
+              className="w-full px-4 py-3 bg-brand-black-3 border border-brand-gold/20 rounded-xl text-white focus:outline-none focus:border-brand-gold/50 tracking-[0.4em]"
+            />
+            {setupError && <p className="text-red-400 text-xs">{setupError}</p>}
+            <button onClick={handleSetup} className="btn-gold w-full">Save Admin PIN</button>
+          </div>
+        </motion.div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-brand-black flex items-center justify-center px-4">
       <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm">
@@ -169,9 +238,9 @@ function PinEntry({ onSuccess }: { onSuccess: () => void }) {
         </div>
         <div className="bg-brand-black-2 border border-brand-gold/20 rounded-2xl p-8 shadow-gold">
           <div className="flex items-center justify-center gap-3 mb-8">
-            <Lock className="w-4 h-4 text-brand-gold/50" />
-            <motion.div animate={shake ? { x: [-8, 8, -8, 8, 0] } : {}} transition={{ duration: 0.4 }} className="flex gap-4">
-              {[0,1,2,3].map(i => (
+              <Lock className="w-4 h-4 text-brand-gold/50" />
+              <motion.div animate={shake ? { x: [-8, 8, -8, 8, 0] } : {}} transition={{ duration: 0.4 }} className="flex gap-4">
+              {[0,1,2,3,4,5].map(i => (
                 <div key={i} className={`w-4 h-4 rounded-full border-2 transition-all ${
                   i < pin.length ? (error ? 'bg-red-500 border-red-500' : 'bg-brand-gold border-brand-gold') : 'border-brand-gold/30'
                 }`} />
@@ -187,6 +256,52 @@ function PinEntry({ onSuccess }: { onSuccess: () => void }) {
                 </button>
               )
             )}
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+function AdminAccountGate({ user }: { user: User | null }) {
+  const allowedEmails = ADMIN_EMAILS.join(' • ')
+
+  return (
+    <div className="min-h-screen bg-brand-black flex items-center justify-center px-4">
+      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-lg">
+        <div className="bg-brand-black-2 border border-brand-gold/20 rounded-2xl p-8 shadow-gold text-center">
+          <Image
+            src={logoSrc}
+            alt="Taries Beauty"
+            width={72}
+            height={72}
+            unoptimized
+            className="rounded-full mx-auto mb-4 border-2 border-brand-gold shadow-gold"
+          />
+          <p className="text-xs tracking-widest text-brand-gold/60 uppercase mb-2">Restricted Area</p>
+          <h1 className="text-2xl font-display font-bold gold-text mb-3">Admin accounts only</h1>
+          {user ? (
+            <>
+              <p className="text-sm text-white/70 mb-2">
+                <span className="text-brand-gold">{user.email}</span> is signed in, but it is not on the admin allowlist.
+              </p>
+              <p className="text-xs text-white/45">Allowed admins: {allowedEmails}</p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-white/70 mb-2">
+                Sign in with one of the approved admin accounts to continue.
+              </p>
+              <p className="text-xs text-white/45">Allowed admins: {allowedEmails}</p>
+            </>
+          )}
+          <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+            <Link href="/login" className="btn-gold">
+              Sign in
+            </Link>
+            <Link href="/account" className="btn-outline-gold">
+              Open account
+            </Link>
           </div>
         </div>
       </motion.div>
@@ -212,6 +327,7 @@ function DashboardTab({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
   const totalRevenue  = useMemo(() => orders.reduce((s, o) => s + o.grandTotalUSD, 0), [orders])
   const onlineCount   = useMemo(() => users.filter(u => isOnline(u.id)).length, [users])
   const pendingVendors = useMemo(() => vendors.filter(v => v.status === 'pending').length, [vendors])
+  const openSupport = useMemo(() => readSupportThreads(users, orders).filter(thread => thread.status !== 'resolved').length, [orders, users])
   const maxViews = topViews[0]?.views ?? 1
 
   const activity = useMemo(() => {
@@ -229,9 +345,9 @@ function DashboardTab({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
     { label: 'Total Orders',    value: String(orders.length),          icon: '📦', sub: `${orders.filter(o => o.status === 'pending').length} pending` },
     { label: 'Total Users',     value: String(users.length),           icon: '👥', sub: `${onlineCount} online` },
     { label: 'Online Now',      value: String(onlineCount),            icon: '🟢', sub: 'last 15 min' },
-    { label: 'Products',        value: String(products.length),        icon: '🏷️',  sub: 'in catalogue' },
+    { label: 'Support Inbox',   value: String(openSupport),            icon: '💬', sub: 'need response' },
     { label: 'Pending Vendors', value: String(pendingVendors),         icon: '🏪', sub: 'awaiting review' },
-  ], [totalRevenue, orders, users, onlineCount, pendingVendors])
+  ], [totalRevenue, orders, users, onlineCount, openSupport, pendingVendors])
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -302,6 +418,15 @@ function DashboardTab({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
                 {pendingVendors}
               </span>
             )}
+          </button>
+          <button onClick={() => onNavigate('users')} className="btn-outline-gold flex items-center gap-2 text-sm">
+            <Users className="w-4 h-4" /> Registered Users
+          </button>
+          <button onClick={() => onNavigate('support')} className="btn-outline-gold flex items-center gap-2 text-sm">
+            <MessageCircle className="w-4 h-4" /> Support Inbox
+          </button>
+          <button onClick={() => onNavigate('marketing')} className="btn-outline-gold flex items-center gap-2 text-sm">
+            <Tag className="w-4 h-4" /> Broadcasts & Promos
           </button>
           <button onClick={() => onNavigate('products')} className="btn-gold flex items-center gap-2 text-sm">
             <Plus className="w-4 h-4" /> Manage Products
@@ -1173,6 +1298,11 @@ function AnalyticsTab() {
   const discountCodes = useMemo(() => {
     const cm = new Map<string,number>()
     orders.forEach(o => {
+      if (o.couponCode) {
+        const code = o.couponCode.toUpperCase()
+        cm.set(code, (cm.get(code) ?? 0) + 1)
+        return
+      }
       if (!o.notes) return
       const match = o.notes.match(/coupon[:\s]+(\w+)/i)
       if (match) { const code=match[1].toUpperCase(); cm.set(code,(cm.get(code)??0)+1) }
@@ -1366,31 +1496,31 @@ function InventoryTab() {
 function SettingsTab() {
   const [pinForm, setPinForm] = useState({ current: '', next: '', confirm: '' })
   const [pinError, setPinError] = useState('')
-  const [settings, setSettings] = useState<StoreSettings>({ storeName: 'Taries Beauty Emporium', whatsapp: '', email: '', announcement: '' })
+  const [settings, setSettings] = useState<StoreSettings>(DEFAULT_STORE_SETTINGS)
   const [maintenance, setMaintenance] = useState(false)
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
-    try { const r = localStorage.getItem('taries-store-settings'); if (r) setSettings(JSON.parse(r) as StoreSettings) } catch { /* ignore */ }
-    setMaintenance(localStorage.getItem('taries-maintenance') === '1')
+    setSettings(getStoreSettings())
+    setMaintenance(getMaintenanceMode())
   }, [])
 
   function handlePinChange() {
     if (pinForm.current !== getAdminPin()) { setPinError('Current PIN is incorrect'); return }
-    if (!/^\d{4}$/.test(pinForm.next)) { setPinError('New PIN must be 4 digits'); return }
+    if (!/^\d{6}$/.test(pinForm.next)) { setPinError('New PIN must be 6 digits'); return }
     if (pinForm.next !== pinForm.confirm) { setPinError('PINs do not match'); return }
     localStorage.setItem('taries-admin-pin', pinForm.next)
     setPinForm({ current: '', next: '', confirm: '' }); setPinError('')
     toast.success('PIN changed successfully')
   }
   function handleSaveSettings() {
-    localStorage.setItem('taries-store-settings', JSON.stringify(settings))
+    saveStoreSettings(settings)
     setSaved(true); setTimeout(() => setSaved(false), 2000)
     toast.success('Settings saved')
   }
   function handleMaintenanceToggle() {
     const next = !maintenance; setMaintenance(next)
-    localStorage.setItem('taries-maintenance', next ? '1' : '0')
+    saveMaintenanceMode(next)
     toast.success(`Maintenance mode ${next ? 'enabled' : 'disabled'}`)
   }
   function handleExportAll() {
@@ -1423,10 +1553,10 @@ function SettingsTab() {
       <div className="bg-brand-black-2 border border-brand-gold/20 rounded-xl p-5 space-y-4">
         <h2 className="font-heading text-white flex items-center gap-2"><Lock className="w-4 h-4 text-brand-gold" /> Change PIN</h2>
         <div className="grid grid-cols-3 gap-3">
-          {([['current','Current PIN'],['next','New PIN'],['confirm','Confirm PIN']] as const).map(([field, label]) => (
+          {([['current','Current PIN'],['next','New 6-digit PIN'],['confirm','Confirm PIN']] as const).map(([field, label]) => (
             <div key={field}>
               <label className="text-xs text-brand-gold/70 mb-1 block">{label}</label>
-              <input type="password" maxLength={4} value={pinForm[field]} onChange={e => setPinForm(f => ({...f, [field]: e.target.value}))} className={ic} placeholder="••••" />
+              <input type="password" maxLength={6} value={pinForm[field]} onChange={e => setPinForm(f => ({...f, [field]: e.target.value.replace(/\D/g, '').slice(0, 6) }))} className={ic} placeholder="••••••" />
             </div>
           ))}
         </div>
@@ -1480,13 +1610,28 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<TabId>('dashboard')
   const [orderBadge, setOrderBadge] = useState(0)
   const [vendorBadge, setVendorBadge] = useState(0)
+  const [adminUser, setAdminUser] = useState<User | null>(null)
+  const [accessChecked, setAccessChecked] = useState(false)
 
   useEffect(() => {
-    if (!authenticated) return
+    const refresh = () => {
+      setAdminUser(getCurrentUser())
+      setAccessChecked(true)
+    }
+
+    refresh()
+    window.addEventListener('storage', refresh)
+    return () => window.removeEventListener('storage', refresh)
+  }, [])
+
+  useEffect(() => {
+    if (!authenticated || !isAdminUser(adminUser)) return
     setOrderBadge(getAllOrders().filter(o => o.status === 'pending').length)
     setVendorBadge(readVendors().filter(v => v.status === 'pending').length)
-  }, [authenticated])
+  }, [adminUser, authenticated])
 
+  if (!accessChecked) return null
+  if (!isAdminUser(adminUser)) return <AdminAccountGate user={adminUser} />
   if (!authenticated) return <PinEntry onSuccess={() => setAuthenticated(true)} />
 
   const tabs: { id: TabId; label: string; icon: React.ReactNode; badge?: number }[] = [

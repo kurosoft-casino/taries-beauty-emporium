@@ -1,12 +1,18 @@
 /** @type {import('next').NextConfig} */
+const isStaticExport = process.env.STATIC_EXPORT === 'true'
+
 const nextConfig = {
-  output: 'export',
-  basePath: '/taries-beauty-emporium',
-  assetPrefix: '/taries-beauty-emporium',
-  trailingSlash: true,
   images: {
     unoptimized: true,
   },
+  ...(isStaticExport
+    ? {
+        output: 'export',
+        basePath: '/taries-beauty-emporium',
+        assetPrefix: '/taries-beauty-emporium',
+        trailingSlash: true,
+      }
+    : {}),
 }
 
 module.exports = nextConfig

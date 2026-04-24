@@ -5,24 +5,32 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "build:static": "STATIC_EXPORT=true next build",
+    "start": "next start",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "cf:d1:local": "wrangler d1 execute taries-beauty-emporium --local --file=./cloudflare/schema.sql",
+    "cf:d1:remote": "wrangler d1 execute taries-beauty-emporium --remote --file=./cloudflare/schema.sql"
   },
   "dependencies": {
-    "next": "14.2.5",
-    "react": "^18",
-    "react-dom": "^18",
-    "framer-motion": "^11",
-    "zustand": "^4",
+    "next": "14.2.35",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "framer-motion": "^12.38.0",
+    "zustand": "^5.0.12",
     "react-hot-toast": "^2",
-    "lucide-react": "^0.394.0"
+    "lucide-react": "^1.8.0"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "1.0.0",
     "typescript": "^5",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "tailwindcss": "^3",
     "postcss": "^8",
-    "autoprefixer": "^10"
+    "autoprefixer": "^10",
+    "wrangler": "^4.84.1"
   }
 }

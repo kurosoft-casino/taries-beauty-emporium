@@ -8,25 +8,13 @@ import { useCartStore } from '@/lib/store'
 import { formatPrice } from '@/lib/products'
 import { estimateWeight, calcShipping, getCargoType } from '@/lib/shipping'
 import AlsoBought from '@/components/shop/AlsoBought'
-
-interface Coupon {
-  discount: number         // fraction, e.g. 0.10 = 10%
-  label: string
-  categoryOnly?: string[]  // if set, only applies to these categories
-}
-
-const COUPONS: Record<string, Coupon> = {
-  BEAUTY10:  { discount: 0.10, label: '10% off' },
-  WELCOME15: { discount: 0.15, label: '15% off' },
-  HAIR20:    { discount: 0.20, label: '20% off on wigs & bundles', categoryOnly: ['wigs', 'bundles'] },
-  TARIES25:  { discount: 0.25, label: '25% off (VIP)' },
-}
+import { calculateCouponDiscount, clearAppliedCoupon, getAppliedCoupon, setAppliedCoupon } from '@/lib/coupons'
 
 export default function CartPage() {
   const { items, removeItem, updateQuantity, getTotalUSD, currency, clearCart } = useCartStore()
 
   const [couponInput, setCouponInput] = useState('')
-  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; coupon: Coupon } | null>(null)
+  const [appliedCoupon, setAppliedCouponState] = useState(() => getAppliedCoupon())
   const [couponError, setCouponError] = useState('')
 
   const total = getTotalUSD()
@@ -35,35 +23,25 @@ export default function CartPage() {
   const shippingCalc = calcShipping(weightKg, cargoType)
   const shipping = items.length > 0 ? shippingCalc.totalUsdEquiv : 0
 
-  // Coupon discount calculation
-  function calcDiscount(coupon: Coupon): number {
-    if (!coupon.categoryOnly) return total * coupon.discount
-    const eligible = items.reduce((sum, i) => {
-      if (coupon.categoryOnly!.includes(i.product.category)) {
-        return sum + i.product.price * i.quantity
-      }
-      return sum
-    }, 0)
-    return eligible * coupon.discount
-  }
-
-  const discount = appliedCoupon ? calcDiscount(appliedCoupon.coupon) : 0
+  const discount = calculateCouponDiscount(items, appliedCoupon)
   const discountedSubtotal = total - discount
   const grandTotal = discountedSubtotal + shipping
 
   function applyCoupon() {
     const code = couponInput.trim().toUpperCase()
-    if (COUPONS[code]) {
-      setAppliedCoupon({ code, coupon: COUPONS[code] })
+    const coupon = setAppliedCoupon(code)
+    if (coupon) {
+      setAppliedCouponState(coupon)
       setCouponError('')
     } else {
-      setCouponError("Invalid code. Try BEAUTY10 for 10% off!")
-      setAppliedCoupon(null)
+      setCouponError('Invalid code. Try TARIES10 for 10% off!')
+      setAppliedCouponState(null)
     }
   }
 
   function removeCoupon() {
-    setAppliedCoupon(null)
+    clearAppliedCoupon()
+    setAppliedCouponState(null)
     setCouponInput('')
     setCouponError('')
   }
@@ -171,7 +149,7 @@ export default function CartPage() {
                     <div className="flex items-center gap-2">
                       <CheckCircle size={14} className="text-green-400 shrink-0" />
                       <span className="font-body text-xs text-green-400">
-                        ✓ <strong>{appliedCoupon.code}</strong> applied — {appliedCoupon.coupon.label}!
+                         ✓ <strong>{appliedCoupon.code}</strong> applied — {appliedCoupon.label}!
                       </span>
                     </div>
                     <button onClick={removeCoupon} className="text-brand-cream/40 hover:text-red-400 transition-colors ml-2">
@@ -223,7 +201,7 @@ export default function CartPage() {
                 </div>
                 {discount > 0 && (
                   <div className="flex justify-between font-body text-sm">
-                    <span className="text-green-400/80">Discount ({appliedCoupon!.coupon.label})</span>
+                    <span className="text-green-400/80">Discount ({appliedCoupon!.label})</span>
                     <span className="text-green-400">−{formatPrice(discount, currency)}</span>
                   </div>
                 )}

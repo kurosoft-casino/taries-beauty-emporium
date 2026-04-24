@@ -2,6 +2,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Product } from './products'
+import { getStorefrontProducts } from './catalog'
 
 export type Currency = 'NGN' | 'GHS' | 'USD' | 'CNY'
 
@@ -32,6 +33,11 @@ function variantKey(variants?: Record<string, string>) {
   return Object.entries(variants).sort().map(([k, v]) => `${k}:${v}`).join('|')
 }
 
+function getLiveProduct(productId: string): Product | null {
+  const live = getStorefrontProducts().find(product => product.id === productId)
+  return live ?? null
+}
+
 export const useCartStore = create<CartStore>()(
   persist(
     (set, get) => ({
@@ -42,10 +48,15 @@ export const useCartStore = create<CartStore>()(
       addItem: (product, variants = {}) => {
         const key = variantKey(variants)
         set(state => {
+          const liveProduct = getLiveProduct(product.id) ?? product
+          if (!liveProduct.inStock) return state
           const existing = state.items.find(
             i => i.product.id === product.id && variantKey(i.selectedVariants) === key
           )
           if (existing) {
+            if (liveProduct.stockCount && existing.quantity >= liveProduct.stockCount) {
+              return state
+            }
             return {
               items: state.items.map(i =>
                 i.product.id === product.id && variantKey(i.selectedVariants) === key
@@ -54,7 +65,7 @@ export const useCartStore = create<CartStore>()(
               ),
             }
           }
-          return { items: [...state.items, { product, quantity: 1, selectedVariants: variants }] }
+          return { items: [...state.items, { product: liveProduct, quantity: 1, selectedVariants: variants }] }
         })
       },
 
@@ -70,10 +81,16 @@ export const useCartStore = create<CartStore>()(
       updateQuantity: (productId, qty, variants = {}) => {
         const key = variantKey(variants)
         if (qty <= 0) { get().removeItem(productId, variants); return }
+        const liveProduct = getLiveProduct(productId)
+        if (liveProduct && !liveProduct.inStock) {
+          get().removeItem(productId, variants)
+          return
+        }
+        const nextQty = liveProduct?.stockCount ? Math.min(qty, liveProduct.stockCount) : qty
         set(state => ({
           items: state.items.map(i =>
             i.product.id === productId && variantKey(i.selectedVariants) === key
-              ? { ...i, quantity: qty }
+              ? { ...i, quantity: nextQty }
               : i
           ),
         }))

@@ -24,8 +24,12 @@ jobs:
           node-version: '20'
       - name: Install dependencies
         run: npm install
-      - name: Build
-        run: npm run build
+      - name: Build static export
+        run: |
+          if [ -d app/api ]; then
+            mv app/api .pages-temp-api
+          fi
+          npm run build:static
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ./out

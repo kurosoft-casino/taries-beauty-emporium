@@ -6,6 +6,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Eye, EyeOff, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { registerUser, getCurrentUser } from '@/lib/auth'
+import { isValidEmail, normalizeEmail, sanitizeInlineText, sanitizePhone } from '@/lib/validation'
+import { getDialCode, getPhonePlaceholder, type SupportedCountry, withCountryDialCode } from '@/lib/phoneCountries'
 
 const AVATARS = ['👸🏽', '💄', '👠', '💅', '🌹', '✨', '👒', '💋', '🌸', '👑', '🎀', '💎']
 
@@ -37,7 +39,8 @@ export default function RegisterPage() {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
+  const [country, setCountry] = useState<SupportedCountry>('Nigeria')
+  const [phone, setPhone] = useState(`${getDialCode('Nigeria')} `)
   const [step1Errors, setStep1Errors] = useState<Record<string, string>>({})
 
   // Step 2
@@ -58,12 +61,18 @@ export default function RegisterPage() {
 
   function validateStep1() {
     const errs: Record<string, string> = {}
-    if (!firstName.trim()) errs.firstName = 'First name is required'
-    if (!lastName.trim()) errs.lastName = 'Last name is required'
-    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = 'Valid email is required'
-    if (!phone.trim()) errs.phone = 'Phone number is required'
+    if (!sanitizeInlineText(firstName)) errs.firstName = 'First name is required'
+    if (!sanitizeInlineText(lastName)) errs.lastName = 'Last name is required'
+    if (!isValidEmail(email)) errs.email = 'Valid email is required'
+    if (!country) errs.country = 'Country is required'
+    if (!sanitizePhone(phone)) errs.phone = 'Phone number is required'
     setStep1Errors(errs)
     return Object.keys(errs).length === 0
+  }
+
+  function handleCountryChange(nextCountry: SupportedCountry) {
+    setCountry(nextCountry)
+    setPhone(current => withCountryDialCode(current, nextCountry))
   }
 
   function validateStep2() {
@@ -90,11 +99,12 @@ export default function RegisterPage() {
     setLoading(true)
     try {
       await registerUser({
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        email: email.trim().toLowerCase(),
-        phone: phone.trim(),
-        passwordHash: btoa(email.trim().toLowerCase() + ':' + password),
+        firstName: sanitizeInlineText(firstName),
+        lastName: sanitizeInlineText(lastName),
+        email: normalizeEmail(email),
+        country,
+        phone: sanitizePhone(phone),
+        password,
         avatar,
       })
       toast.success('Welcome to Taries Beauty! 👑')
@@ -191,6 +201,21 @@ export default function RegisterPage() {
                     />
                     {step1Errors.email && <p className="text-red-400 text-xs mt-1">{step1Errors.email}</p>}
                   </div>
+                  <div className="grid grid-cols-[140px,1fr] gap-4">
+                    <div>
+                      <label className="block font-body text-xs text-brand-gold-2 uppercase tracking-wider mb-1.5">Country</label>
+                      <select
+                        value={country}
+                        onChange={e => handleCountryChange(e.target.value as SupportedCountry)}
+                        className="w-full bg-brand-black-3 border border-brand-gold/20 rounded-lg px-3 py-2.5 font-body text-sm text-brand-cream focus:outline-none focus:border-brand-gold transition-colors"
+                      >
+                        <option value="Nigeria">Nigeria</option>
+                        <option value="Ghana">Ghana</option>
+                        <option value="China">China</option>
+                        <option value="Other">Other</option>
+                      </select>
+                      {step1Errors.country && <p className="text-red-400 text-xs mt-1">{step1Errors.country}</p>}
+                    </div>
                   <div>
                     <label className="block font-body text-xs text-brand-gold-2 uppercase tracking-wider mb-1.5">Phone Number</label>
                     <input
@@ -198,9 +223,10 @@ export default function RegisterPage() {
                       value={phone}
                       onChange={e => setPhone(e.target.value)}
                       className="w-full bg-brand-black-3 border border-brand-gold/20 rounded-lg px-3 py-2.5 font-body text-sm text-brand-cream placeholder-brand-cream/30 focus:outline-none focus:border-brand-gold transition-colors"
-                      placeholder="+234 803 000 0000"
+                      placeholder={getPhonePlaceholder(country)}
                     />
                     {step1Errors.phone && <p className="text-red-400 text-xs mt-1">{step1Errors.phone}</p>}
+                  </div>
                   </div>
                 </div>
               </motion.div>

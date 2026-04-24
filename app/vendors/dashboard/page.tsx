@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Package, BarChart2, MessageCircle, Settings, LogOut, Plus, X, Eye,
@@ -14,20 +15,19 @@ import {
   getVendorProducts,
   type VendorProduct,
 } from '@/lib/productStore'
+import { readJSON, writeJSON, writeText } from '@/lib/storage'
+import { getCurrentUser } from '@/lib/auth'
+import { isValidEmail, normalizeEmail, sanitizeDigits } from '@/lib/validation'
+import {
+  clearVendorSession,
+  findVendorProfileByEmail,
+  getVendorSession,
+  writeVendorSession,
+  type VendorProfile,
+} from '@/lib/vendorProfile'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-interface VendorSession {
-  id:           string
-  businessName: string
-  ownerName:    string
-  email:        string
-  phone:        string
-  category:     string
-  description:  string
-  status:       'pending' | 'approved' | 'rejected'
-  feeStatus:    'unpaid' | 'paid'
-  whatsapp?:    string
-}
+type VendorSession = VendorProfile
 
 interface Message {
   id:        string
@@ -39,21 +39,6 @@ interface Message {
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const DEMO_PIN = '1234'
-
-const DEMO_VENDOR: VendorSession = {
-  id:           'demo-vendor-001',
-  businessName: 'Demo Beauty Store',
-  ownerName:    'Demo Vendor',
-  email:        'demo@example.com',
-  phone:        '+234 800 000 0000',
-  category:     'Beauty & Cosmetics',
-  description:  'A demo beauty store for testing the vendor dashboard.',
-  status:       'approved',
-  feeStatus:    'paid',
-  whatsapp:     '+234 800 000 0000',
-}
-
 const DEMO_MESSAGES: Message[] = [
   {
     id:        'msg-demo-1',
@@ -85,36 +70,42 @@ function LoginGate({ onLogin }: { onLogin: (v: VendorSession) => void }) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!email.trim() || !email.match(/^[^@]+@[^@]+\.[^@]+$/)) {
+    const normalizedEmail = normalizeEmail(email)
+    const normalizedPin = sanitizeDigits(pin)
+    if (!isValidEmail(normalizedEmail)) {
       setError('Please enter a valid email address')
       return
     }
-    if (pin !== DEMO_PIN) {
-      setError('Incorrect PIN. Hint: use 1234 for demo access.')
+    if (!/^\d{6}$/.test(normalizedPin)) {
+      setError('Enter your 6-digit vendor PIN')
+      return
+    }
+    const vendors = readJSON<VendorSession[]>('taries-vendors', [])
+    const found = vendors.find(v => v.email.toLowerCase() === normalizedEmail)
+    if (!found) {
+      setError('No vendor account found for this email. Please register first.')
+      return
+    }
+    if (found.status === 'pending') {
+      setError('Your application is pending admin approval. Check back in 24–48 hours.')
+      return
+    }
+    if (found.status === 'rejected') {
+      setError('Your application was not approved. Contact us on WhatsApp.')
       return
     }
 
-    let vendor: VendorSession = { ...DEMO_VENDOR, email }
-    try {
-      const raw = localStorage.getItem('taries-vendors')
-      if (raw) {
-        const vendors: VendorSession[] = JSON.parse(raw)
-        const found = vendors.find(v => v.email.toLowerCase() === email.toLowerCase())
-        if (found) {
-          if (found.status === 'pending') {
-            setError('Your application is pending admin approval. Check back in 24–48 hours.')
-            return
-          }
-          if (found.status === 'rejected') {
-            setError('Your application was not approved. Contact us on WhatsApp.')
-            return
-          }
-          vendor = { ...found, whatsapp: found.phone }
-        }
-      }
-    } catch {}
+    const storedPin = localStorage.getItem(`taries-vendor-pin-${normalizedEmail}`)
+    if (!storedPin || storedPin !== normalizedPin) {
+      setError('Incorrect vendor PIN.')
+      return
+    }
 
-    try { localStorage.setItem('taries-vendor-session', JSON.stringify(vendor)) } catch {}
+    const vendor = { ...found, whatsapp: found.phone }
+    if (!writeJSON('taries-vendor-session', vendor)) {
+      setError('Could not open the vendor session on this device.')
+      return
+    }
     onLogin(vendor)
   }
 
@@ -131,7 +122,7 @@ function LoginGate({ onLogin }: { onLogin: (v: VendorSession) => void }) {
           </div>
           <p className="section-label">Vendor Portal</p>
           <h1 className="text-2xl font-display font-bold gold-text">Vendor Login</h1>
-          <p className="text-brand-cream/35 text-xs mt-1">Demo mode — any email + PIN 1234</p>
+          <p className="text-brand-cream/35 text-xs mt-1">Use your approved vendor email and secure PIN</p>
         </div>
 
         <form
@@ -152,17 +143,17 @@ function LoginGate({ onLogin }: { onLogin: (v: VendorSession) => void }) {
           </div>
 
           <div>
-            <label className="text-brand-cream/50 text-xs uppercase tracking-wider block mb-1.5">
-              4-Digit PIN
-            </label>
-            <input
-              type="password"
-              maxLength={4}
-              value={pin}
-              onChange={e => { setPin(e.target.value.replace(/\D/g, '')); setError('') }}
-              className="w-full bg-brand-black-3 border border-brand-gold/20 rounded-xl px-4 py-3 text-brand-cream text-sm placeholder:text-brand-cream/20 focus:outline-none focus:border-brand-gold/50 transition-colors tracking-[0.5em]"
-              placeholder="••••"
-            />
+              <label className="text-brand-cream/50 text-xs uppercase tracking-wider block mb-1.5">
+                6-Digit PIN
+              </label>
+              <input
+                type="password"
+                maxLength={6}
+                value={pin}
+                onChange={e => { setPin(sanitizeDigits(e.target.value).slice(0, 6)); setError('') }}
+                className="w-full bg-brand-black-3 border border-brand-gold/20 rounded-xl px-4 py-3 text-brand-cream text-sm placeholder:text-brand-cream/20 focus:outline-none focus:border-brand-gold/50 transition-colors tracking-[0.5em]"
+                placeholder="••••"
+              />
           </div>
 
           <AnimatePresence>
@@ -182,6 +173,52 @@ function LoginGate({ onLogin }: { onLogin: (v: VendorSession) => void }) {
             Access Dashboard
           </button>
         </form>
+      </motion.div>
+    </div>
+  )
+}
+
+function AccountVendorGate({
+  vendorProfile,
+}: {
+  vendorProfile: VendorSession | null
+}) {
+  return (
+    <div className="min-h-screen bg-brand-black flex items-center justify-center px-4">
+      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-lg">
+        <div className="bg-brand-black-2 border border-brand-gold/20 rounded-2xl p-8 shadow-gold-xl text-center">
+          <div className="w-16 h-16 rounded-2xl bg-brand-gold/10 border border-brand-gold/30 flex items-center justify-center mx-auto mb-4">
+            <Store className="w-8 h-8 text-brand-gold" />
+          </div>
+          <p className="section-label">Vendor Access</p>
+          <h1 className="text-2xl font-display font-bold gold-text">
+            {vendorProfile ? 'Vendor account status' : 'Use your account profile'}
+          </h1>
+          <p className="text-brand-cream/55 text-sm mt-3 leading-relaxed">
+            {vendorProfile
+              ? vendorProfile.status === 'pending'
+                ? 'Your vendor application is still pending admin approval. You can monitor it from your account profile.'
+                : 'Your vendor application is not approved yet. Please manage it from your account profile or contact support.'
+              : 'Vendor access now lives inside your normal account profile. Sign in first, then open Vendor Hub from My Account.'}
+          </p>
+
+          {vendorProfile && (
+            <div className="mt-5 inline-flex items-center gap-2 px-4 py-2 rounded-full border border-brand-gold/20 bg-brand-gold/10 text-brand-gold text-xs font-semibold uppercase tracking-wider">
+              Status: {vendorProfile.status}
+            </div>
+          )}
+
+          <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+            <Link href="/account" className="btn-gold">
+              Open My Account
+            </Link>
+            {!vendorProfile && (
+              <Link href="/vendors/register" className="btn-outline-gold">
+                Apply as Vendor
+              </Link>
+            )}
+          </div>
+        </div>
       </motion.div>
     </div>
   )
@@ -318,6 +355,8 @@ function ProductPanel({
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function VendorDashboardPage() {
   const [vendor,          setVendor]          = useState<VendorSession | null>(null)
+  const [linkedVendor,    setLinkedVendor]    = useState<VendorSession | null>(null)
+  const [currentEmail,    setCurrentEmail]    = useState<string | null>(null)
   const [tab,             setTab]             = useState<'products' | 'analytics' | 'messages' | 'settings'>('products')
   const [products,        setProducts]        = useState<VendorProduct[]>([])
   const [views,           setViews]           = useState<Record<string, number>>({})
@@ -339,16 +378,27 @@ export default function VendorDashboardPage() {
   useEffect(() => {
     setMounted(true)
     setViews(getViews())
-    try {
-      const raw = localStorage.getItem('taries-vendor-session')
-      if (raw) {
-        const session: VendorSession = JSON.parse(raw)
-        if (session.status === 'approved') {
-          setVendor(session)
-          loadData(session)
-        }
+    const user = getCurrentUser()
+    const email = user?.email ?? null
+    setCurrentEmail(email)
+
+    if (email) {
+      const matchedVendor = findVendorProfileByEmail(email)
+      setLinkedVendor(matchedVendor)
+      if (matchedVendor?.status === 'approved') {
+        const session = { ...matchedVendor, whatsapp: matchedVendor.whatsapp ?? matchedVendor.phone }
+        writeVendorSession(session)
+        setVendor(session)
+        loadData(session)
       }
-    } catch {}
+      return
+    }
+
+    const session = getVendorSession()
+    if (session?.status === 'approved') {
+      setVendor(session)
+      loadData(session)
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function loadData(v: VendorSession) {
@@ -369,11 +419,12 @@ export default function VendorDashboardPage() {
 
   function handleLogin(v: VendorSession) {
     setVendor(v)
+    setLinkedVendor(v)
     loadData(v)
   }
 
   function handleLogout() {
-    try { localStorage.removeItem('taries-vendor-session') } catch {}
+    clearVendorSession()
     setVendor(null)
   }
 
@@ -421,7 +472,7 @@ export default function VendorDashboardPage() {
       description:  settings.description,
     }
     setVendor(updated)
-    try { localStorage.setItem('taries-vendor-session', JSON.stringify(updated)) } catch {}
+    writeVendorSession(updated)
     // Update vendors list
     try {
       const raw = localStorage.getItem('taries-vendors')
@@ -440,11 +491,14 @@ export default function VendorDashboardPage() {
 
   function handleChangePin() {
     if (!vendor) return
-    const storedPin = localStorage.getItem(`taries-vendor-pin-${vendor.email}`) ?? DEMO_PIN
+    const storedPin = localStorage.getItem(`taries-vendor-pin-${vendor.email}`)
     if (pinForm.current !== storedPin) { setPinError('Current PIN is incorrect'); return }
-    if (!/^\d{4}$/.test(pinForm.next)) { setPinError('New PIN must be exactly 4 digits'); return }
+    if (!/^\d{6}$/.test(pinForm.next)) { setPinError('New PIN must be exactly 6 digits'); return }
     if (pinForm.next !== pinForm.confirm) { setPinError('PINs do not match'); return }
-    try { localStorage.setItem(`taries-vendor-pin-${vendor.email}`, pinForm.next) } catch {}
+    if (!writeText(`taries-vendor-pin-${vendor.email}`, pinForm.next)) {
+      setPinError('Could not save the new PIN on this device')
+      return
+    }
     setPinError('')
     setPinForm({ current: '', next: '', confirm: '' })
     setPinSuccess(true)
@@ -454,7 +508,7 @@ export default function VendorDashboardPage() {
   function handleDeleteAccount() {
     if (!vendor || deleteConfirm !== vendor.email) return
     try {
-      localStorage.removeItem('taries-vendor-session')
+      clearVendorSession()
       localStorage.removeItem(`taries-vendor-${vendor.email}-products`)
       localStorage.removeItem(`taries-vendor-${vendor.email}-messages`)
       const raw = localStorage.getItem('taries-vendors')
@@ -468,7 +522,10 @@ export default function VendorDashboardPage() {
 
   // Prevent SSR mismatch
   if (!mounted) return null
-  if (!vendor)  return <LoginGate onLogin={handleLogin} />
+  if (!vendor) {
+    if (currentEmail) return <AccountVendorGate vendorProfile={linkedVendor} />
+    return <LoginGate onLogin={handleLogin} />
+  }
 
   // Analytics data — use slug for view lookup
   const analyticsData = products.length > 0
@@ -931,16 +988,16 @@ export default function VendorDashboardPage() {
                   <div className="max-w-xs space-y-3">
                     {[
                       { label: 'Current PIN', key: 'current' as const },
-                      { label: 'New PIN (4 digits)', key: 'next' as const },
+                      { label: 'New PIN (6 digits)', key: 'next' as const },
                       { label: 'Confirm New PIN', key: 'confirm' as const },
                     ].map(f => (
                       <div key={f.key}>
                         <label className="text-brand-cream/50 text-xs uppercase tracking-wider block mb-1">{f.label}</label>
                         <input
                           type="password"
-                          maxLength={4}
+                          maxLength={6}
                           value={pinForm[f.key]}
-                          onChange={e => { setPinForm(p => ({ ...p, [f.key]: e.target.value.replace(/\D/g, '') })); setPinError('') }}
+                          onChange={e => { setPinForm(p => ({ ...p, [f.key]: sanitizeDigits(e.target.value).slice(0, 6) })); setPinError('') }}
                           className="w-full bg-brand-black-3 border border-brand-gold/20 rounded-xl px-4 py-2.5 text-brand-cream text-sm tracking-[0.5em] focus:outline-none focus:border-brand-gold/50 transition-colors"
                           placeholder="••••"
                         />

@@ -1,13 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { motion, useInView } from 'framer-motion'
-
-const stats = [
-  { value: 12000, label: 'Happy Customers', suffix: '+', icon: '👑' },
-  { value: 4.9,   label: 'Average Rating',  suffix: '/5', icon: '⭐', decimal: 1 },
-  { value: 98,    label: 'Authentic Hair',   suffix: '%', icon: '💯' },
-  { value: 7,     label: 'Days Min Delivery', suffix: '', icon: '✈️', prefix: '' },
-]
+import { useLang } from '@/lib/lang'
 
 function CountUp({ target, decimal = 0, duration = 2000 }: { target: number; decimal?: number; duration?: number }) {
   const [count, setCount] = useState(0)
@@ -30,6 +24,20 @@ function CountUp({ target, decimal = 0, duration = 2000 }: { target: number; dec
 }
 
 export default function StatsSection() {
+  const { lang } = useLang()
+  const stats = lang === 'ZH'
+    ? [
+        { value: 12000, label: '满意顾客', suffix: '+', icon: '👑' },
+        { value: 4.9, label: '平均评分', suffix: '/5', icon: '⭐', decimal: 1 },
+        { value: 98, label: '正品保障', suffix: '%', icon: '💯' },
+        { value: 7, label: '最快送达天数', suffix: '', icon: '✈️', prefix: '' },
+      ]
+    : [
+        { value: 12000, label: 'Happy Customers', suffix: '+', icon: '👑' },
+        { value: 4.9, label: 'Average Rating', suffix: '/5', icon: '⭐', decimal: 1 },
+        { value: 98, label: 'Authentic Hair', suffix: '%', icon: '💯' },
+        { value: 7, label: 'Days Min Delivery', suffix: '', icon: '✈️', prefix: '' },
+      ]
   return (
     <section className="py-12 sm:py-20 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #111111 50%, #0A0A0A 100%)' }}>
       {/* Gold divider lines */}
@@ -48,9 +56,9 @@ export default function StatsSection() {
           viewport={{ once: true }}
           className="text-center mb-8 sm:mb-14"
         >
-          <p className="section-label">✦ By The Numbers ✦</p>
+          <p className="section-label">{lang === 'ZH' ? '✦ 数据说话 ✦' : '✦ By The Numbers ✦'}</p>
           <h2 className="section-title text-brand-cream">
-            Trusted by <span className="gold-text">Thousands</span>
+            {lang === 'ZH' ? <>深受 <span className="gold-text">上千顾客</span> 信赖</> : <>Trusted by <span className="gold-text">Thousands</span></>}
           </h2>
         </motion.div>
 

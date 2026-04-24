@@ -11,6 +11,8 @@ export interface Order {
   subtotalUSD: number
   shippingUSD: number
   grandTotalUSD: number
+  discountUSD?: number
+  couponCode?: string
   customer: {
     firstName: string
     lastName: string
@@ -35,8 +37,9 @@ export function saveOrder(order: Order): void {
     existing.unshift(order)
     localStorage.setItem('taries-orders', JSON.stringify(existing))
     localStorage.setItem('taries-last-order-id', order.orderId)
-  } catch {
-    // localStorage quota exceeded or unavailable
+  } catch (error) {
+    console.error('Failed to save order data', error)
+    throw new Error('Could not save this order on your device. Please free some browser storage and try again.')
   }
 }
 
@@ -45,7 +48,8 @@ export function getOrder(orderId: string): Order | null {
   try {
     const orders = getAllOrders()
     return orders.find(o => o.orderId === orderId) ?? null
-  } catch {
+  } catch (error) {
+    console.error(`Failed to read order ${orderId}`, error)
     return null
   }
 }
@@ -55,7 +59,8 @@ export function getAllOrders(): Order[] {
   try {
     const raw = localStorage.getItem('taries-orders')
     return raw ? JSON.parse(raw) : []
-  } catch {
+  } catch (error) {
+    console.error('Failed to read orders', error)
     return []
   }
 }
@@ -66,8 +71,8 @@ export function updateOrderStatus(orderId: string, status: Order['status']): voi
     const orders = getAllOrders()
     const updated = orders.map(o => o.orderId === orderId ? { ...o, status } : o)
     localStorage.setItem('taries-orders', JSON.stringify(updated))
-  } catch {
-    // localStorage unavailable
+  } catch (error) {
+    console.error(`Failed to update order ${orderId}`, error)
   }
 }
 

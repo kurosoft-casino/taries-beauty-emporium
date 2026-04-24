@@ -4,13 +4,14 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { ShoppingBag, Heart, Eye, Star, Zap } from 'lucide-react'
-import { type Product, formatPrice } from '@/lib/products'
+import { formatPrice, type Product } from '@/lib/products'
 import { useCartStore } from '@/lib/store'
 import { toggleWishlist, isWishlisted } from '@/lib/wishlist'
 import toast from 'react-hot-toast'
+import { getProductHref, type StorefrontProduct } from '@/lib/catalog'
 
 interface ProductCardProps {
-  product: Product
+  product: Product | StorefrontProduct
   index?: number
 }
 
@@ -42,11 +43,17 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
   function handleAddToCart(e: React.MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
+    if (!product.inStock) {
+      toast.error('This item is currently out of stock')
+      return
+    }
     addItem(product)
     toast.success(`✨ ${product.name.split(' ').slice(0, 3).join(' ')}... added!`, { duration: 2500 })
+    openCart()
   }
 
   const badge = product.badge
+  const href = 'source' in product ? getProductHref(product) : `/product/${product.slug}`
   const discountPct = product.originalPrice
     ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
     : null
@@ -64,7 +71,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
       className="perspective-1000"
     >
       <div className="card-product group cursor-pointer relative">
-        <Link href={`/product/${product.slug}`}>
+        <Link href={href}>
           {/* Image */}
           <div className="relative overflow-hidden aspect-[3/4] bg-brand-black-3">
             <Image
@@ -172,6 +179,13 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
             <p className="font-body text-[10px] text-brand-cream/30 mt-2 flex items-center gap-1">
               <Zap size={9} className="text-brand-gold/40" />
               {product.deliveryDays} · {product.shipsFrom}
+            </p>
+            <p className={`font-body text-[10px] mt-1 ${product.inStock ? 'text-green-400/80' : 'text-red-400/80'}`}>
+              {product.inStock
+                ? product.stockCount && product.stockCount <= 5
+                  ? `Only ${product.stockCount} left`
+                  : 'In stock'
+                : 'Out of stock'}
             </p>
           </div>
         </Link>

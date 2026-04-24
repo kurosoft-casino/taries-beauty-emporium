@@ -5,7 +5,8 @@ export function getViews(): Record<string, number> {
   if (typeof window === 'undefined') return {}
   try {
     return JSON.parse(localStorage.getItem(KEY) || '{}')
-  } catch {
+  } catch (error) {
+    console.error('Failed to read product views', error)
     return {}
   }
 }
@@ -16,8 +17,8 @@ export function incrementView(slug: string): void {
     const views = getViews()
     views[slug] = (views[slug] ?? 0) + 1
     localStorage.setItem(KEY, JSON.stringify(views))
-  } catch {
-    // ignore
+  } catch (error) {
+    console.error(`Failed to track view for ${slug}`, error)
   }
 }
 

@@ -5,6 +5,9 @@ import {
   CheckCircle2, ArrowRight, ArrowLeft,
   MessageCircle, User, Building2, CreditCard, AlertCircle,
 } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { readJSON, writeJSON, writeText } from '@/lib/storage'
+import { isValidEmail, normalizeEmail, sanitizeDigits, sanitizeInlineText, sanitizeMultilineText, sanitizePhone } from '@/lib/validation'
 
 interface VendorForm {
   firstName:    string
@@ -113,6 +116,8 @@ export default function VendorRegisterPage() {
   const [agreed, setAgreed]       = useState(false)
   const [errors, setErrors]       = useState<Record<string, string>>({})
   const [submitted, setSubmitted] = useState(false)
+  const [pin, setPin] = useState('')
+  const [confirmPin, setConfirmPin] = useState('')
 
   function update(k: keyof VendorForm, v: string) {
     setForm(f => ({ ...f, [k]: v }))
@@ -121,19 +126,19 @@ export default function VendorRegisterPage() {
 
   function validateStep1() {
     const e: Record<string, string> = {}
-    if (!form.firstName.trim()) e.firstName = 'First name is required'
-    if (!form.lastName.trim())  e.lastName  = 'Last name is required'
-    if (!form.email.match(/^[^@]+@[^@]+\.[^@]+$/)) e.email = 'Valid email is required'
-    if (!form.phone.trim()) e.phone = 'Phone / WhatsApp number is required'
+    if (!sanitizeInlineText(form.firstName)) e.firstName = 'First name is required'
+    if (!sanitizeInlineText(form.lastName))  e.lastName  = 'Last name is required'
+    if (!isValidEmail(form.email)) e.email = 'Valid email is required'
+    if (!sanitizePhone(form.phone)) e.phone = 'Phone / WhatsApp number is required'
     setErrors(e)
     return Object.keys(e).length === 0
   }
 
   function validateStep2() {
     const e: Record<string, string> = {}
-    if (!form.businessName.trim()) e.businessName = 'Business name is required'
+    if (!sanitizeInlineText(form.businessName)) e.businessName = 'Business name is required'
     if (!form.category)            e.category     = 'Please select a category'
-    if (form.description.trim().length < 20)
+    if (sanitizeMultilineText(form.description).length < 20)
       e.description = 'Please write at least 20 characters'
     setErrors(e)
     return Object.keys(e).length === 0
@@ -146,28 +151,42 @@ export default function VendorRegisterPage() {
   }
 
   function handleSubmit() {
+    const sanitizedPin = sanitizeDigits(pin)
+    if (!/^\d{6}$/.test(sanitizedPin)) {
+      setErrors({ pin: 'Create a secure 6-digit vendor PIN' })
+      return
+    }
+    if (sanitizedPin !== sanitizeDigits(confirmPin)) {
+      setErrors({ confirmPin: 'PINs do not match' })
+      return
+    }
     if (!agreed) {
       setErrors({ agreed: 'You must agree to the terms before submitting' })
       return
     }
+    const email = normalizeEmail(form.email)
+    const existing = readJSON<Array<{ email: string }>>('taries-vendors', [])
+    if (existing.some(vendor => vendor.email.toLowerCase() === email)) {
+      setErrors({ email: 'A vendor account with this email already exists' })
+      return
+    }
     const vendor = {
       id:           generateId(),
-      businessName: form.businessName,
-      ownerName:    `${form.firstName} ${form.lastName}`,
-      email:        form.email,
-      phone:        form.phone,
+      businessName: sanitizeInlineText(form.businessName),
+      ownerName:    `${sanitizeInlineText(form.firstName)} ${sanitizeInlineText(form.lastName)}`,
+      email,
+      phone:        sanitizePhone(form.phone),
       category:     form.category,
-      description:  form.description,
+      description:  sanitizeMultilineText(form.description),
       status:       'pending' as const,
       appliedAt:    new Date().toISOString(),
       feeStatus:    'unpaid' as const,
     }
-    try {
-      const raw      = localStorage.getItem('taries-vendors')
-      const existing = raw ? JSON.parse(raw) : []
-      existing.push(vendor)
-      localStorage.setItem('taries-vendors', JSON.stringify(existing))
-    } catch {}
+    const ok = writeJSON('taries-vendors', [...existing, vendor]) && writeText(`taries-vendor-pin-${email}`, sanitizedPin)
+    if (!ok) {
+      toast.error('Could not save your vendor application on this device.')
+      return
+    }
     setSubmitted(true)
   }
 
@@ -377,6 +396,35 @@ export default function VendorRegisterPage() {
                 </div>
 
                 {/* Agreement */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Create 6-Digit Vendor PIN" error={errors.pin}>
+                    <Input
+                      type="password"
+                      maxLength={6}
+                      value={pin}
+                      onChange={e => {
+                        setPin(sanitizeDigits(e.target.value).slice(0, 6))
+                        if (errors.pin) setErrors(er => { const next = { ...er }; delete next.pin; return next })
+                      }}
+                      placeholder="123456"
+                      hasError={!!errors.pin}
+                    />
+                  </Field>
+                  <Field label="Confirm Vendor PIN" error={errors.confirmPin}>
+                    <Input
+                      type="password"
+                      maxLength={6}
+                      value={confirmPin}
+                      onChange={e => {
+                        setConfirmPin(sanitizeDigits(e.target.value).slice(0, 6))
+                        if (errors.confirmPin) setErrors(er => { const next = { ...er }; delete next.confirmPin; return next })
+                      }}
+                      placeholder="123456"
+                      hasError={!!errors.confirmPin}
+                    />
+                  </Field>
+                </div>
+
                 <label className="flex items-start gap-3 cursor-pointer">
                   <input
                     type="checkbox"

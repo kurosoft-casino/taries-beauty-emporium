@@ -6,6 +6,7 @@ import { motion } from 'framer-motion'
 import { Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { loginUser, getCurrentUser } from '@/lib/auth'
+import { normalizeEmail } from '@/lib/validation'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -25,7 +26,7 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      await loginUser(email.trim(), password)
+      await loginUser(normalizeEmail(email), password)
       toast.success('Welcome back! 👑')
       router.push('/account')
     } catch (err: unknown) {
@@ -78,13 +79,12 @@ export default function LoginPage() {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="font-body text-xs text-brand-gold-2 uppercase tracking-wider">Password</label>
-                <button
-                  type="button"
-                  onClick={() => toast('Contact us on WhatsApp to reset your password', { icon: '💬' })}
+                <Link
+                  href="/forgot-password"
                   className="font-body text-xs text-brand-gold/60 hover:text-brand-gold transition-colors"
                 >
                   Forgot password?
-                </button>
+                </Link>
               </div>
               <div className="relative">
                 <input

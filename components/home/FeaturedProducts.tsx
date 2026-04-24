@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 import ProductCard from '@/components/shop/ProductCard'
 import { products } from '@/lib/products'
+import { useLang } from '@/lib/lang'
 
 interface FeaturedProductsProps {
   title?: string
@@ -21,6 +22,7 @@ export default function FeaturedProducts({
   viewAllHref = '/shop',
 }: FeaturedProductsProps) {
   const featured = products.filter(filter).slice(0, limit)
+  const { lang, t } = useLang()
 
   return (
     <section className="py-16 sm:py-24 bg-brand-black-2 relative overflow-hidden">
@@ -35,7 +37,7 @@ export default function FeaturedProducts({
               viewport={{ once: true }}
               className="section-label"
             >
-              ✦ Taries Picks ✦
+              {lang === 'ZH' ? '✦ Taries 精选 ✦' : '✦ Taries Picks ✦'}
             </motion.p>
             <motion.h2
               initial={{ opacity: 0, y: 20 }}
@@ -67,7 +69,7 @@ export default function FeaturedProducts({
             viewport={{ once: true }}
           >
             <Link href={viewAllHref} className="btn-outline-gold flex items-center gap-2 whitespace-nowrap">
-              View All <ArrowRight size={16} />
+              {t('viewAll')} <ArrowRight size={16} />
             </Link>
           </motion.div>
         </div>

@@ -26,7 +26,7 @@ export function calcShipping(
 }
 
 export function getCargoType(items: CartItem[]): CargoType {
-  const sensitiveCategories = new Set(['beauty', 'maintenance'])
+  const sensitiveCategories = new Set(['beauty', 'maintenance', 'cleaning', 'electronics'])
   const hasSensitive = items.some(i => sensitiveCategories.has(i.product.category))
   return hasSensitive ? 'sensitive' : 'general'
 }

@@ -5,6 +5,11 @@ export type Category =
   | 'maintenance'
   | 'beauty'
   | 'coats'
+  | 'home-appliances'
+  | 'kitchenware'
+  | 'cleaning'
+  | 'bedding'
+  | 'electronics'
 
 export interface Product {
   id: string
@@ -75,7 +80,8 @@ export const products: Product[] = [
       { label: 'Density', options: ['150%', '180%', '250%'] },
       { label: 'Cap Size', options: ['Small (21")', 'Medium (22")', 'Large (23")'] },
     ],
-    inStock: true,
+    inStock: false,
+    stockCount: 0,
     weightKg: 0.35,
     rating: 4.9,
     reviews: 247,
@@ -115,6 +121,7 @@ export const products: Product[] = [
       { label: 'Density', options: ['130%', '150%', '180%', '200%'] },
     ],
     inStock: true,
+    stockCount: 6,
     weightKg: 0.35,
     rating: 4.8,
     reviews: 183,
@@ -151,6 +158,7 @@ export const products: Product[] = [
       { label: 'Density', options: ['150%', '180%', '200%'] },
     ],
     inStock: true,
+    stockCount: 4,
     weightKg: 0.35,
     rating: 4.7,
     reviews: 129,
@@ -758,6 +766,169 @@ export const products: Product[] = [
     deliveryDays: '7–14 business days',
     tags: ['satin', 'evening', 'occasion', 'glamour'],
   },
+
+  // ── HOME APPLIANCES ────────────────────────────────────────────────────────
+  {
+    id: 'appliance-001',
+    name: 'Smart Steam Garment Steamer',
+    slug: 'smart-steam-garment-steamer',
+    category: 'home-appliances',
+    categoryLabel: 'Home Appliances',
+    price: 86,
+    originalPrice: 110,
+    images: [
+      'https://images.unsplash.com/photo-1518640467707-6811f4a6ab73?auto=format&fit=crop&w=800&q=80',
+    ],
+    badge: 'new',
+    shortDesc: 'Fast wrinkle release for coats, gowns, wigs and delicate fabrics.',
+    description: 'Keep every outfit presentation-ready with our Smart Steam Garment Steamer. It heats quickly, smooths wrinkles on coats and robes, and is gentle enough for delicate fashion pieces in your wardrobe or showroom.',
+    features: [
+      'Rapid 30-second heat-up',
+      'Continuous steam output',
+      'Safe for silk, satin and wool blends',
+      'Detachable water tank',
+      'Compact for home and boutique use',
+    ],
+    inStock: true,
+    stockCount: 12,
+    weightKg: 1.8,
+    rating: 4.7,
+    reviews: 64,
+    shipsFrom: 'Guangzhou, China',
+    deliveryDays: '7–14 business days',
+    tags: ['steamer', 'garment care', 'fashion', 'home appliance'],
+  },
+
+  // ── KITCHENWARE ────────────────────────────────────────────────────────────
+  {
+    id: 'kitchen-001',
+    name: 'Granite Non-Stick Cookware Set',
+    slug: 'granite-non-stick-cookware-set',
+    category: 'kitchenware',
+    categoryLabel: 'Kitchenware',
+    price: 129,
+    originalPrice: 165,
+    images: [
+      'https://images.unsplash.com/photo-1584990347449-a7394d77f534?auto=format&fit=crop&w=800&q=80',
+    ],
+    badge: 'bestseller',
+    shortDesc: 'Elegant cookware set for everyday meals and polished kitchens.',
+    description: 'Upgrade your kitchen with a premium granite non-stick cookware set designed for even heat, easy cleaning, and a refined finish that looks beautiful on every countertop.',
+    features: [
+      '5-piece cookware essentials',
+      'Granite non-stick interior',
+      'Heat-resistant handles',
+      'Works on gas and electric stoves',
+      'Easy-clean finish',
+    ],
+    inStock: true,
+    stockCount: 9,
+    weightKg: 3.2,
+    rating: 4.8,
+    reviews: 88,
+    shipsFrom: 'Guangzhou, China',
+    deliveryDays: '7–14 business days',
+    tags: ['cookware', 'pots', 'pans', 'kitchen'],
+  },
+
+  // ── CLEANING ───────────────────────────────────────────────────────────────
+  {
+    id: 'clean-001',
+    name: 'Luxury Home Cleaning Starter Pack',
+    slug: 'luxury-home-cleaning-starter-pack',
+    category: 'cleaning',
+    categoryLabel: 'Cleaning Products',
+    price: 48,
+    images: [
+      'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=800&q=80',
+    ],
+    badge: 'hot',
+    shortDesc: 'Premium surface, glass and fabric-safe cleaners for a spotless home.',
+    description: 'Our Luxury Home Cleaning Starter Pack brings together practical everyday cleaning essentials with a polished premium feel. Designed for busy homes, studios, and boutique spaces that need reliable freshness and shine.',
+    features: [
+      'Multi-surface cleaner',
+      'Glass and mirror spray',
+      'Fabric freshener',
+      'Compact starter bundle',
+      'Fresh clean scent',
+    ],
+    inStock: true,
+    stockCount: 14,
+    weightKg: 2.4,
+    rating: 4.6,
+    reviews: 51,
+    shipsFrom: 'Guangzhou, China',
+    deliveryDays: '7–14 business days',
+    tags: ['cleaning', 'surface care', 'home care', 'freshener'],
+  },
+
+  // ── BEDDING ────────────────────────────────────────────────────────────────
+  {
+    id: 'bedding-001',
+    name: 'Egyptian Cotton Bedding Set',
+    slug: 'egyptian-cotton-bedding-set',
+    category: 'bedding',
+    categoryLabel: 'Bedding',
+    price: 142,
+    originalPrice: 189,
+    images: [
+      'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=800&q=80',
+    ],
+    badge: 'sale',
+    shortDesc: 'Soft, breathable luxury bedding for a polished bedroom look.',
+    description: 'Create a restful luxury bedroom with our Egyptian Cotton Bedding Set. Smooth, breathable and designed for comfort, it adds a refined hotel-style finish to your home.',
+    features: [
+      'High-thread-count cotton feel',
+      'Duvet cover and pillowcases included',
+      'Soft-touch breathable finish',
+      'Elegant neutral colour palette',
+      'Machine washable',
+    ],
+    variants: [
+      { label: 'Size', options: ['Queen', 'King', 'Super King'] },
+      { label: 'Colour', options: ['Ivory', 'Sand', 'Charcoal'] },
+    ],
+    inStock: true,
+    stockCount: 7,
+    weightKg: 2.2,
+    rating: 4.8,
+    reviews: 73,
+    shipsFrom: 'Guangzhou, China',
+    deliveryDays: '7–14 business days',
+    tags: ['bedding', 'bed linen', 'cotton', 'home'],
+  },
+
+  // ── ELECTRONICS ────────────────────────────────────────────────────────────
+  {
+    id: 'electronic-001',
+    name: 'LED Vanity Mirror Pro',
+    slug: 'led-vanity-mirror-pro',
+    category: 'electronics',
+    categoryLabel: 'Electronics',
+    price: 118,
+    originalPrice: 149,
+    images: [
+      'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=800&q=80',
+    ],
+    badge: 'new',
+    shortDesc: 'Bright adjustable mirror lighting for makeup, wigs and content creation.',
+    description: 'The LED Vanity Mirror Pro is built for beauty routines, product content, and precision styling. Adjustable brightness and a clean modern finish make it ideal for home glam stations and vendor showrooms.',
+    features: [
+      'Adjustable LED brightness',
+      'Touch-sensitive controls',
+      'USB powered setup',
+      'Ideal for makeup and wig styling',
+      'Stable tabletop base',
+    ],
+    inStock: true,
+    stockCount: 11,
+    weightKg: 1.4,
+    rating: 4.7,
+    reviews: 59,
+    shipsFrom: 'Guangzhou, China',
+    deliveryDays: '7–14 business days',
+    tags: ['electronics', 'mirror', 'beauty tech', 'led'],
+  },
 ]
 
 export const categories = [
@@ -808,6 +979,46 @@ export const categories = [
     image: 'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?auto=format&fit=crop&w=600&q=80',
     count: products.filter(p => p.category === 'coats').length,
     icon: '🧥',
+  },
+  {
+    id: 'home-appliances',
+    label: 'Home Appliances',
+    description: 'Useful premium appliances for modern homes.',
+    image: 'https://images.unsplash.com/photo-1518640467707-6811f4a6ab73?auto=format&fit=crop&w=600&q=80',
+    count: products.filter(p => p.category === 'home-appliances').length,
+    icon: '🏠',
+  },
+  {
+    id: 'kitchenware',
+    label: 'Kitchenware',
+    description: 'Cookware and essentials for stylish kitchens.',
+    image: 'https://images.unsplash.com/photo-1584990347449-a7394d77f534?auto=format&fit=crop&w=600&q=80',
+    count: products.filter(p => p.category === 'kitchenware').length,
+    icon: '🍳',
+  },
+  {
+    id: 'cleaning',
+    label: 'Cleaning Products',
+    description: 'Home cleaning essentials with a polished finish.',
+    image: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=600&q=80',
+    count: products.filter(p => p.category === 'cleaning').length,
+    icon: '🧼',
+  },
+  {
+    id: 'bedding',
+    label: 'Bedding',
+    description: 'Bed linen and soft layers for luxury comfort.',
+    image: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=600&q=80',
+    count: products.filter(p => p.category === 'bedding').length,
+    icon: '🛏️',
+  },
+  {
+    id: 'electronics',
+    label: 'Electronics',
+    description: 'Beauty and lifestyle electronics for everyday use.',
+    image: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80',
+    count: products.filter(p => p.category === 'electronics').length,
+    icon: '🔌',
   },
 ]
 

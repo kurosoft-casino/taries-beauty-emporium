@@ -4,12 +4,13 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
-import { SlidersHorizontal, Grid, List, X, Search, ChevronDown, ChevronLeft, ChevronRight, ShoppingBag } from 'lucide-react'
+import { Grid, List, X, Search, ChevronDown, ChevronLeft, ChevronRight, ShoppingBag } from 'lucide-react'
 import ProductCard from '@/components/shop/ProductCard'
-import { products, categories, formatPrice, type Category } from '@/lib/products'
+import { categories, formatPrice } from '@/lib/products'
 import { getAllViewsSorted } from '@/lib/views'
 import { useCartStore } from '@/lib/store'
 import toast from 'react-hot-toast'
+import { getProductHref, getStorefrontProducts, type StorefrontProduct } from '@/lib/catalog'
 
 const ITEMS_PER_PAGE = 12
 
@@ -34,10 +35,12 @@ function ShopContent() {
   const [viewMode,       setViewMode]       = useState<'grid' | 'list'>('grid')
   const [inStockOnly,    setInStockOnly]    = useState(false)
   const [currentPage,    setCurrentPage]    = useState(1)
+  const [catalogProducts, setCatalogProducts] = useState<StorefrontProduct[]>([])
 
   const { addItem, openCart, currency } = useCartStore()
 
   useEffect(() => {
+    setCatalogProducts(getStorefrontProducts())
     const cat = searchParams.get('category')
     if (cat) setActiveCategory(cat)
     const q = searchParams.get('search')
@@ -52,7 +55,7 @@ function ShopContent() {
   }, [activeCategory, sort, searchQuery, badgeFilter, priceRange, inStockOnly])
 
   const filtered = useMemo(() => {
-    let list = [...products]
+    let list = [...catalogProducts]
     if (activeCategory !== 'all') list = list.filter(p => p.category === activeCategory)
     if (inStockOnly) list = list.filter(p => p.inStock === true)
     if (searchQuery) {
@@ -79,7 +82,14 @@ function ShopContent() {
       }
       default: return list
     }
-  }, [activeCategory, sort, searchQuery, badgeFilter, priceRange, inStockOnly])
+  }, [activeCategory, sort, searchQuery, badgeFilter, priceRange, inStockOnly, catalogProducts])
+
+  const categoryCounts = useMemo(() => {
+    return categories.map(category => ({
+      ...category,
+      count: catalogProducts.filter(product => product.category === category.id).length,
+    }))
+  }, [catalogProducts])
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE)
   const paginated = useMemo(() => {
@@ -114,9 +124,9 @@ function ShopContent() {
               activeCategory === 'all' ? 'bg-gold-gradient text-brand-black' : 'border border-brand-gold/30 text-brand-gold-2 hover:border-brand-gold'
             }`}
           >
-            All ({products.length})
+            All ({catalogProducts.length})
           </button>
-          {categories.map(cat => (
+          {categoryCounts.map(cat => (
             <button
               key={cat.id}
               onClick={() => setActiveCategory(cat.id)}
@@ -239,7 +249,7 @@ function ShopContent() {
                   transition={{ delay: i * 0.04 }}
                   className="flex gap-5 bg-brand-black-2 border border-brand-gold/10 hover:border-brand-gold/30 transition-colors p-4"
                 >
-                  <Link href={`/product/${product.slug}`} className="relative w-24 h-24 sm:w-48 sm:h-48 shrink-0 overflow-hidden">
+                  <Link href={getProductHref(product)} className="relative w-24 h-24 sm:w-48 sm:h-48 shrink-0 overflow-hidden">
                     <Image
                       src={product.images[0]}
                       alt={product.name}
@@ -258,7 +268,7 @@ function ShopContent() {
                   </Link>
                   <div className="flex flex-col flex-1 min-w-0 py-1">
                     <p className="font-body text-[10px] tracking-widest text-brand-gold-2/70 uppercase mb-1">{product.categoryLabel}</p>
-                    <Link href={`/product/${product.slug}`}>
+                    <Link href={getProductHref(product)}>
                       <h3 className="font-heading text-lg font-semibold text-brand-cream hover:text-brand-gold-3 transition-colors mb-2 line-clamp-2">
                         {product.name}
                       </h3>
@@ -282,13 +292,18 @@ function ShopContent() {
                       </div>
                       <button
                         onClick={() => {
+                          if (!product.inStock) {
+                            toast.error('This item is currently out of stock')
+                            return
+                          }
                           addItem(product)
                           toast.success(`✨ ${product.name.split(' ').slice(0, 3).join(' ')}... added!`, { duration: 2500 })
                           openCart()
                         }}
+                        disabled={!product.inStock}
                         className="ml-auto flex items-center gap-2 px-4 py-2 bg-gold-gradient text-brand-black text-xs font-body font-bold tracking-widest uppercase hover:shadow-gold transition-shadow"
                       >
-                        <ShoppingBag size={14} /> Add to Cart
+                        <ShoppingBag size={14} /> {product.inStock ? 'Add to Cart' : 'Sold Out'}
                       </button>
                     </div>
                   </div>
@@ -353,4 +368,3 @@ export default function ShopPage() {
     </Suspense>
   )
 }
-

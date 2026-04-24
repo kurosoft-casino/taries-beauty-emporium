@@ -3,9 +3,11 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Star, ChevronLeft, ChevronRight, Quote } from 'lucide-react'
 import { testimonials } from '@/lib/products'
+import { useLang } from '@/lib/lang'
 
 export default function Testimonials() {
   const [active, setActive] = useState(0)
+  const { lang } = useLang()
   const visible = 3
   const total = testimonials.length
 
@@ -31,9 +33,9 @@ export default function Testimonials() {
           viewport={{ once: true }}
           className="text-center mb-8 sm:mb-14"
         >
-          <p className="section-label">✦ Real Queens, Real Reviews ✦</p>
+          <p className="section-label">{lang === 'ZH' ? '✦ 真实顾客，真实评价 ✦' : '✦ Real Queens, Real Reviews ✦'}</p>
           <h2 className="section-title text-brand-cream">
-            What Our <span className="gold-text">Customers Say</span>
+            {lang === 'ZH' ? <>顾客 <span className="gold-text">怎么说</span></> : <>What Our <span className="gold-text">Customers Say</span></>}
           </h2>
         </motion.div>
 
@@ -108,7 +110,7 @@ export default function Testimonials() {
               ))}
             </div>
             <p className="font-heading text-3xl font-bold gold-text">4.9 / 5.0</p>
-            <p className="font-body text-sm text-brand-cream/50">Based on 1,200+ verified customer reviews</p>
+            <p className="font-body text-sm text-brand-cream/50">{lang === 'ZH' ? '基于 1,200+ 条真实顾客评价' : 'Based on 1,200+ verified customer reviews'}</p>
           </div>
         </motion.div>
       </div>

@@ -7,6 +7,8 @@ import { Printer, Download, ArrowLeft, CheckCircle, Clock, Package } from 'lucid
 import { getOrder, formatOrderDate, paymentMethodLabel } from '@/lib/orders'
 import type { Order } from '@/lib/orders'
 import { formatPrice, EXCHANGE_RATES } from '@/lib/products'
+import { getCurrentUser } from '@/lib/auth'
+import { normalizeEmail } from '@/lib/validation'
 
 const PREFIX = process.env.NODE_ENV === 'production' ? '/taries-beauty-emporium' : ''
 
@@ -26,13 +28,23 @@ export default function InvoiceClient() {
   const orderId = params.get('orderId')
   const [order, setOrder] = useState<Order | null>(null)
   const [notFound, setNotFound] = useState(false)
+  const [unlocked, setUnlocked] = useState(false)
+  const [unlockEmail, setUnlockEmail] = useState('')
+  const [unlockError, setUnlockError] = useState('')
   const invoiceRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!orderId) { setNotFound(true); return }
     const found = getOrder(orderId)
-    if (found) setOrder(found)
-    else setNotFound(true)
+    if (!found) {
+      setNotFound(true)
+      return
+    }
+    setOrder(found)
+    const currentUser = getCurrentUser()
+    const allowed = currentUser?.email.toLowerCase() === found.customer.email.toLowerCase()
+    const sessionEmail = sessionStorage.getItem(`taries-invoice-access-${found.orderId}`)
+    setUnlocked(allowed || sessionEmail?.toLowerCase() === found.customer.email.toLowerCase())
   }, [orderId])
 
   function handlePrint() {
@@ -63,8 +75,46 @@ export default function InvoiceClient() {
     )
   }
 
+  if (!unlocked) {
+    return (
+      <div className="min-h-screen bg-brand-black flex items-center justify-center px-4">
+        <div className="w-full max-w-md bg-brand-black-2 border border-brand-gold/20 p-6">
+          <p className="section-label mb-2">Protected Invoice</p>
+          <h1 className="font-display text-3xl gold-text mb-3">Confirm Your Email</h1>
+          <p className="font-body text-sm text-brand-cream/60 mb-5">
+            To view invoice <strong className="text-brand-gold-2">{order.orderId}</strong>, enter the same email used at checkout.
+          </p>
+          <form
+            onSubmit={event => {
+              event.preventDefault()
+              const email = normalizeEmail(unlockEmail)
+              if (email !== order.customer.email.toLowerCase()) {
+                setUnlockError('That email does not match this order.')
+                return
+              }
+              sessionStorage.setItem(`taries-invoice-access-${order.orderId}`, email)
+              setUnlocked(true)
+            }}
+            className="space-y-4"
+          >
+            <input
+              type="email"
+              value={unlockEmail}
+              onChange={event => { setUnlockEmail(event.target.value); setUnlockError('') }}
+              placeholder="you@example.com"
+              className="w-full bg-brand-black-3 border border-brand-gold/20 px-4 py-3 text-brand-cream focus:outline-none focus:border-brand-gold/50"
+            />
+            {unlockError && <p className="text-red-400 text-xs">{unlockError}</p>}
+            <button type="submit" className="btn-gold w-full">Unlock Invoice</button>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
   const subtotal  = order.subtotalUSD
   const shipping  = order.shippingUSD
+  const discount = order.discountUSD ?? 0
   const grandTotal = order.grandTotalUSD
   const cur = order.currency
 
@@ -271,6 +321,12 @@ export default function InvoiceClient() {
                 {shipping === 0 ? 'FREE ✈️' : formatPrice(shipping, cur)}
               </span>
             </div>
+            {discount > 0 && (
+              <div className="flex justify-between font-body text-sm py-2 border-b border-brand-gold/10 print:border-gray-100">
+                <span className="text-green-400">Discount{order.couponCode ? ` (${order.couponCode})` : ''}</span>
+                <span className="text-green-400">−{formatPrice(discount, cur)}</span>
+              </div>
+            )}
             {/* Grand Total */}
             <div className="flex justify-between items-center py-3 mt-1">
               <span className="font-heading text-base text-brand-cream print:text-gray-900 font-bold">Grand Total</span>

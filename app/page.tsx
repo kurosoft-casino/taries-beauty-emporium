@@ -8,24 +8,26 @@ import Testimonials from '@/components/home/Testimonials'
 import WhyUs from '@/components/home/WhyUs'
 import ShippingBanner from '@/components/home/ShippingBanner'
 import RecentlyViewedBar from '@/components/shop/RecentlyViewedBar'
-import { products } from '@/lib/products'
+import { useLang } from '@/lib/lang'
 
 export default function HomePage() {
+  const { lang } = useLang()
+
   return (
     <>
       <HeroSection />
       <MarqueeTicker />
       <CategoryGrid />
       <FeaturedProducts
-        title="Bestselling Products"
-        subtitle="Our most-loved pieces — picked by queens, for queens"
+        title={lang === 'ZH' ? '热销爆款' : 'Bestselling Products'}
+        subtitle={lang === 'ZH' ? '最受欢迎的人气单品，专为女王们挑选' : 'Our most-loved pieces — picked by queens, for queens'}
         filter={(p) => p.badge === 'bestseller'}
         limit={8}
       />
       <StatsSection />
       <FeaturedProducts
-        title="New Arrivals"
-        subtitle="Fresh drops just landed — be the first to wear them"
+        title={lang === 'ZH' ? '新品上架' : 'New Arrivals'}
+        subtitle={lang === 'ZH' ? '最新到货，抢先体验你的下一件心头好' : 'Fresh drops just landed — be the first to wear them'}
         filter={(p) => p.badge === 'new'}
         limit={4}
         viewAllHref="/shop?badge=new"

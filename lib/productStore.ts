@@ -19,6 +19,7 @@ export interface VendorProduct {
   badge?: 'new' | 'sale' | 'hot' | 'bestseller' | ''
   addedAt: string
   active: boolean
+  status?: 'pending' | 'approved' | 'featured' | 'removed'
 }
 
 // Admin can override any catalogue product field via localStorage

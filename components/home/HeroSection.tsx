@@ -2,8 +2,9 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion'
-import { ArrowRight, Star, ChevronDown } from 'lucide-react'
+import { ArrowRight, ChevronDown } from 'lucide-react'
 import { logoSrc } from '@/lib/assets'
+import { useLang } from '@/lib/lang'
 
 // Star particle component
 function Stars() {
@@ -44,8 +45,24 @@ export default function HeroSection() {
   const { scrollYProgress } = useScroll({ target: containerRef, offset: ['start start', 'end start'] })
   const y = useTransform(scrollYProgress, [0, 1], ['0%', '40%'])
   const opacity = useTransform(scrollYProgress, [0, 0.6], [1, 0])
+  const { lang, t } = useLang()
 
-  const words = ['Premium.', 'Luxurious.', 'Authentic.', 'Yours.']
+  const words = lang === 'ZH'
+    ? ['高端。', '奢华。', '正品。', '属于你。']
+    : ['Premium.', 'Luxurious.', 'Authentic.', 'Yours.']
+  const trustBar = lang === 'ZH'
+    ? [
+        { icon: '⭐', label: '4.9/5 评分', sub: '1,200+ 条评价' },
+        { icon: '🌍', label: '发货至尼日利亚和加纳', sub: '7–14 个工作日' },
+        { icon: '💎', label: '100% 真人发', sub: '正品保证' },
+        { icon: '🔒', label: '安全结账', sub: 'Paystack 与转账' },
+      ]
+    : [
+        { icon: '⭐', label: '4.9/5 Rating', sub: '1,200+ Reviews' },
+        { icon: '🌍', label: 'Ships to NG & GH', sub: '7–14 Business Days' },
+        { icon: '💎', label: '100% Human Hair', sub: 'Authenticity Guaranteed' },
+        { icon: '🔒', label: 'Secure Checkout', sub: 'Paystack & Transfer' },
+      ]
 
   return (
     <section ref={containerRef} className="relative min-h-screen flex items-center justify-center overflow-hidden bg-brand-black">
@@ -85,7 +102,7 @@ export default function HeroSection() {
           transition={{ delay: 0.4, duration: 0.6 }}
           className="section-label text-center mb-4"
         >
-          ✦ Luxury Hair & Beauty — Ships from China to Nigeria & Ghana ✦
+          ✦ {t('heroTag')} ✦
         </motion.p>
 
         {/* Main headline */}
@@ -95,8 +112,8 @@ export default function HeroSection() {
           transition={{ delay: 0.6, duration: 0.8 }}
           className="font-display text-5xl sm:text-6xl md:text-8xl font-bold leading-none mb-4"
         >
-          <span className="block text-brand-cream mb-2">Where Beauty</span>
-          <span className="gold-text-animate block">Meets Royalty</span>
+          <span className="block text-brand-cream mb-2">{t('heroTitle1')}</span>
+          <span className="gold-text-animate block">{t('heroTitle2')}</span>
         </motion.h1>
 
         {/* Rotating words */}
@@ -128,8 +145,7 @@ export default function HeroSection() {
           transition={{ delay: 1.0, duration: 0.6 }}
           className="font-body text-lg text-brand-cream/60 max-w-2xl mx-auto mb-10 leading-relaxed"
         >
-          100% authentic human hair wigs & bundles, custom-made with precision,
-          shipped direct from our manufacturers in China to your door in Nigeria & Ghana.
+          {t('heroSubtitle')}
         </motion.p>
 
         {/* CTAs */}
@@ -140,10 +156,10 @@ export default function HeroSection() {
           className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12"
         >
           <Link href="/shop" className="btn-gold flex items-center gap-2 text-base px-10 py-4">
-            Shop The Collection <ArrowRight size={18} />
+            {t('shopNow')} <ArrowRight size={18} />
           </Link>
           <Link href="/custom-wigs" className="btn-outline-gold flex items-center gap-2 text-base px-10 py-4">
-            Order Custom Wig ✨
+            {t('customOrder')} ✨
           </Link>
         </motion.div>
 
@@ -154,12 +170,7 @@ export default function HeroSection() {
           transition={{ delay: 1.5 }}
           className="flex flex-wrap items-center justify-center gap-6 text-center"
         >
-          {[
-            { icon: '⭐', label: '4.9/5 Rating', sub: '1,200+ Reviews' },
-            { icon: '🌍', label: 'Ships to NG & GH', sub: '7–14 Business Days' },
-            { icon: '💎', label: '100% Human Hair', sub: 'Authenticity Guaranteed' },
-            { icon: '🔒', label: 'Secure Checkout', sub: 'Paystack & Transfer' },
-          ].map(item => (
+          {trustBar.map(item => (
             <div key={item.label} className="flex items-center gap-2">
               <span className="text-xl">{item.icon}</span>
               <div className="text-left">
@@ -178,7 +189,7 @@ export default function HeroSection() {
         transition={{ delay: 2, duration: 1 }}
         className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
       >
-        <p className="font-body text-[10px] tracking-widest text-brand-gold/50 uppercase">Scroll</p>
+        <p className="font-body text-[10px] tracking-widest text-brand-gold/50 uppercase">{lang === 'ZH' ? '向下滚动' : 'Scroll'}</p>
         <motion.div animate={{ y: [0, 8, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>
           <ChevronDown size={20} className="text-brand-gold-2" />
         </motion.div>

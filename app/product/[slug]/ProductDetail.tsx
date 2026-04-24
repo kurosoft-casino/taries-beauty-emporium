@@ -4,8 +4,8 @@ import { notFound } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Star, ShoppingBag, Heart, Share2, Truck, Shield, ChevronLeft, ChevronRight, Check, Plus, Minus, MessageCircle } from 'lucide-react'
-import { products, formatPrice } from '@/lib/products'
+import { Star, ShoppingBag, Heart, Share2, Truck, Shield, ChevronLeft, ChevronRight, Check, Plus, Minus, MessageCircle, ZoomIn, Video } from 'lucide-react'
+import { formatPrice } from '@/lib/products'
 import { getBundlesForProduct } from '@/lib/bundles'
 import ProductCard from '@/components/shop/ProductCard'
 import ProductReviews from '@/components/shop/ProductReviews'
@@ -17,9 +17,12 @@ import { addRecentlyViewed } from '@/lib/recentlyViewed'
 import FlashSaleTimer from '@/components/shop/FlashSaleTimer'
 import RecentlyViewedBar from '@/components/shop/RecentlyViewedBar'
 import toast from 'react-hot-toast'
+import { getCatalogProductBySlug, getStorefrontProducts } from '@/lib/catalog'
+import { isValidEmail, normalizeEmail } from '@/lib/validation'
+import { readJSON, writeJSON } from '@/lib/storage'
 
 export default function ProductDetail({ slug }: { slug: string }) {
-  const productData = products.find(p => p.slug === slug)
+  const productData = getCatalogProductBySlug(slug)
   if (!productData) notFound()
   const product = productData!
 
@@ -33,10 +36,17 @@ export default function ProductDetail({ slug }: { slug: string }) {
   const [shareOpen,    setShareOpen]    = useState(false)
   const [notifyEmail,  setNotifyEmail]  = useState('')
   const [notifySent,   setNotifySent]   = useState(false)
+  const [notifyPending, setNotifyPending] = useState(false)
+  const [zoomOpen,     setZoomOpen]     = useState(false)
   const shareRef = useRef<HTMLDivElement>(null)
 
   const { addItem, openCart, currency } = useCartStore()
-  const related = products.filter(p => p.category === product.category && p.id !== product.id).slice(0, 4)
+  const related = getStorefrontProducts().filter(p => p.category === product.category && p.id !== product.id).slice(0, 4)
+  const bundles = getBundlesForProduct(slug)
+  const bundleProducts = bundles.map(bundle => ({
+    ...bundle,
+    items: getStorefrontProducts().filter(productItem => bundle.productSlugs.includes(productItem.slug)),
+  })).filter(bundle => bundle.items.length > 0)
 
   // Track product view on mount, seed reviews, init wishlist, record recently viewed
   useEffect(() => {
@@ -63,6 +73,10 @@ export default function ProductDetail({ slug }: { slug: string }) {
   }, [shareOpen])
 
   function handleAddToCart() {
+    if (!product.inStock) {
+      toast.error('This item is currently out of stock')
+      return
+    }
     for (let i = 0; i < qty; i++) addItem(product, selectedVars)
     toast.success('✨ Added to your cart!', { duration: 2500 })
     openCart()
@@ -92,6 +106,7 @@ export default function ProductDetail({ slug }: { slug: string }) {
   }
 
   const allVarsSelected = !product.variants || product.variants.every(v => selectedVars[v.label])
+  const addToCartDisabled = !allVarsSelected || !product.inStock
 
   return (
     <div className="min-h-screen bg-brand-black pt-28 pb-20">
@@ -132,6 +147,13 @@ export default function ProductDetail({ slug }: { slug: string }) {
                   />
                 </motion.div>
               </AnimatePresence>
+              <button
+                onClick={() => setZoomOpen(true)}
+                className="absolute bottom-3 left-3 glass-dark rounded-full px-3 py-2 flex items-center gap-2 text-xs text-brand-cream opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <ZoomIn size={14} />
+                Zoom
+              </button>
 
               {product.badge && (
                 <span className={
@@ -157,6 +179,24 @@ export default function ProductDetail({ slug }: { slug: string }) {
 
               <div className="absolute inset-0 border-2 border-brand-gold/0 group-hover:border-brand-gold/30 transition-all duration-500 pointer-events-none" />
             </div>
+
+            {product.video && (
+              <div className="border border-brand-gold/20 bg-brand-black-2 p-3">
+                <div className="flex items-center gap-2 text-brand-gold-2 text-xs uppercase tracking-widest mb-3">
+                  <Video size={14} />
+                  Hair movement video
+                </div>
+                <div className="aspect-video overflow-hidden">
+                  <iframe
+                    src={product.video}
+                    title={`${product.name} video`}
+                    className="w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+              </div>
+            )}
 
             {product.images.length > 1 && (
               <div className="flex flex-wrap gap-2">
@@ -206,6 +246,22 @@ export default function ProductDetail({ slug }: { slug: string }) {
 
               <p className="font-body text-sm text-brand-cream/60 leading-relaxed mb-6">{product.shortDesc}</p>
 
+              <div className="mb-6 flex flex-wrap items-center gap-3">
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold tracking-wider uppercase ${
+                  product.inStock
+                    ? 'bg-green-500/10 text-green-400 border border-green-500/30'
+                    : 'bg-red-500/10 text-red-400 border border-red-500/30'
+                }`}>
+                  {product.inStock ? 'In Stock' : 'Out of Stock'}
+                </span>
+                {product.inStock && product.stockCount && (
+                  <span className="text-xs text-brand-gold-2 font-body">
+                    {product.stockCount <= 5 ? `Only ${product.stockCount} left in stock` : `${product.stockCount} units ready to ship`}
+                  </span>
+                )}
+                <span className="text-xs text-brand-cream/40 font-body">Delivery estimate: {product.deliveryDays}</span>
+              </div>
+
               {product.badge === 'sale' && <FlashSaleTimer />}
 
               {product.variants?.map(variant => (
@@ -238,7 +294,10 @@ export default function ProductDetail({ slug }: { slug: string }) {
                     <Minus size={14} />
                   </button>
                   <span className="w-10 h-10 flex items-center justify-center font-body font-semibold text-brand-cream">{qty}</span>
-                  <button onClick={() => setQty(q => q + 1)} className="w-10 h-10 flex items-center justify-center text-brand-gold-2 hover:bg-brand-gold/10 transition-colors">
+                  <button
+                    onClick={() => setQty(q => product.stockCount ? Math.min(product.stockCount, q + 1) : q + 1)}
+                    className="w-10 h-10 flex items-center justify-center text-brand-gold-2 hover:bg-brand-gold/10 transition-colors"
+                  >
                     <Plus size={14} />
                   </button>
                 </div>
@@ -247,12 +306,12 @@ export default function ProductDetail({ slug }: { slug: string }) {
               <div className="flex gap-3 mb-6">
                 <motion.button
                   onClick={handleAddToCart}
-                  disabled={!allVarsSelected}
+                  disabled={addToCartDisabled}
                   whileTap={{ scale: 0.97 }}
                   className="flex-1 btn-gold flex items-center justify-center gap-2 py-4 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <ShoppingBag size={18} />
-                  {allVarsSelected ? 'Add to Cart' : 'Select Options'}
+                  {!product.inStock ? 'Sold Out' : allVarsSelected ? 'Add to Cart' : 'Select Options'}
                 </motion.button>
                 <motion.button
                   onClick={() => setWished(toggleWishlist(slug))}
@@ -331,13 +390,37 @@ export default function ProductDetail({ slug }: { slug: string }) {
                     <p className="font-body text-xs text-brand-gold-3">✓ You're on the list! We'll email you when this is back.</p>
                   ) : (
                     <form
-                      onSubmit={e => {
+                      onSubmit={async e => {
                         e.preventDefault()
-                        if (!notifyEmail.trim()) return
-                        const key = 'taries-notify-me'
-                        const list = JSON.parse(localStorage.getItem(key) || '[]')
-                        list.push({ slug, email: notifyEmail.trim(), addedAt: new Date().toISOString() })
-                        localStorage.setItem(key, JSON.stringify(list))
+                        const email = normalizeEmail(notifyEmail)
+                        if (!isValidEmail(email)) {
+                          toast.error('Enter a valid email address')
+                          return
+                        }
+
+                        setNotifyPending(true)
+
+                        try {
+                          const response = await fetch('/api/stock-alerts', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ slug, email }),
+                          })
+
+                          if (!response.ok) {
+                            throw new Error((await response.json().catch(() => null))?.error ?? 'Stock alert service is unavailable right now.')
+                          }
+                        } catch (error) {
+                          const key = 'taries-notify-me'
+                          const list = readJSON<Array<{ slug: string; email: string; addedAt: string }>>(key, [])
+                          const nextList = list.some(item => item.slug === slug && item.email === email)
+                            ? list
+                            : [...list, { slug, email, addedAt: new Date().toISOString() }]
+                          writeJSON(key, nextList)
+                          console.error(error)
+                        }
+
+                        setNotifyPending(false)
                         setNotifySent(true)
                         toast.success('You\'ll be notified when it\'s back!')
                       }}
@@ -351,13 +434,13 @@ export default function ProductDetail({ slug }: { slug: string }) {
                         required
                         className="flex-1 bg-brand-black border border-brand-gold/20 px-3 py-2 font-body text-xs text-brand-cream placeholder-brand-cream/30 focus:outline-none focus:border-brand-gold/50"
                       />
-                      <button type="submit" className="btn-gold px-4 py-2 text-xs font-semibold shrink-0">
-                        Notify Me
-                      </button>
-                    </form>
-                  )}
-                </div>
-              )}
+                        <button type="submit" disabled={notifyPending} className="btn-gold px-4 py-2 text-xs font-semibold shrink-0 disabled:opacity-60">
+                          {notifyPending ? 'Saving...' : 'Notify Me'}
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                )}
 
               <div className="grid grid-cols-2 gap-3">
                 {[
@@ -436,6 +519,53 @@ export default function ProductDetail({ slug }: { slug: string }) {
           </div>
         </div>
 
+        {bundleProducts.length > 0 && (
+          <div className="mb-16">
+            <h2 className="font-heading text-2xl font-bold text-brand-cream mb-6">
+              Frequently Bought <span className="gold-text">Together</span>
+            </h2>
+            <div className="space-y-4">
+              {bundleProducts.map(bundle => (
+                <div key={bundle.id} className="border border-brand-gold/20 bg-brand-black-2 p-5">
+                  <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        {bundle.badge && <span className="text-xs text-brand-gold-2 uppercase tracking-widest">{bundle.badge}</span>}
+                        <span className="text-xs text-green-400">Save ${bundle.savingUsd}</span>
+                      </div>
+                      <h3 className="font-heading text-xl text-brand-cream">{bundle.name}</h3>
+                      <p className="font-body text-sm text-brand-cream/60 mt-1">{bundle.description}</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+                        {bundle.items.map(item => (
+                          <Link key={item.id} href={item.source === 'vendor' ? `/product-preview?id=${encodeURIComponent(item.id)}` : `/product/${item.slug}`} className="flex gap-3 border border-brand-gold/10 p-3 hover:border-brand-gold/30 transition-colors">
+                            <div className="relative w-16 h-16 shrink-0 overflow-hidden">
+                              <Image src={item.images[0]} alt={item.name} fill className="object-cover" sizes="64px" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-body text-sm text-brand-cream line-clamp-2">{item.name}</p>
+                              <p className="font-heading text-sm text-brand-gold-3 mt-1">{formatPrice(item.price, currency)}</p>
+                            </div>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        bundle.items.filter(item => item.inStock).forEach(item => addItem(item))
+                        toast.success(`${bundle.name} added to cart`)
+                        openCart()
+                      }}
+                      className="btn-gold shrink-0"
+                    >
+                      Add bundle to cart
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {related.length > 0 && (
           <div>
             <h2 className="font-heading text-2xl font-bold text-brand-cream mb-8">
@@ -447,6 +577,41 @@ export default function ProductDetail({ slug }: { slug: string }) {
           </div>
         )}
       </div>
+      <AnimatePresence>
+        {zoomOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/80 z-50"
+              onClick={() => setZoomOpen(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+            >
+              <div className="relative w-full max-w-5xl aspect-square bg-brand-black-2 border border-brand-gold/20">
+                <Image
+                  src={product.images[activeImg]}
+                  alt={product.name}
+                  fill
+                  sizes="100vw"
+                  className="object-contain"
+                />
+                <button
+                  onClick={() => setZoomOpen(false)}
+                  className="absolute top-4 right-4 glass-dark rounded-full px-3 py-2 text-sm text-brand-cream"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
       <RecentlyViewedBar />
     </div>
   )

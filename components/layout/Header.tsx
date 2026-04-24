@@ -5,38 +5,14 @@ import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ShoppingBag, Search, Menu, X, ChevronDown, Heart, User } from 'lucide-react'
 import { useCartStore } from '@/lib/store'
-import { products, formatPrice } from '@/lib/products'
+import { formatPrice } from '@/lib/products'
 import { logoSrc } from '@/lib/assets'
-import { useLang } from '@/lib/lang'
+import { getCategoryCopy, useLang } from '@/lib/lang'
 import { getWishlist } from '@/lib/wishlist'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, isAdminUser } from '@/lib/auth'
 import type { User as AuthUser } from '@/lib/auth'
-
-const navLinks = [
-  {
-    label: 'Shop',
-    href: '/shop',
-    submenu: [
-      { label: '👑 Human Hair Wigs',     href: '/shop?category=wigs' },
-      { label: '✨ Hair Bundles',          href: '/shop?category=bundles' },
-      { label: '💎 Custom Made Wigs',     href: '/shop?category=custom-wigs' },
-      { label: '🌿 Hair Maintenance',     href: '/shop?category=maintenance' },
-      { label: '💄 Beauty Products',      href: '/shop?category=beauty' },
-      { label: '🧥 Female Coats',         href: '/shop?category=coats' },
-    ],
-  },
-  { label: 'Custom Wigs', href: '/custom-wigs' },
-  { label: 'About',       href: '/about' },
-  {
-    label: 'Vendors',
-    href: '/vendors',
-    submenu: [
-      { label: '🏪 Become a Vendor',       href: '/vendors' },
-      { label: '📋 Apply / Register',      href: '/vendors/register' },
-      { label: '📊 Vendor Dashboard',      href: '/vendors/dashboard' },
-    ],
-  },
-]
+import { getProductHref, getStorefrontProducts, type StorefrontProduct } from '@/lib/catalog'
+import { DEFAULT_STORE_SETTINGS, getStoreSettings, subscribeStoreSettings } from '@/lib/storeSettings'
 
 export default function Header() {
   const [scrolled,      setScrolled]      = useState(false)
@@ -46,22 +22,58 @@ export default function Header() {
   const [searchQuery,   setSearchQuery]   = useState('')
   const [wishlistCount, setWishlistCount] = useState(0)
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null)
+  const [settings, setSettings] = useState(DEFAULT_STORE_SETTINGS)
+  const [catalogProducts, setCatalogProducts] = useState<StorefrontProduct[]>([])
   const searchRef = useRef<HTMLInputElement>(null)
 
   const { getTotalItems, openCart, currency, setCurrency } = useCartStore()
-  const { lang, setLang } = useLang()
+  const { lang, setLang, t } = useLang()
   const totalItems = getTotalItems()
   const router = useRouter()
+  const shopCategories = useMemo(() => [
+    { icon: '👑', id: 'wigs', href: '/shop?category=wigs' },
+    { icon: '✨', id: 'bundles', href: '/shop?category=bundles' },
+    { icon: '💎', id: 'custom-wigs', href: '/shop?category=custom-wigs' },
+    { icon: '🌿', id: 'maintenance', href: '/shop?category=maintenance' },
+    { icon: '💄', id: 'beauty', href: '/shop?category=beauty' },
+    { icon: '🧥', id: 'coats', href: '/shop?category=coats' },
+    { icon: '🏠', id: 'home-appliances', href: '/shop?category=home-appliances' },
+    { icon: '🍳', id: 'kitchenware', href: '/shop?category=kitchenware' },
+    { icon: '🧼', id: 'cleaning', href: '/shop?category=cleaning' },
+    { icon: '🛏️', id: 'bedding', href: '/shop?category=bedding' },
+    { icon: '🔌', id: 'electronics', href: '/shop?category=electronics' },
+  ], [])
+  const navLinks = useMemo(() => [
+    {
+      label: t('shop'),
+      href: '/shop',
+      submenu: shopCategories.map(category => ({
+        label: `${category.icon} ${getCategoryCopy(category.id, lang)?.label ?? category.id}`,
+        href: category.href,
+      })),
+    },
+    { label: t('customWigs'), href: '/custom-wigs' },
+    { label: t('about'), href: '/about' },
+    {
+      label: t('vendors'),
+      href: '/vendors',
+      submenu: [
+        { label: `🏪 ${t('becomeVendor')}`, href: '/vendors' },
+        { label: lang === 'ZH' ? '📋 申请 / 注册' : '📋 Apply / Register', href: '/vendors/register' },
+        { label: `📊 ${t('vendorDashboard')}`, href: '/vendors/dashboard' },
+      ],
+    },
+  ], [lang, shopCategories, t])
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return []
     const q = searchQuery.toLowerCase()
-    return products.filter(p =>
+    return catalogProducts.filter(p =>
       p.name.toLowerCase().includes(q) ||
       p.description.toLowerCase().includes(q) ||
       p.tags.some(t => t.includes(q))
     ).slice(0, 6)
-  }, [searchQuery])
+  }, [catalogProducts, searchQuery])
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 40)
@@ -91,6 +103,15 @@ export default function Header() {
     return () => window.removeEventListener('storage', handleStorage)
   }, [])
 
+  useEffect(() => {
+    const refresh = () => {
+      setSettings(getStoreSettings())
+      setCatalogProducts(getStorefrontProducts())
+    }
+    refresh()
+    return subscribeStoreSettings(refresh)
+  }, [])
+
   return (
     <>
       <motion.header
@@ -106,7 +127,10 @@ export default function Header() {
           <div className="flex whitespace-nowrap animate-marquee" style={{ width: 'max-content' }}>
             {Array(4).fill(null).map((_, i) => (
               <span key={i} className="mx-8">
-                🌟 Free shipping on orders over $200 &nbsp;•&nbsp; Ships from China to Nigeria &amp; Ghana &nbsp;•&nbsp; 7–14 business days delivery &nbsp;•&nbsp; 100% Authentic Human Hair Guaranteed
+                {lang === 'ZH'
+                  ? '🌟 满 $200 免运费 • 从中国发货至尼日利亚和加纳 • 7–14 个工作日送达 • 100% 真人发品质保证'
+                  : '🌟 Free shipping on orders over $200 • Ships from China to Nigeria & Ghana • 7–14 business days delivery • 100% Authentic Human Hair Guaranteed'}
+                {settings.announcement ? ` • ${settings.announcement}` : ''}
               </span>
             ))}
           </div>
@@ -128,7 +152,7 @@ export default function Header() {
               />
             </motion.div>
             <div className="hidden sm:block">
-              <p className="font-heading text-sm font-bold gold-text leading-tight tracking-wider">TARIES BEAUTY</p>
+              <p className="font-heading text-sm font-bold gold-text leading-tight tracking-wider">{settings.storeName.toUpperCase()}</p>
               <p className="font-body text-[9px] tracking-[0.4em] text-brand-gold-2 uppercase">Emporium</p>
             </div>
           </Link>
@@ -219,7 +243,7 @@ export default function Header() {
             <button
               onClick={() => setSearchOpen(!searchOpen)}
               className="text-brand-cream hover:text-brand-gold-3 transition-colors"
-              aria-label="Search"
+              aria-label={lang === 'ZH' ? '搜索' : 'Search'}
             >
               <Search size={20} />
             </button>
@@ -248,16 +272,23 @@ export default function Header() {
 
             {/* Account */}
             {currentUser ? (
-              <Link href="/account" className="flex items-center gap-1.5 text-brand-cream hover:text-brand-gold-3 transition-colors" title={`${currentUser.firstName} ${currentUser.lastName}`}>
-                <span className="text-lg leading-none">{currentUser.avatar || '👑'}</span>
-                <span className="hidden md:block font-body text-xs font-medium text-brand-gold-2 max-w-[80px] truncate">
-                  {currentUser.firstName.slice(0, 10)}
-                </span>
-              </Link>
+              <div className="flex items-center gap-2">
+                {isAdminUser(currentUser) && (
+                  <Link href="/admin" className="hidden md:inline-flex px-2 py-1 border border-brand-gold/40 text-brand-gold-2 text-[10px] font-body font-semibold uppercase tracking-wider hover:border-brand-gold hover:text-brand-gold-3 transition-colors">
+                    Admin
+                  </Link>
+                )}
+                <Link href="/account" className="flex items-center gap-1.5 text-brand-cream hover:text-brand-gold-3 transition-colors" title={`${currentUser.firstName} ${currentUser.lastName}`}>
+                  <span className="text-lg leading-none">{currentUser.avatar || '👑'}</span>
+                  <span className="hidden md:block font-body text-xs font-medium text-brand-gold-2 max-w-[80px] truncate">
+                    {currentUser.firstName.slice(0, 10)}
+                  </span>
+                </Link>
+              </div>
             ) : (
-              <Link href="/login" className="hidden md:flex items-center gap-1 text-brand-cream hover:text-brand-gold-3 transition-colors" aria-label="Sign In">
+              <Link href="/login" className="hidden md:flex items-center gap-1 text-brand-cream hover:text-brand-gold-3 transition-colors" aria-label={t('signIn')}>
                 <User size={20} />
-                <span className="font-body text-xs font-medium">Sign In</span>
+                <span className="font-body text-xs font-medium">{t('signIn')}</span>
               </Link>
             )}
 
@@ -312,7 +343,7 @@ export default function Header() {
                     type="text"
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    placeholder="Search wigs, bundles, beauty products..."
+                    placeholder={t('searchPlaceholder')}
                     className="flex-1 bg-transparent text-brand-cream placeholder-brand-gold/40 font-body text-sm focus:outline-none"
                     onKeyDown={e => {
                       if (e.key === 'Enter' && searchQuery.trim()) {
@@ -342,7 +373,7 @@ export default function Header() {
                         <button
                           key={product.id}
                           onClick={() => {
-                            router.push(`/product/${product.slug}`)
+                            router.push(getProductHref(product))
                             setSearchOpen(false)
                             setSearchQuery('')
                           }}
@@ -355,11 +386,11 @@ export default function Header() {
                             className="w-10 h-10 object-cover shrink-0"
                           />
                           <div className="flex-1 min-w-0">
-                            <p className="font-body text-sm text-brand-cream truncate">{product.name}</p>
-                            <span className="inline-block text-[10px] font-body font-semibold text-brand-gold-2/70 uppercase tracking-wider">
-                              {product.categoryLabel}
-                            </span>
-                          </div>
+                             <p className="font-body text-sm text-brand-cream truncate">{product.name}</p>
+                             <span className="inline-block text-[10px] font-body font-semibold text-brand-gold-2/70 uppercase tracking-wider">
+                               {getCategoryCopy(product.category, lang)?.label ?? product.categoryLabel}
+                             </span>
+                           </div>
                           <span className="font-heading text-sm font-bold text-brand-gold-3 shrink-0">
                             {formatPrice(product.price, currency)}
                           </span>
@@ -373,7 +404,7 @@ export default function Header() {
                         }}
                         className="w-full px-4 py-2.5 text-center font-body text-xs text-brand-gold-2 hover:text-brand-gold-3 transition-colors"
                       >
-                        View all results for &ldquo;{searchQuery}&rdquo; →
+                        {lang === 'ZH' ? `查看“${searchQuery}”的全部结果 →` : `View all results for “${searchQuery}” →`}
                       </button>
                     </motion.div>
                   )}
@@ -429,14 +460,25 @@ export default function Header() {
                   className="block py-4 font-heading text-xl text-brand-cream hover:text-brand-gold-3 transition-colors border-b border-brand-gold/20"
                   onClick={() => setMobileOpen(false)}
                 >
-                  {currentUser ? `${currentUser.avatar || '👑'} ${currentUser.firstName}` : '👤 Sign In'}
+                  {currentUser ? `${currentUser.avatar || '👑'} ${currentUser.firstName}` : `👤 ${t('signIn')}`}
                 </Link>
               </motion.div>
+              {currentUser && isAdminUser(currentUser) && (
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.34 }}>
+                  <Link
+                    href="/admin"
+                    className="block py-4 font-heading text-xl text-brand-gold hover:text-brand-gold-3 transition-colors border-b border-brand-gold/20"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    🔐 Admin Dashboard
+                  </Link>
+                </motion.div>
+              )}
             </div>
 
             {/* Mobile currency */}
             <div className="mt-8">
-              <p className="font-body text-xs tracking-widest text-brand-gold-2 uppercase mb-3">Currency</p>
+              <p className="font-body text-xs tracking-widest text-brand-gold-2 uppercase mb-3">{t('currency')}</p>
               <div className="flex gap-2">
                 {(['NGN', 'GHS', 'USD', 'CNY'] as const).map(c => (
                   <button
@@ -456,7 +498,7 @@ export default function Header() {
 
             {/* Mobile Language Toggle */}
             <div className="mt-4">
-              <p className="font-body text-xs tracking-widest text-brand-gold-2 uppercase mb-3">Language / 语言</p>
+              <p className="font-body text-xs tracking-widest text-brand-gold-2 uppercase mb-3">{t('language')} / 语言</p>
               <div className="flex gap-2">
                 {(['EN', 'ZH'] as const).map(l => (
                   <button
@@ -480,8 +522,8 @@ export default function Header() {
               rel="noopener noreferrer"
               className="mt-8 btn-gold text-center block"
             >
-              💬 WhatsApp Us
-            </a>
+               {lang === 'ZH' ? '💬 WhatsApp 联系我们' : '💬 WhatsApp Us'}
+             </a>
           </motion.div>
         )}
       </AnimatePresence>

@@ -1,19 +1,40 @@
 'use client'
-import { useEffect, useRef } from 'react'
-
-const items = [
-  '👑 100% Human Hair Wigs',
-  '✨ Virgin Hair Bundles',
-  '💎 Custom Made Wigs',
-  '🌿 Hair Maintenance',
-  '💄 Beauty Products',
-  '🧥 Luxury Coats',
-  '✈️ Ships to Nigeria & Ghana',
-  '🔒 Authentic & Guaranteed',
-  '⭐ 4.9/5 Rated',
-]
+import { useLang } from '@/lib/lang'
 
 export default function MarqueeTicker() {
+  const { lang } = useLang()
+  const items = lang === 'ZH'
+    ? [
+        '👑 100% 真人发假发',
+        '✨ 优质真人发束',
+        '💎 定制假发',
+        '🌿 发品护理',
+        '💄 美妆产品',
+        '🧥 精品外套',
+        '🏠 家用电器',
+        '🍳 厨具用品',
+        '🧼 清洁用品',
+        '🛏️ 床上用品',
+        '🔌 电子产品',
+        '✈️ 发往尼日利亚和加纳',
+        '🔒 正品保证',
+      ]
+    : [
+        '👑 100% Human Hair Wigs',
+        '✨ Virgin Hair Bundles',
+        '💎 Custom Made Wigs',
+        '🌿 Hair Maintenance',
+        '💄 Beauty Products',
+        '🧥 Luxury Coats',
+        '🏠 Home Appliances',
+        '🍳 Kitchenware',
+        '🧼 Cleaning Products',
+        '🛏️ Bedding',
+        '🔌 Electronics',
+        '✈️ Ships to Nigeria & Ghana',
+        '🔒 Authentic & Guaranteed',
+        '⭐ 4.9/5 Rated',
+      ]
   return (
     <div className="bg-brand-black-3 border-y border-brand-gold/20 py-4 overflow-hidden relative">
       {/* Edge fades */}

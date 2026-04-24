@@ -3,20 +3,25 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ShoppingBag, Heart, MapPin, Settings, LayoutDashboard, Plus, Trash2, LogOut, Eye } from 'lucide-react'
+import { ShoppingBag, Heart, MapPin, Settings, LayoutDashboard, Plus, Trash2, LogOut, Eye, Store, Package, MessageCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
   getCurrentUser, logoutUser, updateUser, addAddress, removeAddress,
-  setDefaultAddress, changePassword, deleteAccount,
+  setDefaultAddress, changePassword, deleteAccount, getAdminLevel, isAdminUser,
   type User, type SavedAddress,
 } from '@/lib/auth'
 import { getAllOrders, formatOrderDate } from '@/lib/orders'
 import { getWishlist, toggleWishlist } from '@/lib/wishlist'
 import { products, formatPrice } from '@/lib/products'
 import { useCartStore } from '@/lib/store'
+import { getRecentlyViewed } from '@/lib/recentlyViewed'
+import { getVendorProducts } from '@/lib/productStore'
+import { findVendorProfileByEmail, type VendorProfile } from '@/lib/vendorProfile'
+import { getViews } from '@/lib/views'
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'business', label: 'Business', icon: Store },
   { id: 'orders', label: 'Orders', icon: ShoppingBag },
   { id: 'wishlist', label: 'Wishlist', icon: Heart },
   { id: 'addresses', label: 'Addresses', icon: MapPin },
@@ -42,6 +47,7 @@ export default function AccountPage() {
   const router = useRouter()
   const { currency, addItem } = useCartStore()
   const [user, setUser] = useState<User | null>(null)
+  const [linkedVendor, setLinkedVendor] = useState<VendorProfile | null>(null)
   const [authChecked, setAuthChecked] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>('overview')
 
@@ -78,6 +84,9 @@ export default function AccountPage() {
       setEditFirstName(u.firstName)
       setEditLastName(u.lastName)
       setEditPhone(u.phone)
+      setLinkedVendor(findVendorProfileByEmail(u.email))
+    } else {
+      setLinkedVendor(null)
     }
     return u
   }, [])
@@ -98,10 +107,27 @@ export default function AccountPage() {
     : []
 
   const recentlyViewedCount = typeof window !== 'undefined'
-    ? (() => { try { return JSON.parse(localStorage.getItem('taries-recently-viewed') || '[]').length } catch { return 0 } })()
+    ? getRecentlyViewed().length
     : 0
 
   const wishlistProducts = products.filter(p => wishlistSlugs.includes(p.slug))
+  const vendorProducts = linkedVendor?.status === 'approved' ? getVendorProducts(linkedVendor.email) : []
+  const vendorViews = getViews()
+  const vendorTotalViews = vendorProducts.reduce((total, product) => {
+    const slug = product.name.toLowerCase().replace(/\s+/g, '-')
+    return total + (vendorViews[slug] ?? vendorViews[product.id] ?? 0)
+  }, 0)
+  const vendorUnreadMessages = (() => {
+    if (!linkedVendor) return 0
+    try {
+      const raw = localStorage.getItem(`taries-vendor-${linkedVendor.email}-messages`)
+      if (!raw) return 0
+      const messages = JSON.parse(raw) as Array<{ isOwn?: boolean; read?: boolean }>
+      return messages.filter(message => !message.isOwn && !message.read).length
+    } catch {
+      return 0
+    }
+  })()
 
   function handleRemoveWishlist(slug: string) {
     toggleWishlist(slug)
@@ -127,7 +153,7 @@ export default function AccountPage() {
     if (newPw.length < 8) { toast.error('Password must be at least 8 characters'); return }
     setChangingPw(true)
     try {
-      changePassword(currentPw, newPw)
+      await changePassword(currentPw, newPw)
       setCurrentPw(''); setNewPw(''); setConfirmPw('')
       toast.success('Password changed!')
     } catch (err: unknown) {
@@ -186,6 +212,30 @@ export default function AccountPage() {
         <div className="mb-8">
           <h1 className="font-display text-3xl gold-text">{user.avatar || '👑'} My Account</h1>
           <p className="font-body text-sm text-brand-cream/50 mt-1">{user.email}</p>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            {linkedVendor && (
+              <span className={`px-3 py-1 rounded-full border text-xs font-body font-semibold uppercase tracking-wider ${
+                linkedVendor.status === 'approved'
+                  ? 'border-green-500/30 bg-green-500/10 text-green-400'
+                  : linkedVendor.status === 'pending'
+                    ? 'border-yellow-500/30 bg-yellow-500/10 text-yellow-400'
+                    : 'border-red-500/30 bg-red-500/10 text-red-400'
+              }`}>
+                vendor {linkedVendor.status}
+              </span>
+            )}
+            {isAdminUser(user) && (
+              <>
+              <span className="px-3 py-1 rounded-full border border-brand-gold/30 bg-brand-gold/10 text-brand-gold text-xs font-body font-semibold uppercase tracking-wider">
+                {getAdminLevel(user)?.replace('-', ' ') ?? 'admin'} access enabled
+              </span>
+              <Link href="/admin" className="inline-flex items-center gap-2 btn-outline-gold">
+                <LayoutDashboard size={16} />
+                Open Admin Panel
+              </Link>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Sticky Tab bar */}
@@ -276,7 +326,7 @@ export default function AccountPage() {
                 </div>
 
                 {/* Quick actions */}
-                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
                   <Link href="/shop" className="bg-brand-black-2 border border-brand-gold/10 hover:border-brand-gold/30 rounded-xl p-4 text-center transition-all group">
                     <p className="text-2xl mb-1">🛍️</p>
                     <p className="font-body text-xs text-brand-cream/60 group-hover:text-brand-cream">Browse Shop</p>
@@ -289,7 +339,210 @@ export default function AccountPage() {
                     <p className="text-2xl mb-1">📦</p>
                     <p className="font-body text-xs text-brand-cream/60 group-hover:text-brand-cream">Track Order</p>
                   </Link>
+                  <button
+                    onClick={() => setActiveTab('business')}
+                    className="bg-brand-black-2 border border-brand-gold/10 hover:border-brand-gold/30 rounded-xl p-4 text-center transition-all group"
+                  >
+                    <p className="text-2xl mb-1">🏪</p>
+                    <p className="font-body text-xs text-brand-cream/60 group-hover:text-brand-cream">Vendor Hub</p>
+                  </button>
+                  {isAdminUser(user) && (
+                    <Link href="/admin" className="bg-brand-black-2 border border-brand-gold/10 hover:border-brand-gold/30 rounded-xl p-4 text-center transition-all group">
+                      <p className="text-2xl mb-1">🛡️</p>
+                      <p className="font-body text-xs text-brand-cream/60 group-hover:text-brand-cream">Admin Panel</p>
+                    </Link>
+                  )}
                 </div>
+              </div>
+            )}
+
+            {/* ── BUSINESS ── */}
+            {activeTab === 'business' && (
+              <div className="space-y-6">
+                <div className="bg-brand-black-2 border border-brand-gold/20 rounded-2xl p-6">
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div>
+                      <p className="section-label">Business Hub</p>
+                      <h2 className="font-display text-2xl gold-text">
+                        {linkedVendor?.businessName ?? 'Sell with Taries Beauty Emporium'}
+                      </h2>
+                      <p className="font-body text-sm text-brand-cream/50 mt-1">
+                        Manage vendor access, products, customer chats, and business details from your main account profile.
+                      </p>
+                    </div>
+                    {linkedVendor?.status === 'approved' ? (
+                      <Link href="/vendors/dashboard" className="btn-gold inline-flex items-center gap-2">
+                        <Store size={16} />
+                        Open Vendor Workspace
+                      </Link>
+                    ) : (
+                      <Link href="/vendors/register" className="btn-outline-gold inline-flex items-center gap-2">
+                        <Plus size={16} />
+                        {linkedVendor ? 'Update Vendor Application' : 'Apply as Vendor'}
+                      </Link>
+                    )}
+                  </div>
+                </div>
+
+                {!linkedVendor && (
+                  <div className="bg-brand-black-2 border border-brand-gold/10 rounded-2xl p-8">
+                    <h3 className="font-heading text-lg text-brand-gold mb-2">Start selling from this account</h3>
+                    <p className="font-body text-sm text-brand-cream/55 max-w-2xl">
+                      Vendor access is now connected to your signed-in customer profile. Apply once, get approved by admin, and your vendor tools will appear here without a separate vendor login.
+                    </p>
+                    <div className="mt-5 flex flex-wrap gap-3">
+                      <Link href="/vendors/register" className="btn-gold">Apply as Vendor</Link>
+                      <Link href="/contact" className="btn-outline-gold">Contact Support</Link>
+                    </div>
+                  </div>
+                )}
+
+                {linkedVendor && linkedVendor.status !== 'approved' && (
+                  <div className={`rounded-2xl p-6 border ${
+                    linkedVendor.status === 'pending'
+                      ? 'bg-yellow-500/5 border-yellow-500/20'
+                      : 'bg-red-500/5 border-red-500/20'
+                  }`}>
+                    <div className="flex items-start justify-between gap-4 flex-wrap">
+                      <div>
+                        <h3 className="font-heading text-lg text-brand-gold mb-2">Vendor application status</h3>
+                        <p className="font-body text-sm text-brand-cream/60">
+                          Your current vendor request for <span className="text-brand-cream">{linkedVendor.businessName}</span> is <span className="capitalize">{linkedVendor.status}</span>.
+                        </p>
+                      </div>
+                      <span className={`px-3 py-1 rounded-full border text-xs font-semibold uppercase tracking-wider ${
+                        linkedVendor.status === 'pending'
+                          ? 'border-yellow-500/30 bg-yellow-500/10 text-yellow-400'
+                          : 'border-red-500/30 bg-red-500/10 text-red-400'
+                      }`}>
+                        {linkedVendor.status}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
+                      <div className="bg-brand-black/30 rounded-xl p-4 border border-brand-gold/10">
+                        <p className="font-body text-xs text-brand-gold-2 uppercase tracking-wider mb-2">Business details</p>
+                        <p className="font-body text-sm text-brand-cream">{linkedVendor.businessName}</p>
+                        <p className="font-body text-xs text-brand-cream/55 mt-1">{linkedVendor.category}</p>
+                        <p className="font-body text-xs text-brand-cream/45 mt-3">{linkedVendor.description}</p>
+                      </div>
+                      <div className="bg-brand-black/30 rounded-xl p-4 border border-brand-gold/10">
+                        <p className="font-body text-xs text-brand-gold-2 uppercase tracking-wider mb-2">What happens next</p>
+                        <p className="font-body text-sm text-brand-cream/60">
+                          Admin reviews vendor requests from the main admin panel. Once approved, your full vendor workspace opens directly from this profile.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {linkedVendor?.status === 'approved' && (
+                  <>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                      {[
+                        { label: 'Listed Products', value: vendorProducts.length, icon: Package },
+                        { label: 'Product Views', value: vendorTotalViews, icon: Eye },
+                        { label: 'Unread Messages', value: vendorUnreadMessages, icon: MessageCircle },
+                        { label: 'Status', value: 'Approved', icon: Store },
+                      ].map(stat => {
+                        const Icon = stat.icon
+                        return (
+                          <div key={stat.label} className="bg-brand-black-2 border border-brand-gold/10 rounded-xl p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <p className="font-body text-xs text-brand-cream/45 uppercase tracking-wider">{stat.label}</p>
+                              <Icon size={15} className="text-brand-gold" />
+                            </div>
+                            <p className="font-display text-2xl text-brand-gold font-bold">{stat.value}</p>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_0.9fr] gap-6">
+                      <div className="bg-brand-black-2 border border-brand-gold/10 rounded-2xl p-6">
+                        <div className="flex items-center justify-between gap-3 mb-5">
+                          <h3 className="font-heading text-lg text-brand-gold">Recent Vendor Products</h3>
+                          <Link href="/vendors/dashboard" className="text-xs text-brand-gold/70 hover:text-brand-gold transition-colors">
+                            Manage all
+                          </Link>
+                        </div>
+
+                        {vendorProducts.length === 0 ? (
+                          <div className="border border-dashed border-brand-gold/20 rounded-xl p-6 text-center">
+                            <p className="font-body text-sm text-brand-cream/55">No vendor products yet.</p>
+                            <Link href="/vendors/dashboard" className="btn-gold mt-4 inline-flex">Add Your First Product</Link>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {vendorProducts.slice(0, 4).map(product => {
+                              const slug = product.name.toLowerCase().replace(/\s+/g, '-')
+                              const viewCount = vendorViews[slug] ?? vendorViews[product.id] ?? 0
+                              return (
+                                <div key={product.id} className="flex items-center justify-between gap-4 rounded-xl border border-brand-gold/10 bg-brand-black/30 p-4">
+                                  <div className="min-w-0">
+                                    <p className="font-body text-sm text-brand-cream truncate">{product.name}</p>
+                                    <p className="font-body text-xs text-brand-cream/45 mt-1">
+                                      {product.category} · ${product.price.toFixed(2)}
+                                    </p>
+                                  </div>
+                                  <div className="text-right shrink-0">
+                                    <p className="font-body text-xs text-brand-gold">{viewCount} views</p>
+                                    <p className={`font-body text-xs mt-1 ${product.active !== false ? 'text-green-400' : 'text-brand-cream/35'}`}>
+                                      {product.active !== false ? 'Active' : 'Inactive'}
+                                    </p>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-6">
+                        <div className="bg-brand-black-2 border border-brand-gold/10 rounded-2xl p-6">
+                          <h3 className="font-heading text-lg text-brand-gold mb-4">Business Profile</h3>
+                          <div className="space-y-3 text-sm">
+                            <div>
+                              <p className="font-body text-xs text-brand-gold-2 uppercase tracking-wider mb-1">Business Name</p>
+                              <p className="font-body text-brand-cream">{linkedVendor.businessName}</p>
+                            </div>
+                            <div>
+                              <p className="font-body text-xs text-brand-gold-2 uppercase tracking-wider mb-1">Category</p>
+                              <p className="font-body text-brand-cream">{linkedVendor.category}</p>
+                            </div>
+                            <div>
+                              <p className="font-body text-xs text-brand-gold-2 uppercase tracking-wider mb-1">Contact</p>
+                              <p className="font-body text-brand-cream">{linkedVendor.whatsapp ?? linkedVendor.phone}</p>
+                            </div>
+                            <div>
+                              <p className="font-body text-xs text-brand-gold-2 uppercase tracking-wider mb-1">Description</p>
+                              <p className="font-body text-brand-cream/60">{linkedVendor.description}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-brand-black-2 border border-brand-gold/10 rounded-2xl p-6">
+                          <h3 className="font-heading text-lg text-brand-gold mb-4">Workspace Access</h3>
+                          <p className="font-body text-sm text-brand-cream/55">
+                            Your vendor tools are linked to this account now. Open the workspace anytime without a separate vendor login page.
+                          </p>
+                          <div className="mt-5 flex flex-col gap-3">
+                            <Link href="/vendors/dashboard" className="btn-gold text-center">Open Vendor Workspace</Link>
+                            {isAdminUser(user) ? (
+                              <Link href="/admin" className="btn-outline-gold text-center">
+                                Open Admin Panel
+                              </Link>
+                            ) : (
+                              <Link href="/contact" className="btn-outline-gold text-center">
+                                Contact Admin Support
+                              </Link>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 

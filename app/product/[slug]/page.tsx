@@ -32,5 +32,41 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 }
 
 export default function ProductPage({ params }: { params: { slug: string } }) {
-  return <ProductDetail slug={params.slug} />
+  const product = products.find(p => p.slug === params.slug)
+  const jsonLd = product ? {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.name,
+    description: product.description,
+    image: product.images,
+    sku: product.id,
+    brand: {
+      '@type': 'Brand',
+      name: 'Taries Beauty Emporium',
+    },
+    aggregateRating: {
+      '@type': 'AggregateRating',
+      ratingValue: product.rating,
+      reviewCount: product.reviews,
+    },
+    offers: {
+      '@type': 'Offer',
+      priceCurrency: 'USD',
+      price: product.price,
+      availability: product.inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      url: `https://kurosoft1.github.io/taries-beauty-emporium/product/${product.slug}`,
+    },
+  } : null
+
+  return (
+    <>
+      {jsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      )}
+      <ProductDetail slug={params.slug} />
+    </>
+  )
 }

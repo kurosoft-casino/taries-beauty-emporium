@@ -3,10 +3,13 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Check, ShoppingBag, CreditCard, Smartphone, Building2, ChevronRight, FileText, Plane, Package } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { useCartStore } from '@/lib/store'
 import { formatPrice } from '@/lib/products'
 import { saveOrder } from '@/lib/orders'
 import { estimateWeight, calcShipping, getCargoType } from '@/lib/shipping'
+import { calculateCouponDiscount, clearAppliedCoupon, getAppliedCoupon } from '@/lib/coupons'
+import { isValidEmail, normalizeEmail, sanitizeInlineText, sanitizeMultilineText, sanitizePhone } from '@/lib/validation'
 
 const steps = ['Cart', 'Details', 'Payment', 'Confirm']
 const countries = ['Nigeria', 'Ghana']
@@ -27,6 +30,7 @@ export default function CheckoutPage() {
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [ordered, setOrdered] = useState(false)
+  const [placingOrder, setPlacingOrder] = useState(false)
   const [orderNum] = useState(() => 'TBE-' + Math.random().toString(36).slice(2, 8).toUpperCase())
 
   const total = getTotalUSD()
@@ -34,18 +38,21 @@ export default function CheckoutPage() {
   const weightKg = estimateWeight(items)
   const shippingCalc = calcShipping(weightKg, cargoType)
   const shipping = items.length > 0 ? shippingCalc.totalUsdEquiv : 0
-  const grandTotal = total + shipping
+  const appliedCoupon = getAppliedCoupon()
+  const discount = calculateCouponDiscount(items, appliedCoupon)
+  const discountedSubtotal = total - discount
+  const grandTotal = discountedSubtotal + shipping
 
   function update(k: string, v: string) { setForm(f => ({ ...f, [k]: v })) }
 
   function validateStep1() {
     const e: Record<string, string> = {}
-    if (!form.firstName.trim()) e.firstName = 'Required'
-    if (!form.lastName.trim())  e.lastName  = 'Required'
-    if (!form.email.match(/^[^@]+@[^@]+\.[^@]+$/)) e.email = 'Valid email required'
-    if (!form.phone.trim()) e.phone = 'Required'
-    if (!form.address.trim()) e.address = 'Required'
-    if (!form.city.trim()) e.city = 'Required'
+    if (!sanitizeInlineText(form.firstName)) e.firstName = 'Required'
+    if (!sanitizeInlineText(form.lastName))  e.lastName  = 'Required'
+    if (!isValidEmail(form.email)) e.email = 'Valid email required'
+    if (!sanitizePhone(form.phone)) e.phone = 'Required'
+    if (!sanitizeInlineText(form.address)) e.address = 'Required'
+    if (!sanitizeInlineText(form.city)) e.city = 'Required'
     if (!form.state) e.state = 'Required'
     setErrors(e)
     return Object.keys(e).length === 0
@@ -69,36 +76,69 @@ export default function CheckoutPage() {
     setStep(s => s + 1)
   }
 
-  function handlePlaceOrder() {
-    saveOrder({
+  async function handlePlaceOrder() {
+    const orderPayload = {
       orderId: orderNum,
       date: new Date().toISOString(),
-      status: 'pending',
-      paymentStatus: form.payMethod === 'transfer' ? 'pending' : 'paid',
+      status: 'pending' as const,
+      paymentStatus: 'pending' as const,
       paymentMethod: form.payMethod,
       currency,
       items,
       subtotalUSD: total,
       shippingUSD: shipping,
       grandTotalUSD: grandTotal,
+      discountUSD: discount || undefined,
+      couponCode: appliedCoupon?.code,
       customer: {
-        firstName: form.firstName,
-        lastName: form.lastName,
-        email: form.email,
-        phone: form.phone,
+        firstName: sanitizeInlineText(form.firstName),
+        lastName: sanitizeInlineText(form.lastName),
+        email: normalizeEmail(form.email),
+        phone: sanitizePhone(form.phone),
       },
       shipping: {
-        address: form.address,
-        city: form.city,
-        state: form.state,
+        address: sanitizeInlineText(form.address),
+        city: sanitizeInlineText(form.city),
+        state: sanitizeInlineText(form.state),
         country: form.country,
-        postalCode: form.postalCode,
+        postalCode: sanitizeInlineText(form.postalCode),
       },
-      notes: form.notes,
-      giftMessage: form.giftMessage || undefined,
-    })
-    setOrdered(true)
-    clearCart()
+      notes: sanitizeMultilineText(form.notes) || undefined,
+      giftMessage: sanitizeMultilineText(form.giftMessage) || undefined,
+    }
+
+    setPlacingOrder(true)
+
+    try {
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(orderPayload),
+      })
+
+      if (!response.ok) {
+        throw new Error((await response.json().catch(() => null))?.error ?? 'Live order backup is unavailable right now.')
+      }
+
+      saveOrder(orderPayload)
+      clearAppliedCoupon()
+      setOrdered(true)
+      clearCart()
+    } catch (error) {
+      console.error(error)
+      try {
+        saveOrder(orderPayload)
+        clearAppliedCoupon()
+        setOrdered(true)
+        clearCart()
+        toast.error('Live order backup is unavailable right now, but your order was saved on this device.')
+      } catch (localError) {
+        console.error(localError)
+        toast.error('We could not save your order right now. Please try again.')
+      }
+    } finally {
+      setPlacingOrder(false)
+    }
   }
 
   if (ordered) {
@@ -116,11 +156,11 @@ export default function CheckoutPage() {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
             <h1 className="font-display text-4xl font-bold gold-text mb-3">Order Placed! 🎉</h1>
             <p className="font-heading text-xl text-brand-cream mb-2">Thank you, {form.firstName}!</p>
-            <p className="font-body text-sm text-brand-cream/50 mb-6">Your order <strong className="text-brand-gold-2">{orderNum}</strong> has been received. We'll send confirmation to <strong className="text-brand-gold-2">{form.email}</strong> and WhatsApp you a tracking number within 48 hours.</p>
+            <p className="font-body text-sm text-brand-cream/50 mb-6">Your order <strong className="text-brand-gold-2">{orderNum}</strong> has been received. We&apos;ll send confirmation to <strong className="text-brand-gold-2">{form.email}</strong> and WhatsApp you a tracking number within 48 hours.</p>
             <div className="bg-brand-black-2 border border-brand-gold/20 p-5 mb-8 text-left space-y-2">
               <p className="font-body text-sm text-brand-cream/60">📦 Shipping to: <span className="text-brand-cream">{form.address}, {form.city}, {form.state}, {form.country}</span></p>
               <p className="font-body text-sm text-brand-cream/60">✈️ Estimated delivery: <span className="text-brand-cream">7–14 business days from Guangzhou</span></p>
-              <p className="font-body text-sm text-brand-cream/60">💰 Total paid: <span className="text-brand-gold-3 font-bold">{formatPrice(grandTotal, currency)}</span></p>
+              <p className="font-body text-sm text-brand-cream/60">💰 Total due: <span className="text-brand-gold-3 font-bold">{formatPrice(grandTotal, currency)}</span></p>
             </div>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Link href={`/invoice?orderId=${orderNum}`} className="btn-gold flex items-center gap-2 justify-center">
@@ -323,10 +363,10 @@ export default function CheckoutPage() {
                     <p className="font-body text-sm text-brand-cream/60">📍 <span className="text-brand-cream">{form.firstName} {form.lastName}</span></p>
                     <p className="font-body text-sm text-brand-cream/60">{form.address}, {form.city}, {form.state}, {form.country}</p>
                     <p className="font-body text-sm text-brand-cream/60">📧 {form.email} · 📞 {form.phone}</p>
-                    <p className="font-body text-sm text-brand-cream/60">💳 {form.payMethod === 'card' ? 'Credit/Debit Card' : form.payMethod === 'transfer' ? 'Bank Transfer' : 'Mobile Money'}</p>
+                <p className="font-body text-sm text-brand-cream/60">💳 {form.payMethod === 'card' ? 'Card checkout (manual confirmation)' : form.payMethod === 'transfer' ? 'Bank Transfer' : 'Mobile Money (manual confirmation)'}</p>
                   </div>
-                  <button onClick={handlePlaceOrder} className="btn-gold w-full py-4 text-base flex items-center justify-center gap-2">
-                    <Check size={18} /> Place Order · {formatPrice(grandTotal, currency)}
+                  <button onClick={handlePlaceOrder} disabled={placingOrder} className="btn-gold w-full py-4 text-base flex items-center justify-center gap-2 disabled:opacity-60">
+                    <Check size={18} /> {placingOrder ? 'Saving Order...' : `Place Order · ${formatPrice(grandTotal, currency)}`}
                   </button>
                   <p className="font-body text-xs text-brand-cream/30 text-center mt-3">By placing this order you agree to our Terms & Conditions.</p>
                 </motion.div>
@@ -362,6 +402,12 @@ export default function CheckoutPage() {
                   <span className="text-brand-cream/60">Subtotal</span>
                   <span className="text-brand-cream">{formatPrice(total, currency)}</span>
                 </div>
+                {appliedCoupon && discount > 0 && (
+                  <div className="flex justify-between font-body text-sm">
+                    <span className="text-green-400/80">Discount ({appliedCoupon.code})</span>
+                    <span className="text-green-400">−{formatPrice(discount, currency)}</span>
+                  </div>
+                )}
                 {/* Real shipping breakdown */}
                 <div className="p-3 bg-brand-black-3 border border-brand-gold/10 space-y-1.5">
                   <div className="flex items-center gap-1.5 mb-1">
@@ -379,9 +425,9 @@ export default function CheckoutPage() {
                   </p>
                   <div className="flex justify-between font-body text-sm pt-1 border-t border-brand-gold/10">
                     <span className="text-brand-cream/60">Shipping</span>
-                    <span className="text-brand-cream">{formatPrice(shipping, currency)}</span>
+                      <span className="text-brand-cream">{formatPrice(shipping, currency)}</span>
+                    </div>
                   </div>
-                </div>
                 <div className="flex justify-between font-heading font-bold pt-2 border-t border-brand-gold/20">
                   <span className="text-brand-cream">Total</span>
                   <span className="gold-text text-lg">{formatPrice(grandTotal, currency)}</span>
