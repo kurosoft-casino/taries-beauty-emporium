@@ -70,20 +70,21 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
       onMouseLeave={handleMouseLeave}
       className="perspective-1000"
     >
-      <div className="card-product group cursor-pointer relative">
+      <div className="group cursor-pointer relative bg-[#FFF8E7] border-2 border-brand-gold/40 hover:border-brand-gold transition-all duration-500 shadow-[0_8px_24px_rgba(0,0,0,0.5)] hover:shadow-[0_25px_60px_-15px_rgba(212,175,55,0.6)]">
         <Link href={href}>
           {/* Image */}
-          <div className="relative overflow-hidden aspect-[3/4] bg-brand-black-3">
+          <div className="relative overflow-hidden aspect-[3/4] bg-white">
             <Image
               src={product.images[imageIdx] || product.images[0]}
               alt={product.name}
               fill
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
               className="object-cover transition-transform duration-700 group-hover:scale-110"
+              style={{ filter: 'brightness(1.05) contrast(1.02)' }}
             />
 
-            {/* Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-brand-black via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-300" />
+            {/* Subtle overlay for text readability */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
             {/* Glow ring on hover */}
             <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
@@ -143,9 +144,9 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
           </div>
 
           {/* Info */}
-          <div className="p-4">
-            <p className="font-body text-[10px] tracking-widest text-brand-gold-2/70 uppercase mb-1">{product.categoryLabel}</p>
-            <h3 className="font-heading text-sm font-semibold text-brand-cream mb-2 line-clamp-2 group-hover:text-brand-gold-3 transition-colors duration-300">
+          <div className="p-4 bg-[#FFF8E7] border-t-2 border-brand-gold/30">
+            <p className="font-body text-[10px] tracking-widest text-brand-gold-4 uppercase mb-1 font-bold">{product.categoryLabel}</p>
+            <h3 className="font-heading text-sm font-semibold text-brand-black mb-2 line-clamp-2 group-hover:text-brand-gold-4 transition-colors duration-300">
               {product.name}
             </h3>
 
@@ -160,27 +161,27 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
                   />
                 ))}
               </div>
-              <span className="font-body text-[10px] text-brand-cream/50">({product.reviews})</span>
+              <span className="font-body text-[10px] text-brand-black/70 font-semibold">({product.reviews})</span>
             </div>
 
             {/* Price */}
             <div className="flex items-center gap-2">
-              <span className="font-heading text-base font-bold text-brand-gold-3">
+              <span className="font-heading text-base font-bold text-brand-black">
                 {formatPrice(product.price, currency)}
               </span>
               {product.originalPrice && (
-                <span className="font-body text-xs text-brand-cream/40 line-through">
+                <span className="font-body text-xs text-brand-black/50 line-through">
                   {formatPrice(product.originalPrice, currency)}
                 </span>
               )}
             </div>
 
             {/* Ships from */}
-            <p className="font-body text-[10px] text-brand-cream/30 mt-2 flex items-center gap-1">
-              <Zap size={9} className="text-brand-gold/40" />
+            <p className="font-body text-[10px] text-brand-black/70 mt-2 flex items-center gap-1 font-medium">
+              <Zap size={9} className="text-brand-gold-4" />
               {product.deliveryDays} · {product.shipsFrom}
             </p>
-            <p className={`font-body text-[10px] mt-1 ${product.inStock ? 'text-green-400/80' : 'text-red-400/80'}`}>
+            <p className={`font-body text-[10px] mt-1 font-bold ${product.inStock ? 'text-green-700' : 'text-red-700'}`}>
               {product.inStock
                 ? product.stockCount && product.stockCount <= 5
                   ? `Only ${product.stockCount} left`
