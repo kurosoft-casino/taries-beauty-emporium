@@ -194,3 +194,4 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
     </motion.div>
   )
 }
+/* build trigger 1777108138 */
