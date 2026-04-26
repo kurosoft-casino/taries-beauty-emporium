@@ -1,4 +1,4 @@
-const DEFAULT_SITE_URL = 'https://tariesbeauty.com'
+const DEFAULT_SITE_URL = 'https://www.tariesbeauty.com'
 
 const rawBasePath = process.env.NEXT_PUBLIC_BASE_PATH || ''
 export const BASE_PATH = rawBasePath ? `/${rawBasePath.replace(/^\/+|\/+$/g, '')}` : ''

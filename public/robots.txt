@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://tariesbeauty.com/sitemap.xml
+Sitemap: https://www.tariesbeauty.com/sitemap.xml
