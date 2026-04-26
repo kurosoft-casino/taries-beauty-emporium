@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build:static": "STATIC_EXPORT=true next build",
+    "build:static": "bash ./scripts/build-static.sh",
     "start": "next start",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
@@ -14,23 +14,26 @@
     "cf:d1:remote": "wrangler d1 execute taries-beauty-emporium --remote --file=./cloudflare/schema.sql"
   },
   "dependencies": {
-    "next": "14.2.35",
+    "framer-motion": "^12.38.0",
+    "lucide-react": "^1.8.0",
+    "next": "^16.2.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "framer-motion": "^12.38.0",
-    "zustand": "^5.0.12",
     "react-hot-toast": "^2",
-    "lucide-react": "^1.8.0"
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
-    "@opennextjs/cloudflare": "1.0.0",
-    "typescript": "^5",
+    "@opennextjs/cloudflare": "^1.19.4",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "tailwindcss": "^3",
-    "postcss": "^8",
     "autoprefixer": "^10",
+    "postcss": "8.5.10",
+    "tailwindcss": "^3",
+    "typescript": "^5",
     "wrangler": "^4.84.1"
+  },
+  "overrides": {
+    "postcss": "$postcss"
   }
 }

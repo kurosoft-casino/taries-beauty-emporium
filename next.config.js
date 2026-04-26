@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const isStaticExport = process.env.STATIC_EXPORT === 'true'
+const rawBasePath = process.env.NEXT_PUBLIC_BASE_PATH || ''
+const basePath = rawBasePath ? `/${rawBasePath.replace(/^\/+|\/+$/g, '')}` : ''
 
 const nextConfig = {
   images: {
@@ -8,9 +10,8 @@ const nextConfig = {
   ...(isStaticExport
     ? {
         output: 'export',
-        basePath: '/taries-beauty-emporium',
-        assetPrefix: '/taries-beauty-emporium',
         trailingSlash: true,
+        ...(basePath ? { basePath, assetPrefix: basePath } : {}),
       }
     : {}),
 }

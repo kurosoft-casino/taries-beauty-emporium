@@ -9,8 +9,7 @@ import type { Order } from '@/lib/orders'
 import { formatPrice, EXCHANGE_RATES } from '@/lib/products'
 import { getCurrentUser } from '@/lib/auth'
 import { normalizeEmail } from '@/lib/validation'
-
-const PREFIX = process.env.NODE_ENV === 'production' ? '/taries-beauty-emporium' : ''
+import { SITE_URL, withBasePath } from '@/lib/site'
 
 const STATUS_MAP = {
   pending:    { label: 'Pending',     color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/30' },
@@ -160,7 +159,7 @@ export default function InvoiceClient() {
               <div className="relative w-16 h-16 shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={`${PREFIX}/images/logo.jpg`}
+                  src={withBasePath('/images/logo.jpg')}
                   alt="Taries Beauty Emporium"
                   className="w-full h-full object-contain"
                 />
@@ -414,7 +413,7 @@ export default function InvoiceClient() {
                   📧 tariesbeautye@gmail.com
                 </p>
                 <p className="font-body text-xs text-brand-cream/40 print:text-gray-400">
-                  kurosoft1.github.io/taries-beauty-emporium
+                  {SITE_URL.replace(/^https?:\/\//, '')}
                 </p>
               </div>
             </div>

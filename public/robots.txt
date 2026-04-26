@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://kurosoft1.github.io/taries-beauty-emporium/sitemap.xml
+Sitemap: https://tariesbeauty.com/sitemap.xml

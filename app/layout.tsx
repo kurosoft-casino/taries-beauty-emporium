@@ -12,6 +12,7 @@ import CookieConsent from '@/components/ui/CookieConsent'
 import ExitIntentPopup from '@/components/ui/ExitIntentPopup'
 import SiteRuntime from '@/components/ui/SiteRuntime'
 import { Toaster } from 'react-hot-toast'
+import { SITE_URL, withBasePath } from '@/lib/site'
 
 const playfair = Playfair_Display({
   subsets: ['latin'],
@@ -41,20 +42,20 @@ export const metadata: Metadata = {
   description: 'Premium 100% human hair wigs, bundles, custom wigs, hair maintenance & beauty products. Direct from manufacturers in Guangzhou, China to Nigeria & Ghana.',
   keywords: ['human hair wigs', 'hair bundles', 'custom wigs', 'beauty products', 'Nigeria', 'Ghana', 'luxury hair', 'Taries Beauty'],
   authors: [{ name: 'Taries Beauty Emporium' }],
-  metadataBase: new URL('https://kurosoft1.github.io/taries-beauty-emporium'),
+  metadataBase: new URL(SITE_URL),
   openGraph: {
     title: 'Taries Beauty Emporium | Luxury Hair & Beauty',
     description: 'Premium 100% human hair wigs, bundles, custom wigs & beauty products. Direct from Guangzhou, China — shipped to Nigeria & Ghana.',
     type: 'website',
-    url: 'https://kurosoft1.github.io/taries-beauty-emporium',
+    url: SITE_URL,
     siteName: 'Taries Beauty Emporium',
-    images: [{ url: '/images/logo.jpg', width: 800, height: 600, alt: 'Taries Beauty Emporium' }],
+    images: [{ url: withBasePath('/images/logo.jpg'), width: 800, height: 600, alt: 'Taries Beauty Emporium' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Taries Beauty Emporium | Luxury Hair & Beauty',
     description: 'Premium human hair wigs, bundles & beauty products shipped to Nigeria & Ghana.',
-    images: ['/images/logo.jpg'],
+    images: [withBasePath('/images/logo.jpg')],
   },
 }
 
@@ -62,12 +63,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${playfair.variable} ${poppins.variable} ${cormorant.variable}`}>
       <head>
-        <link rel="manifest" href="/taries-beauty-emporium/manifest.json" />
+        <link rel="manifest" href={withBasePath('/manifest.json')} />
         <meta name="theme-color" content="#D4AF37" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Taries Beauty" />
-        <link rel="apple-touch-icon" href="/taries-beauty-emporium/images/logo.jpg" />
+        <link rel="apple-touch-icon" href={withBasePath('/images/logo.jpg')} />
       </head>
       <body className="bg-brand-black font-body text-brand-cream antialiased overflow-x-hidden">
         <LangProvider>

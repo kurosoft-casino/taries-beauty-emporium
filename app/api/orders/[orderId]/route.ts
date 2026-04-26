@@ -3,8 +3,9 @@ import { isValidEmail, normalizeEmail } from '@/lib/validation'
 
 export async function GET(
   request: Request,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
+  const { orderId } = await params
   const { searchParams } = new URL(request.url)
   const email = normalizeEmail(searchParams.get('email') ?? '')
 
@@ -13,7 +14,7 @@ export async function GET(
   }
 
   try {
-    const order = await getRemoteOrder(params.orderId, email)
+    const order = await getRemoteOrder(orderId, email)
     if (!order) {
       return Response.json({ error: 'Order not found.' }, { status: 404 })
     }

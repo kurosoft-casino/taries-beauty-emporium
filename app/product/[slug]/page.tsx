@@ -1,13 +1,15 @@
 import { products } from '@/lib/products'
 import ProductDetail from './ProductDetail'
 import type { Metadata } from 'next'
+import { SITE_URL } from '@/lib/site'
 
 export function generateStaticParams() {
   return products.map(p => ({ slug: p.slug }))
 }
 
-export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const product = products.find(p => p.slug === params.slug)
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params
+  const product = products.find(p => p.slug === slug)
   if (!product) return { title: 'Product Not Found' }
   return {
     title: product.name,
@@ -31,8 +33,9 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   }
 }
 
-export default function ProductPage({ params }: { params: { slug: string } }) {
-  const product = products.find(p => p.slug === params.slug)
+export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params
+  const product = products.find(p => p.slug === slug)
   const jsonLd = product ? {
     '@context': 'https://schema.org',
     '@type': 'Product',
@@ -54,7 +57,7 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
       priceCurrency: 'USD',
       price: product.price,
       availability: product.inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-      url: `https://kurosoft1.github.io/taries-beauty-emporium/product/${product.slug}`,
+      url: `${SITE_URL}/product/${product.slug}`,
     },
   } : null
 
@@ -66,7 +69,7 @@ export default function ProductPage({ params }: { params: { slug: string } }) {
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       )}
-      <ProductDetail slug={params.slug} />
+      <ProductDetail slug={slug} />
     </>
   )
 }
