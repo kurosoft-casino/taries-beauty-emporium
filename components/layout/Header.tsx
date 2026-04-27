@@ -113,6 +113,21 @@ export default function Header() {
     return subscribeStoreSettings(refresh)
   }, [])
 
+  useEffect(() => {
+    setMobileOpen(false)
+    setMegaOpen(false)
+  }, [pathname])
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)')
+    const handleViewportChange = () => {
+      if (media.matches) setMobileOpen(false)
+    }
+    handleViewportChange()
+    media.addEventListener('change', handleViewportChange)
+    return () => media.removeEventListener('change', handleViewportChange)
+  }, [])
+
   if (pathname.startsWith('/admin')) return null
 
   return (
@@ -531,18 +546,6 @@ export default function Header() {
         )}
       </AnimatePresence>
 
-      {/* Mobile overlay */}
-      <AnimatePresence>
-        {mobileOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-30 bg-black/60"
-            onClick={() => setMobileOpen(false)}
-          />
-        )}
-      </AnimatePresence>
     </>
   )
 }
