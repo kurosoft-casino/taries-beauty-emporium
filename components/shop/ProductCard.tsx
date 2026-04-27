@@ -1,8 +1,8 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { ShoppingBag, Heart, Eye, Star, Zap } from 'lucide-react'
 import { formatPrice, type Product } from '@/lib/products'
 import { useCartStore } from '@/lib/store'
@@ -15,30 +15,15 @@ interface ProductCardProps {
   index?: number
 }
 
-export default function ProductCard({ product, index = 0 }: ProductCardProps) {
+export default function ProductCard({ product, index: _index = 0 }: ProductCardProps) {
   const [wished, setWished] = useState(false)
   const [imageIdx, setImageIdx] = useState(0)
-  const cardRef = useRef<HTMLDivElement>(null)
 
   const { addItem, openCart, currency } = useCartStore()
 
   useEffect(() => {
     setWished(isWishlisted(product.slug))
   }, [product.slug])
-
-  // 3D tilt
-  const x = useMotionValue(0)
-  const y = useMotionValue(0)
-  const rotateX = useSpring(useTransform(y, [-0.5, 0.5], [8, -8]), { stiffness: 300, damping: 30 })
-  const rotateY = useSpring(useTransform(x, [-0.5, 0.5], [-8, 8]), { stiffness: 300, damping: 30 })
-
-  function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
-    if (!cardRef.current) return
-    const rect = cardRef.current.getBoundingClientRect()
-    x.set((e.clientX - rect.left) / rect.width - 0.5)
-    y.set((e.clientY - rect.top) / rect.height - 0.5)
-  }
-  function handleMouseLeave() { x.set(0); y.set(0) }
 
   function handleAddToCart(e: React.MouseEvent) {
     e.preventDefault()
@@ -59,17 +44,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
     : null
 
   return (
-    <motion.div
-      ref={cardRef}
-      initial={{ opacity: 0, y: 40 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-50px' }}
-      transition={{ duration: 0.5, delay: index * 0.08, ease: [0.22, 1, 0.36, 1] }}
-      style={{ rotateX, rotateY, transformStyle: 'preserve-3d' }}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      className="perspective-1000"
-    >
+    <div className="transition-transform duration-300 hover:-translate-y-1">
       <div className="group cursor-pointer relative bg-[#FFF8E7] border-2 border-brand-gold/40 hover:border-brand-gold transition-all duration-500 shadow-[0_8px_24px_rgba(0,0,0,0.5)] hover:shadow-[0_25px_60px_-15px_rgba(212,175,55,0.6)]">
         <Link href={href}>
           {/* Image */}
@@ -128,11 +103,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
             )}
 
             {/* Quick add – slides up on hover */}
-            <motion.div
-              initial={{ y: 60, opacity: 0 }}
-              whileHover={{ y: 0, opacity: 1 }}
-              className="absolute bottom-0 left-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-            >
+            <div className="absolute bottom-0 left-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
               <button
                 onClick={handleAddToCart}
                 className="w-full py-2.5 bg-gold-gradient text-brand-black text-xs font-body font-bold tracking-widest uppercase flex items-center justify-center gap-2 hover:shadow-gold transition-shadow duration-300"
@@ -140,7 +111,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
                 <ShoppingBag size={14} />
                 Add to Cart
               </button>
-            </motion.div>
+            </div>
           </div>
 
           {/* Info */}
@@ -191,7 +162,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
           </div>
         </Link>
       </div>
-    </motion.div>
+    </div>
   )
 }
 /* build trigger 1777108138 */
