@@ -22,4 +22,4 @@ if [ -d "$api_dir" ]; then
   mv "$api_dir" "$temp_dir"
 fi
 
-STATIC_EXPORT=true next build
+STATIC_EXPORT=true npx next build --webpack
