@@ -1,7 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { motion } from 'framer-motion'
 import { ShoppingBag, Heart, Eye, Star, Zap } from 'lucide-react'
 import { formatPrice, type Product } from '@/lib/products'
@@ -9,6 +8,7 @@ import { useCartStore } from '@/lib/store'
 import { toggleWishlist, isWishlisted } from '@/lib/wishlist'
 import toast from 'react-hot-toast'
 import { getProductHref, type StorefrontProduct } from '@/lib/catalog'
+import FallbackImage from '@/components/ui/FallbackImage'
 
 interface ProductCardProps {
   product: Product | StorefrontProduct
@@ -49,7 +49,7 @@ export default function ProductCard({ product, index: _index = 0 }: ProductCardP
         <Link href={href}>
           {/* Image */}
           <div className="relative overflow-hidden aspect-[3/4] bg-white">
-            <Image
+            <FallbackImage
               src={product.images[imageIdx] || product.images[0]}
               alt={product.name}
               fill

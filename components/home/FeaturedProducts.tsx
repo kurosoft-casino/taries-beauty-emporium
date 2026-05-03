@@ -1,13 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
 import { motion } from 'framer-motion'
 import { ArrowRight, ShoppingBag, Sparkles, Star } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatPrice, products } from '@/lib/products'
 import { useLang } from '@/lib/lang'
 import { useCartStore } from '@/lib/store'
+import FallbackImage from '@/components/ui/FallbackImage'
 
 interface FeaturedProductsProps {
   title?: string
@@ -124,7 +124,7 @@ export default function FeaturedProducts({
           >
             <Link href={`/product/${spotlight.slug}`} className="block">
               <div className="relative aspect-[16/10] overflow-hidden">
-                <Image
+                <FallbackImage
                   src={spotlight.images[0]}
                   alt={spotlight.name}
                   fill
@@ -216,7 +216,7 @@ export default function FeaturedProducts({
                 className="group flex gap-3 border border-brand-gold/20 bg-brand-black-2 p-3 transition-colors hover:border-brand-gold/45"
               >
                 <Link href={`/product/${product.slug}`} className="relative block h-28 w-24 shrink-0 overflow-hidden sm:h-32 sm:w-28">
-                  <Image
+                  <FallbackImage
                     src={product.images[0]}
                     alt={product.name}
                     fill
@@ -262,7 +262,7 @@ export default function FeaturedProducts({
               >
                 <Link href={`/product/${product.slug}`} className="block">
                   <div className="relative aspect-[4/3] overflow-hidden">
-                    <Image
+                    <FallbackImage
                       src={product.images[0]}
                       alt={product.name}
                       fill

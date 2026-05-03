@@ -545,7 +545,7 @@ export const products: Product[] = [
     price: 35,
     originalPrice: 55,
     images: [
-      'https://images.unsplash.com/photo-1631214803994-e0d7ebb18d68?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=800&q=80',
       'https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=800&q=80',
     ],
     badge: 'bestseller',
@@ -578,7 +578,7 @@ export const products: Product[] = [
     categoryLabel: 'Beauty Products',
     price: 42,
     images: [
-      'https://images.unsplash.com/photo-1570194065650-d99fb4bedf0a?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1522338140262-f46f5913618a?auto=format&fit=crop&w=800&q=80',
     ],
     badge: 'hot',
     shortDesc: 'Brighten, even & glow. 20% Vitamin C powerhouse serum.',
@@ -609,7 +609,7 @@ export const products: Product[] = [
     price: 38,
     originalPrice: 52,
     images: [
-      'https://images.unsplash.com/photo-1631214803994-e0d7ebb18d68?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=800&q=80',
     ],
     badge: 'sale',
     shortDesc: 'Full coverage, 24-hour wear. 40 shades for every queen.',
@@ -641,7 +641,7 @@ export const products: Product[] = [
     categoryLabel: 'Beauty Products',
     price: 29,
     images: [
-      'https://images.unsplash.com/photo-1570194065650-d99fb4bedf0a?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1522338140262-f46f5913618a?auto=format&fit=crop&w=800&q=80',
     ],
     badge: 'new',
     shortDesc: 'Lock your look all day. Primer + setting spray duo.',
@@ -674,7 +674,7 @@ export const products: Product[] = [
     originalPrice: 210,
     images: [
       'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1520975867988-cd31f11e88b6?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80',
     ],
     badge: 'bestseller',
     shortDesc: 'Timeless elegance. Premium wool blend with flattering belt.',
@@ -707,7 +707,7 @@ export const products: Product[] = [
     categoryLabel: 'Female Coats',
     price: 98,
     images: [
-      'https://images.unsplash.com/photo-1520975867988-cd31f11e88b6?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80',
     ],
     badge: 'hot',
     shortDesc: 'Edgy meets elegant. Premium vegan leather with gold hardware.',
@@ -809,7 +809,7 @@ export const products: Product[] = [
     price: 129,
     originalPrice: 165,
     images: [
-      'https://images.unsplash.com/photo-1584990347449-a7394d77f534?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1556910103-1c02745aae4d?auto=format&fit=crop&w=800&q=80',
     ],
     badge: 'bestseller',
     shortDesc: 'Elegant cookware set for everyday meals and polished kitchens.',

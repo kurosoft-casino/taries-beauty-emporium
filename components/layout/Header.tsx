@@ -17,7 +17,7 @@ import { DEFAULT_STORE_SETTINGS, getStoreSettings, subscribeStoreSettings } from
 export default function Header() {
   const [scrolled,      setScrolled]      = useState(false)
   const [mobileOpen,    setMobileOpen]    = useState(false)
-  const [megaOpen,      setMegaOpen]      = useState(false)
+  const [desktopMenuOpen, setDesktopMenuOpen] = useState<string | null>(null)
   const [searchOpen,    setSearchOpen]    = useState(false)
   const [searchQuery,   setSearchQuery]   = useState('')
   const [wishlistCount, setWishlistCount] = useState(0)
@@ -31,6 +31,11 @@ export default function Header() {
   const totalItems = getTotalItems()
   const router = useRouter()
   const pathname = usePathname()
+  const isActiveRoute = (href: string) => {
+    const basePath = href.split('?')[0]
+    if (basePath === '/') return pathname === '/'
+    return pathname === basePath || pathname.startsWith(`${basePath}/`)
+  }
   const shopCategories = useMemo(() => [
     { icon: '👑', id: 'wigs', href: '/shop?category=wigs' },
     { icon: '✨', id: 'bundles', href: '/shop?category=bundles' },
@@ -115,7 +120,7 @@ export default function Header() {
 
   useEffect(() => {
     setMobileOpen(false)
-    setMegaOpen(false)
+    setDesktopMenuOpen(null)
   }, [pathname])
 
   useEffect(() => {
@@ -128,20 +133,42 @@ export default function Header() {
     return () => media.removeEventListener('change', handleViewportChange)
   }, [])
 
+  useEffect(() => {
+    if (!mobileOpen) return
+    const originalOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = originalOverflow
+    }
+  }, [mobileOpen])
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setMobileOpen(false)
+      setSearchOpen(false)
+      setDesktopMenuOpen(null)
+    }
+    window.addEventListener('keydown', handleEscape)
+    return () => window.removeEventListener('keydown', handleEscape)
+  }, [])
+
   if (pathname.startsWith('/admin')) return null
 
   return (
     <>
       <motion.header
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
-          scrolled ? 'glass-dark py-3 shadow-gold' : 'bg-transparent py-5'
+          scrolled
+            ? 'glass-dark border-b border-brand-gold/20 py-2.5 shadow-gold'
+            : 'bg-brand-black/40 border-b border-transparent py-4'
         }`}
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
       >
         {/* Top ticker bar */}
-        <div className="bg-gold-gradient text-brand-black text-center py-1.5 text-xs font-body font-semibold tracking-widest uppercase overflow-hidden">
+        <div className="bg-gold-gradient text-brand-black text-center py-1.5 text-[10px] sm:text-xs font-body font-semibold tracking-[0.2em] sm:tracking-widest uppercase overflow-hidden">
           <div className="flex whitespace-nowrap animate-marquee" style={{ width: 'max-content' }}>
             {Array(4).fill(null).map((_, i) => (
               <span key={i} className="mx-8">
@@ -154,7 +181,7 @@ export default function Header() {
           </div>
         </div>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
+        <div className="site-container flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3 group">
             <motion.div
@@ -177,21 +204,30 @@ export default function Header() {
 
           {/* Desktop Nav */}
           <nav className="hidden lg:flex items-center gap-8">
-            {navLinks.map(link => (
+            {navLinks.map(link => {
+              const active = isActiveRoute(link.href)
+              return (
               <div key={link.label} className="relative group">
                 {link.submenu ? (
                   <button
-                    className="flex items-center gap-1 font-body text-sm font-medium text-brand-cream hover:text-brand-gold-3 transition-colors duration-300 tracking-wide"
-                    onMouseEnter={() => setMegaOpen(true)}
-                    onMouseLeave={() => setMegaOpen(false)}
+                    className={`flex items-center gap-1 font-body text-sm font-medium transition-colors duration-300 tracking-wide ${
+                      active ? 'text-brand-gold-3' : 'text-brand-cream hover:text-brand-gold-3'
+                    }`}
+                    onMouseEnter={() => setDesktopMenuOpen(link.label)}
+                    onMouseLeave={() => setDesktopMenuOpen(null)}
+                    aria-expanded={desktopMenuOpen === link.label}
                   >
                     {link.label}
-                    <ChevronDown size={14} className="transition-transform duration-300 group-hover:rotate-180" />
+                    <ChevronDown size={14} className={`transition-transform duration-300 ${desktopMenuOpen === link.label ? 'rotate-180' : ''}`} />
                   </button>
                 ) : (
                   <Link
                     href={link.href}
-                    className="relative font-body text-sm font-medium text-brand-cream hover:text-brand-gold-3 transition-colors duration-300 tracking-wide after:absolute after:bottom-0 after:left-0 after:w-0 after:h-px after:bg-gold-gradient after:transition-all after:duration-300 hover:after:w-full"
+                    className={`relative font-body text-sm font-medium transition-colors duration-300 tracking-wide after:absolute after:bottom-0 after:left-0 after:h-px after:bg-gold-gradient after:transition-all after:duration-300 ${
+                      active
+                        ? 'text-brand-gold-3 after:w-full'
+                        : 'text-brand-cream hover:text-brand-gold-3 after:w-0 hover:after:w-full'
+                    }`}
                   >
                     {link.label}
                   </Link>
@@ -200,15 +236,15 @@ export default function Header() {
                 {/* Mega menu */}
                 {link.submenu && (
                   <AnimatePresence>
-                    {megaOpen && (
+                    {desktopMenuOpen === link.label && (
                       <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 10 }}
                         transition={{ duration: 0.2 }}
                         className="absolute top-full left-0 mt-3 glass-dark rounded-lg overflow-hidden min-w-[220px] shadow-gold-lg"
-                        onMouseEnter={() => setMegaOpen(true)}
-                        onMouseLeave={() => setMegaOpen(false)}
+                        onMouseEnter={() => setDesktopMenuOpen(link.label)}
+                        onMouseLeave={() => setDesktopMenuOpen(null)}
                       >
                         {link.submenu.map((item, i) => (
                           <motion.div
@@ -220,7 +256,7 @@ export default function Header() {
                             <Link
                               href={item.href}
                               className="block px-5 py-3 font-body text-sm text-brand-cream hover:bg-brand-gold/10 hover:text-brand-gold-3 transition-all duration-200 border-b border-brand-gold/10 last:border-0"
-                              onClick={() => setMegaOpen(false)}
+                              onClick={() => setDesktopMenuOpen(null)}
                             >
                               {item.label}
                             </Link>
@@ -231,7 +267,8 @@ export default function Header() {
                   </AnimatePresence>
                 )}
               </div>
-            ))}
+              )
+            })}
           </nav>
 
           {/* Right Actions */}
@@ -337,6 +374,8 @@ export default function Header() {
             <button
               className="lg:hidden text-brand-cream hover:text-brand-gold-3 transition-colors"
               onClick={() => setMobileOpen(!mobileOpen)}
+              aria-label={mobileOpen ? (lang === 'ZH' ? '关闭菜单' : 'Close menu') : (lang === 'ZH' ? '打开菜单' : 'Open menu')}
+              aria-expanded={mobileOpen}
             >
               {mobileOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
@@ -402,6 +441,11 @@ export default function Header() {
                             src={product.images[0]}
                             alt={product.name}
                             className="w-10 h-10 object-cover shrink-0"
+                            onError={(event) => {
+                              const img = event.currentTarget
+                              if (img.src.endsWith('/images/logo.jpg')) return
+                              img.src = '/images/logo.jpg'
+                            }}
                           />
                           <div className="flex-1 min-w-0">
                              <p className="font-body text-sm text-brand-cream truncate">{product.name}</p>
@@ -436,20 +480,33 @@ export default function Header() {
       {/* Mobile Nav */}
       <AnimatePresence>
         {mobileOpen && (
-          <motion.div
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: 'tween', duration: 0.3 }}
-            className="fixed inset-y-0 right-0 z-40 w-[min(320px,_calc(100vw-40px))] glass-dark flex flex-col pt-24 px-6 pb-8 overflow-y-auto"
-          >
+          <>
+            <motion.button
+              type="button"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-[55] bg-brand-black/70 backdrop-blur-[1px]"
+              onClick={() => setMobileOpen(false)}
+              aria-label={lang === 'ZH' ? '关闭移动菜单' : 'Close mobile menu'}
+            />
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'tween', duration: 0.3 }}
+              className="fixed inset-y-0 right-0 z-[60] w-[min(360px,_calc(100vw-24px))] rounded-l-2xl border-l border-brand-gold/25 bg-brand-black/95 backdrop-blur-xl flex flex-col pt-24 px-6 pb-8 overflow-y-auto shadow-gold-lg"
+            >
             <div className="flex flex-col gap-2">
               {navLinks.map((link, i) => (
                 <div key={link.label}>
                   <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.08 }}>
                     <Link
                       href={link.href}
-                      className="block py-4 font-heading text-xl text-brand-cream hover:text-brand-gold-3 transition-colors border-b border-brand-gold/20"
+                      className={`block py-4 font-heading text-xl transition-colors border-b border-brand-gold/20 ${
+                        isActiveRoute(link.href) ? 'text-brand-gold-3' : 'text-brand-cream hover:text-brand-gold-3'
+                      }`}
                       onClick={() => setMobileOpen(false)}
                     >
                       {link.label}
@@ -475,7 +532,11 @@ export default function Header() {
               <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
                 <Link
                   href={currentUser ? '/account' : '/login'}
-                  className="block py-4 font-heading text-xl text-brand-cream hover:text-brand-gold-3 transition-colors border-b border-brand-gold/20"
+                  className={`block py-4 font-heading text-xl transition-colors border-b border-brand-gold/20 ${
+                    isActiveRoute(currentUser ? '/account' : '/login')
+                      ? 'text-brand-gold-3'
+                      : 'text-brand-cream hover:text-brand-gold-3'
+                  }`}
                   onClick={() => setMobileOpen(false)}
                 >
                   {currentUser ? `${currentUser.avatar || '👑'} ${currentUser.firstName}` : `👤 ${t('signIn')}`}
@@ -541,8 +602,9 @@ export default function Header() {
               className="mt-8 btn-gold text-center block"
             >
                {lang === 'ZH' ? '💬 WhatsApp 联系我们' : '💬 WhatsApp Us'}
-             </a>
-          </motion.div>
+              </a>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 

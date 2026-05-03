@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
@@ -23,6 +22,7 @@ import { categories, formatPrice } from '@/lib/products'
 import { useCartStore } from '@/lib/store'
 import { getAllViewsSorted } from '@/lib/views'
 import { getProductHref, getStorefrontProducts, type StorefrontProduct } from '@/lib/catalog'
+import FallbackImage from '@/components/ui/FallbackImage'
 
 const ITEMS_PER_PAGE = 12
 
@@ -72,7 +72,7 @@ function ProductCardModern({ product, index, onAdd, currency }: ProductCardModer
     >
       <Link href={getProductHref(product)} className="block">
         <div className="relative aspect-[4/5] overflow-hidden bg-[#f4e7cb]">
-          <Image
+          <FallbackImage
             src={product.images[0]}
             alt={product.name}
             fill
@@ -145,7 +145,7 @@ function ProductListRow({ product, index, onAdd, currency }: ProductListRowProps
       className="group grid grid-cols-[110px,1fr] gap-4 border border-brand-gold/18 bg-brand-black-2 p-3 transition-colors hover:border-brand-gold/45 sm:grid-cols-[170px,1fr]"
     >
       <Link href={getProductHref(product)} className="relative block h-[130px] overflow-hidden sm:h-[170px]">
-        <Image
+        <FallbackImage
           src={product.images[0]}
           alt={product.name}
           fill
