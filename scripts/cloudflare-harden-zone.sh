@@ -132,7 +132,7 @@ else
 fi
 
 # Zone-level rate limiting using Rulesets API.
-rate_rule_json='{"action":"block","expression":"(starts_with(http.request.uri.path, \"/api\") or starts_with(http.request.uri.path, \"/auth\") or starts_with(http.request.uri.path, \"/login\") or starts_with(http.request.uri.path, \"/register\") or starts_with(http.request.uri.path, \"/checkout\"))","description":"Taries default edge rate limit","enabled":true,"ratelimit":{"characteristics":["cf.colo.id","ip.src"],"period":10,"requests_per_period":30,"mitigation_timeout":600}}'
+rate_rule_json='{"action":"block","expression":"(starts_with(http.request.uri.path, \"/api\") or starts_with(http.request.uri.path, \"/auth\") or starts_with(http.request.uri.path, \"/login\") or starts_with(http.request.uri.path, \"/register\") or starts_with(http.request.uri.path, \"/checkout\"))","description":"Taries default edge rate limit","enabled":true,"ratelimit":{"characteristics":["cf.colo.id","ip.src"],"period":10,"requests_per_period":30,"mitigation_timeout":10}}'
 rate_entry_resp="$(cf_api GET "/zones/${zone_id}/rulesets/phases/http_ratelimit/entrypoint")"
 rate_entry_ok="$(echo "${rate_entry_resp}" | jq -r '.success')"
 if [[ "${rate_entry_ok}" == "true" ]]; then
