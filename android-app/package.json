@@ -1,0 +1,20 @@
+{
+  "name": "taries-beauty-android",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Capacitor Android wrapper for Taries Beauty Emporium",
+  "scripts": {
+    "build:web": "cd ../ && npm ci && npm run build:static",
+    "sync": "cap sync android",
+    "assets": "npx @capacitor/assets@3.0.5 generate --android --assetPath resources",
+    "init:android": "cap add android",
+    "build": "npm run build:web && npm run sync && cd android && ./gradlew assembleRelease"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.3.1"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.3.1",
+    "@capacitor/core": "^8.3.1"
+  }
+}

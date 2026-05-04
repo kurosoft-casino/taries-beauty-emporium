@@ -109,14 +109,14 @@ export default function Footer() {
   }
 
   return (
-    <footer className="bg-brand-black-2 border-t border-brand-gold/20 pt-16 pb-8 relative overflow-hidden">
+    <footer className="bg-gradient-to-b from-brand-black-2 to-brand-black border-t border-brand-gold/20 pt-20 pb-10 relative overflow-hidden">
       {/* Background orbs */}
       <div className="orb orb-gold w-96 h-96 bottom-0 right-0 opacity-20" />
       <div className="orb orb-amber w-64 h-64 top-0 left-1/4 opacity-10" />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10">
+      <div className="site-container relative z-10">
         {/* Top section */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 sm:gap-12 pb-12 border-b border-brand-gold/20">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 sm:gap-12 pb-12 border-b border-brand-gold/20">
           {/* Brand col */}
           <div className="lg:col-span-1">
             <Link href="/" className="flex items-center gap-3 mb-6">
@@ -223,15 +223,15 @@ export default function Footer() {
             {lang === 'ZH' ? '加入 ' : 'Join the '}<span className="gold-text">Taries Beauty</span>{lang === 'ZH' ? ' 大家庭' : ' Family'}
           </h3>
           <p className="font-body text-sm text-brand-cream/60 mb-6">{lang === 'ZH' ? '独家优惠、新品上架与美妆贴士，直接发送到您的邮箱。' : 'Get exclusive deals, new arrivals & beauty tips — straight to your inbox.'}</p>
-          <form className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto" onSubmit={handleSubscribe}>
+          <form className="flex flex-col sm:flex-row gap-3 max-w-xl mx-auto" onSubmit={handleSubscribe}>
             <input
               type="email"
               value={newsletterEmail}
               onChange={e => setNewsletterEmail(e.target.value)}
               placeholder={lang === 'ZH' ? '输入您的邮箱地址' : 'Your email address'}
-              className="flex-1 bg-brand-black-3 border border-brand-gold/30 text-brand-cream placeholder-brand-cream/30 font-body text-sm px-4 py-3 rounded-none focus:outline-none focus:border-brand-gold-2"
+              className="flex-1 bg-brand-black-3 border border-brand-gold/30 text-brand-cream placeholder-brand-cream/30 font-body text-sm px-4 py-3 rounded-md focus:outline-none focus:border-brand-gold-2"
             />
-            <button type="submit" disabled={subscribing} className="btn-gold shrink-0 disabled:opacity-60">
+            <button type="submit" disabled={subscribing} className="btn-gold shrink-0 rounded-md disabled:opacity-60">
               {subscribing ? (lang === 'ZH' ? '保存中...' : 'Saving...') : (lang === 'ZH' ? '订阅' : 'Subscribe')}
             </button>
           </form>
@@ -252,6 +252,9 @@ export default function Footer() {
               </span>
             ))}
           </div>
+          <a href="#top" className="font-body text-xs text-brand-gold-2/70 hover:text-brand-gold-3 transition-colors">
+            {lang === 'ZH' ? '↑ 返回顶部' : '↑ Back to top'}
+          </a>
         </div>
       </div>
     </footer>

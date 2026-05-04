@@ -24,6 +24,15 @@
     overflow-x: hidden;
   }
 
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid #D4AF37;
+    outline-offset: 2px;
+  }
+
   ::selection { background: rgba(212, 175, 55, 0.3); color: #FFD700; }
 
   ::-webkit-scrollbar { width: 6px; }
@@ -36,6 +45,14 @@
 
 /* ─── Utility classes ─────────────────────────────────────────────────────── */
 @layer components {
+  .site-container {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .section-shell {
+    @apply mx-auto w-full max-w-7xl px-4 py-14 sm:px-6 sm:py-16 lg:px-8 lg:py-20;
+  }
+
   .gold-text {
     background: linear-gradient(135deg, #8B6914 0%, #D4AF37 40%, #FFD700 60%, #C9960C 80%, #8B6914 100%);
     background-size: 200% auto;
@@ -228,3 +245,12 @@
   50%       { opacity: 1;   transform: scale(1.3); }
 }
 @keyframes marquee  { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

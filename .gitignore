@@ -19,6 +19,7 @@ npm-debug.log*
 *.swp
 .idea/
 .vscode/
+*.tsbuildinfo
 
 # Vercel
 .vercel

@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "taries-beauty-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-04-24",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "vars": {
+    "ALLOWED_ORIGINS": "https://tariesbeauty.com,https://www.tariesbeauty.com,https://kurosoft1.github.io,http://localhost:3000"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "taries-beauty-emporium",
+      "database_id": "1cd7958e-cbe3-4ecc-b4ad-915a1bf5d902"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      "id": "4684c12cfa184036aecc08e6cef17f47"
+    }
+  ],
+  "ai": {
+    "binding": "AI"
+  }
+}

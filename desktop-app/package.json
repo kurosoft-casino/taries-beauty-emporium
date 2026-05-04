@@ -1,0 +1,118 @@
+{
+  "name": "taries-beauty-desktop",
+  "version": "1.0.0",
+  "description": "Taries Beauty Emporium desktop app (Electron)",
+  "main": "src/main.js",
+  "private": true,
+  "homepage": "https://tariesbeauty.com",
+  "author": {
+    "name": "Taries Beauty Emporium",
+    "email": "support@tariesbeauty.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Kurosoft1/taries-beauty-emporium.git"
+  },
+  "scripts": {
+    "build:web": "cd .. && npm ci && npm run build:static",
+    "copy:web": "node ./scripts/copy-web.js",
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "npm run build:web && npm run copy:web && electron-builder",
+    "dist:mac": "npm run build:web && npm run copy:web && electron-builder --mac",
+    "dist:win": "npm run build:web && npm run copy:web && electron-builder --win",
+    "dist:linux": "npm run build:web && npm run copy:web && electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^41.5.0",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "com.tariesbeauty.desktop",
+    "productName": "Taries Beauty",
+    "copyright": "Copyright © 2025 Taries Beauty Emporium",
+    "publish": null,
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "web/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "src/main.js"
+    },
+    "mac": {
+      "category": "public.app-category.shopping",
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "darkModeSupport": true,
+      "artifactName": "taries-beauty-${os}-${arch}.${ext}"
+    },
+    "dmg": {
+      "artifactName": "taries-beauty-${arch}.${ext}"
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "taries-beauty-setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "taries-beauty-portable.${ext}"
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Network",
+      "maintainer": "Taries Beauty Emporium <support@tariesbeauty.com>",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "taries-beauty.${ext}"
+    }
+  }
+}

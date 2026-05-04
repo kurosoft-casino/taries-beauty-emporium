@@ -1,0 +1,13 @@
+{
+  "name": "taries-beauty-api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "schema": "wrangler d1 execute taries-beauty-emporium --remote --file=../cloudflare/schema.sql"
+  },
+  "devDependencies": {
+    "wrangler": "^4.84.1"
+  }
+}

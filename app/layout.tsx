@@ -70,12 +70,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-title" content="Taries Beauty" />
         <link rel="apple-touch-icon" href={withBasePath('/images/logo.jpg')} />
       </head>
-      <body className="bg-brand-black font-body text-brand-cream antialiased overflow-x-hidden">
+      <body id="top" className="bg-brand-black font-body text-brand-cream antialiased overflow-x-hidden min-h-screen">
         <LangProvider>
         <CartProvider>
           <Header />
           <CartDrawer />
-          <main>{children}</main>
+          <main className="relative z-0">{children}</main>
           <Footer />
           <FirstTimeBuyerBanner />
           <Toaster
