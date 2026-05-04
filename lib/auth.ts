@@ -2,6 +2,7 @@ import { hashSecret, randomSalt } from './security'
 import { readJSON, removeKey, writeJSON } from './storage'
 import { isValidEmail, normalizeEmail, sanitizeDigits, sanitizeInlineText, sanitizePhone } from './validation'
 import type { SupportedCountry } from './phoneCountries'
+import { withApiBase } from './site'
 
 export type AdminLevel = 'super-admin' | 'staff-admin' | 'support-admin' | 'finance-admin'
 
@@ -54,6 +55,7 @@ const SESSION_KEY = 'taries-session'
 const SESSION_META_KEY = 'taries-session-meta'
 export const SESSION_TIMEOUT_MS = 30 * 60 * 1000
 export const ADMIN_EMAILS = ['tarimoboere18@gmail.com', 'kurosoft01@gmail.com'] as const
+const REMOTE_AUTH_TIMEOUT_MS = 8000
 
 export function isAdminEmail(email: string): boolean {
   const normalized = normalizeEmail(email)
@@ -120,6 +122,81 @@ function readSessionMeta(): SessionMeta | null {
   return readJSON<SessionMeta | null>(SESSION_META_KEY, null)
 }
 
+interface RemoteAuthUser {
+  id: string
+  firstName: string
+  lastName: string
+  email: string
+  country?: SupportedCountry | string
+  phone?: string
+  createdAt?: string
+  avatar?: string
+  role?: 'admin'
+}
+
+function asSupportedCountry(value: string | undefined): SupportedCountry {
+  if (value === 'Nigeria' || value === 'Ghana' || value === 'China') return value
+  return 'Other'
+}
+
+function mapRemoteUserToLocal(user: RemoteAuthUser): User {
+  return applyUserRole({
+    id: user.id,
+    firstName: sanitizeInlineText(user.firstName),
+    lastName: sanitizeInlineText(user.lastName),
+    email: normalizeEmail(user.email),
+    role: user.role === 'admin' ? 'admin' : undefined,
+    adminLevel: user.role === 'admin' ? 'super-admin' : undefined,
+    country: asSupportedCountry(typeof user.country === 'string' ? user.country : undefined),
+    phone: sanitizePhone(user.phone ?? ''),
+    passwordHash: 'remote-auth',
+    passwordSalt: undefined,
+    passwordVersion: 2,
+    createdAt: user.createdAt ?? new Date().toISOString(),
+    avatar: user.avatar,
+    addresses: [],
+  })
+}
+
+function upsertLocalUser(user: User): void {
+  const users = getUsers()
+  const idx = users.findIndex(entry => entry.id === user.id || entry.email.toLowerCase() === user.email.toLowerCase())
+  const next = [...users]
+  if (idx >= 0) next[idx] = { ...next[idx], ...user, addresses: next[idx].addresses ?? [] }
+  else next.push(user)
+  saveUsers(next)
+}
+
+async function requestRemoteAuth<T>(path: string, init?: RequestInit): Promise<T | null> {
+  if (typeof window === 'undefined') return null
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), REMOTE_AUTH_TIMEOUT_MS)
+  try {
+    const response = await fetch(withApiBase(path), {
+      credentials: 'include',
+      cache: 'no-store',
+      ...init,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(init?.headers ?? {}),
+      },
+    })
+    const payload = await response.json().catch(() => null) as T | { error?: string } | null
+    if (!response.ok) {
+      if (payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string') {
+        throw new Error(payload.error)
+      }
+      return null
+    }
+    return payload as T
+  } catch {
+    return null
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
 async function verifyPassword(user: User, password: string): Promise<boolean> {
   if (user.passwordVersion === 2 && user.passwordSalt) {
     const hash = await createPasswordHash(user.email, password, user.passwordSalt)
@@ -150,6 +227,16 @@ export function touchSession(): void {
   writeJSON(SESSION_META_KEY, { userId: current.id, lastSeen: Date.now() } satisfies SessionMeta)
 }
 
+export async function syncSessionFromServer(): Promise<User | null> {
+  if (typeof window === 'undefined') return null
+  const payload = await requestRemoteAuth<{ ok: boolean; user: RemoteAuthUser | null }>('/auth/me')
+  if (!payload?.user) return null
+  const mapped = mapRemoteUserToLocal(payload.user)
+  upsertLocalUser(mapped)
+  writeSession(mapped)
+  return mapped
+}
+
 export async function registerUser(data: RegisterUserData): Promise<User> {
   if (typeof window === 'undefined') throw new Error('Not available on server')
   const firstName = sanitizeInlineText(data.firstName)
@@ -165,6 +252,17 @@ export async function registerUser(data: RegisterUserData): Promise<User> {
   if (!country) throw new Error('Country is required.')
   if (!phone) throw new Error('Phone number is required.')
   if (password.length < 8) throw new Error('Password must be at least 8 characters.')
+
+  const remote = await requestRemoteAuth<{ ok: boolean; user: RemoteAuthUser }>('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ firstName, lastName, email, country, phone, password, avatar: data.avatar }),
+  })
+  if (remote?.user) {
+    const mapped = mapRemoteUserToLocal(remote.user)
+    upsertLocalUser(mapped)
+    writeSession(mapped)
+    return mapped
+  }
 
   const users = getUsers()
   const existing = users.find(user => user.email.toLowerCase() === email)
@@ -198,6 +296,17 @@ export async function loginUser(emailInput: string, password: string): Promise<U
   const email = normalizeEmail(emailInput)
   if (!isValidEmail(email)) throw new Error('Please enter a valid email address.')
 
+  const remote = await requestRemoteAuth<{ ok: boolean; user: RemoteAuthUser }>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  })
+  if (remote?.user) {
+    const mapped = mapRemoteUserToLocal(remote.user)
+    upsertLocalUser(mapped)
+    writeSession(mapped)
+    return mapped
+  }
+
   const users = getUsers()
   const found = users.find(user => user.email.toLowerCase() === email)
   if (!found) throw new Error('No account found with that email address.')
@@ -212,6 +321,7 @@ export async function loginUser(emailInput: string, password: string): Promise<U
 
 export function logoutUser(): void {
   if (typeof window === 'undefined') return
+  void fetch(withApiBase('/auth/logout'), { method: 'POST', credentials: 'include' }).catch(() => undefined)
   removeKey(SESSION_KEY)
   removeKey(SESSION_META_KEY)
 }

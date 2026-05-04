@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { getCurrentUser, logoutUser, touchSession } from '@/lib/auth'
+import { getCurrentUser, logoutUser, syncSessionFromServer, touchSession } from '@/lib/auth'
 import { readJSON, writeText } from '@/lib/storage'
 import { DEFAULT_STORE_SETTINGS, getMaintenanceMode, getStoreSettings, subscribeStoreSettings } from '@/lib/storeSettings'
+import { SITE_URL } from '@/lib/site'
 
 interface VendorSession {
   id: string
@@ -30,6 +31,32 @@ export default function SiteRuntime() {
   const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
+    const canonicalHost = (() => {
+      try {
+        return new URL(SITE_URL).hostname
+      } catch {
+        return ''
+      }
+    })()
+
+    const currentHost = window.location.hostname
+    const isLocalHost =
+      currentHost === 'localhost' ||
+      currentHost === '127.0.0.1' ||
+      currentHost.endsWith('.local')
+
+    if (
+      canonicalHost &&
+      !isLocalHost &&
+      currentHost !== canonicalHost &&
+      (currentHost === 'tariesbeauty.com' || currentHost === `www.${canonicalHost}` || canonicalHost === `www.${currentHost}`)
+    ) {
+      const canonicalOrigin = `${window.location.protocol}//${canonicalHost}`
+      const destination = `${canonicalOrigin}${window.location.pathname}${window.location.search}${window.location.hash}`
+      window.location.replace(destination)
+      return
+    }
+
     setHydrated(true)
     setMaintenance(getMaintenanceMode())
     setSettings(getStoreSettings())
@@ -77,7 +104,9 @@ export default function SiteRuntime() {
       touchSession()
       return
     }
-    logoutUser()
+    void syncSessionFromServer().then(user => {
+      if (!user) logoutUser()
+    })
   }, [hydrated])
 
   if (!maintenanceBlocked) return null

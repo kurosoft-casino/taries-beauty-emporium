@@ -19,15 +19,18 @@ import { getInventory, setInventoryItem } from '@/lib/inventory'
 import type { InventoryItem } from '@/lib/inventory'
 import { ADMIN_EMAILS, getAdminLevel, getCurrentUser, isAdminUser, type AdminLevel, type User } from '@/lib/auth'
 import { logoSrc } from '@/lib/assets'
+import { withApiBase } from '@/lib/site'
 import { useLang } from '@/lib/lang'
 import { DEFAULT_STORE_SETTINGS, getMaintenanceMode, getStoreSettings, saveMaintenanceMode, saveStoreSettings } from '@/lib/storeSettings'
 import { appendAuditEvent, getAdminRoleLabel, readSupportThreads } from '@/lib/adminConsole'
 import { AuditLogTab, MarketingTab, SupportInboxTab } from '@/components/admin/OperationsTabs'
+import ProductForm, { emptyFormData, type ProductFormData } from '@/components/ui/ProductForm'
+import { addVendorProduct } from '@/lib/productStore'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type TabId = 'dashboard' | 'orders' | 'users' | 'products' | 'vendors' | 'analytics' | 'inventory' | 'support' | 'marketing' | 'audit' | 'settings'
 type AdminUser = User & { suspended?: boolean }
-type StatusFilterOption = Order['status'] | 'all' | 'cancelled'
+type StatusFilterOption = Order['status'] | 'all'
 
 interface Vendor {
   id: string; businessName: string; ownerName: string; email: string; phone: string
@@ -42,6 +45,9 @@ interface StoreSettings { storeName: string; whatsapp: string; email: string; an
 interface VendorProduct {
   id: string; name: string; vendorId: string; vendorName?: string; category: string
   price: number; status: 'pending' | 'approved' | 'featured' | 'removed'; createdAt: string
+  originalPrice?: number; description?: string; shortDesc?: string; images?: string[]; video?: string
+  inStock?: boolean; stockCount?: number; badge?: 'new' | 'sale' | 'hot' | 'bestseller' | ''
+  whatsapp?: string; features?: string[]; variants?: { label: string; options: string[] }[]; active?: boolean
 }
 
 const adminTranslations = {
@@ -60,8 +66,8 @@ const adminTranslations = {
     adminPanel: 'Admin Panel',
     adminShort: 'Admin',
     logout: 'Log Out',
-    localDataNotice: 'Registered users, orders, and vendor records on this GitHub Pages build are stored in this browser. This dashboard shows the accounts created or used on this device.',
-    usersNotice: 'This list shows accounts currently stored in this browser for the live site. If another device registered a user, it will not appear here until account data is moved to the backend.',
+    localDataNotice: 'If the Cloudflare backend is available, user accounts are synced across devices. If not, this static build falls back to browser-local storage on this device.',
+    usersNotice: 'When backend sync is available this list is global; otherwise it only shows accounts saved in this browser.',
     totalRevenue: 'Total Revenue',
     totalOrders: 'Total Orders',
     totalUsers: 'Total Users',
@@ -100,8 +106,8 @@ const adminTranslations = {
     adminPanel: '管理后台',
     adminShort: '管理',
     logout: '退出登录',
-    localDataNotice: '当前 GitHub Pages 版本中的用户、订单和商家数据保存在此浏览器中。此控制台显示的是在本设备上创建或使用过的账户数据。',
-    usersNotice: '此列表显示当前浏览器中保存的站点账户。如果其他设备注册了用户，在账户数据迁移到后端前，这里不会显示。',
+    localDataNotice: '如果 Cloudflare 后端可用，用户账户会跨设备同步；否则此静态版本会回退为当前浏览器本地存储。',
+    usersNotice: '后端可用时此列表为全站用户；否则仅显示当前浏览器保存的账户。',
     totalRevenue: '总收入',
     totalOrders: '总订单数',
     totalUsers: '总用户数',
@@ -134,7 +140,11 @@ function useAdminText() {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const ORDER_STATUSES = ['pending', 'processing', 'shipped', 'delivered'] as const
-const STATUS_FILTER_OPTIONS = ['all', 'pending', 'processing', 'shipped', 'delivered', 'cancelled'] as const
+const STATUS_FILTER_OPTIONS = ['all', 'pending', 'processing', 'shipped', 'delivered'] as const
+const ADMIN_PIN_LOCK_KEY = 'taries-admin-pin-lock-until'
+const ADMIN_PIN_FAIL_KEY = 'taries-admin-pin-fail-count'
+const ADMIN_PIN_MAX_ATTEMPTS = 5
+const ADMIN_PIN_LOCK_MS = 5 * 60 * 1000
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function timeAgo(isoString: string): string {
@@ -157,6 +167,44 @@ function readUsers(): AdminUser[] {
 function saveAdminUsers(users: AdminUser[]): void {
   if (typeof window === 'undefined') return
   try { localStorage.setItem('taries-users', JSON.stringify(users)) } catch { /* ignore */ }
+}
+function normalizeRemoteAdminUser(user: Partial<AdminUser> & { id: string; email: string }): AdminUser {
+  const country = user.country === 'Nigeria' || user.country === 'Ghana' || user.country === 'China' ? user.country : 'Other'
+  return {
+    id: user.id,
+    firstName: user.firstName ?? '',
+    lastName: user.lastName ?? '',
+    email: user.email,
+    role: user.role,
+    adminLevel: user.adminLevel,
+    country,
+    phone: user.phone ?? '',
+    passwordHash: user.passwordHash ?? 'remote-auth',
+    passwordSalt: user.passwordSalt,
+    passwordVersion: user.passwordVersion ?? 2,
+    createdAt: user.createdAt ?? new Date().toISOString(),
+    avatar: user.avatar,
+    addresses: user.addresses ?? [],
+    suspended: user.suspended ?? false,
+  }
+}
+async function fetchRemoteAdminUsers(): Promise<AdminUser[] | null> {
+  if (typeof window === 'undefined') return null
+  try {
+    const response = await fetch(withApiBase('/admin/users'), {
+      method: 'GET',
+      credentials: 'include',
+      cache: 'no-store',
+    })
+    if (!response.ok) return null
+    const payload = await response.json().catch(() => null) as { users?: Array<Partial<AdminUser> & { id: string; email: string }> } | null
+    if (!payload?.users) return null
+    const users = payload.users.map(normalizeRemoteAdminUser)
+    saveAdminUsers(users)
+    return users
+  } catch {
+    return null
+  }
 }
 function readVendors(): Vendor[] {
   if (typeof window === 'undefined') return []
@@ -203,8 +251,14 @@ function getVendorProducts(): VendorProduct[] {
       if (!match) continue
       const raw = localStorage.getItem(key)
       if (!raw) continue
-      const items = JSON.parse(raw) as VendorProduct[]
-      result.push(...items.map(p => ({ ...p, vendorId: match[1] })))
+      const items = JSON.parse(raw) as Array<Partial<VendorProduct> & { id: string; name: string; category: string; price: number; vendorEmail?: string; addedAt?: string }>
+      result.push(...items.map(p => ({
+        ...p,
+        vendorId: match[1],
+        vendorName: p.vendorName ?? p.vendorId ?? p.vendorEmail ?? match[1],
+        createdAt: p.createdAt ?? p.addedAt ?? new Date().toISOString(),
+        status: p.status ?? 'pending',
+      }) as VendorProduct))
     }
   } catch { /* ignore */ }
   return result
@@ -245,24 +299,51 @@ function PinEntry({ onSuccess }: { onSuccess: () => void }) {
   const [needsSetup, setNeedsSetup] = useState(false)
   const [setupForm, setSetupForm] = useState({ next: '', confirm: '' })
   const [setupError, setSetupError] = useState('')
+  const [lockedUntil, setLockedUntil] = useState(0)
 
   useEffect(() => {
     setNeedsSetup(!getAdminPin())
+    const lockUntil = Number(localStorage.getItem(ADMIN_PIN_LOCK_KEY) ?? '0')
+    if (Number.isFinite(lockUntil) && lockUntil > Date.now()) {
+      setLockedUntil(lockUntil)
+    }
   }, [])
 
   const handleDigit = useCallback((d: string) => {
+    if (lockedUntil > Date.now()) return
     if (pin.length >= 6) return
     const next = pin + d
     setPin(next); setError(false)
     if (next.length === 6) {
       if (next === getAdminPin()) {
+        localStorage.removeItem(ADMIN_PIN_FAIL_KEY)
+        localStorage.removeItem(ADMIN_PIN_LOCK_KEY)
         setTimeout(() => onSuccess(), 300)
       } else {
+        const fails = Number(localStorage.getItem(ADMIN_PIN_FAIL_KEY) ?? '0') + 1
+        localStorage.setItem(ADMIN_PIN_FAIL_KEY, String(fails))
+        if (fails >= ADMIN_PIN_MAX_ATTEMPTS) {
+          const nextLock = Date.now() + ADMIN_PIN_LOCK_MS
+          localStorage.setItem(ADMIN_PIN_LOCK_KEY, String(nextLock))
+          setLockedUntil(nextLock)
+          localStorage.setItem(ADMIN_PIN_FAIL_KEY, '0')
+        }
         setShake(true); setError(true)
         setTimeout(() => { setPin(''); setShake(false); setError(false) }, 700)
       }
     }
-  }, [pin, onSuccess])
+  }, [lockedUntil, pin, onSuccess])
+
+  useEffect(() => {
+    if (lockedUntil <= Date.now()) return
+    const timer = window.setInterval(() => {
+      if (Date.now() >= lockedUntil) {
+        setLockedUntil(0)
+        localStorage.removeItem(ADMIN_PIN_LOCK_KEY)
+      }
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [lockedUntil])
 
   const handleBack = useCallback(() => { setPin(p => p.slice(0, -1)); setError(false) }, [])
   const keys = ['1','2','3','4','5','6','7','8','9','','0','⌫']
@@ -339,13 +420,18 @@ function PinEntry({ onSuccess }: { onSuccess: () => void }) {
           <div className="grid grid-cols-3 gap-3">
             {keys.map((key, idx) =>
               key === '' ? <div key={idx} /> : (
-                <button key={idx} onClick={() => key === '⌫' ? handleBack() : handleDigit(key)}
+                <button key={idx} onClick={() => key === '⌫' ? handleBack() : handleDigit(key)} disabled={lockedUntil > Date.now()}
                   className="py-4 rounded-xl text-xl font-body font-semibold bg-brand-black-3 text-white hover:bg-brand-gold hover:text-black transition-all border border-brand-gold/10 active:scale-95">
                   {key}
                 </button>
               )
             )}
           </div>
+          {lockedUntil > Date.now() && (
+            <p className="text-red-400 text-xs text-center mt-4">
+              Too many failed attempts. Try again in {Math.max(1, Math.ceil((lockedUntil - Date.now()) / 1000))}s.
+            </p>
+          )}
         </div>
       </motion.div>
     </div>
@@ -407,20 +493,22 @@ function DashboardTab({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
   const [topViews, setTopViews] = useState<{ slug: string; views: number }[]>([])
 
   useEffect(() => {
-    const refresh = () => {
+    const refresh = async () => {
       localStorage.setItem('taries-presence-admin', Date.now().toString())
       setOrders(getAllOrders())
-      setUsers(readUsers())
+      const remoteUsers = await fetchRemoteAdminUsers()
+      setUsers(remoteUsers ?? readUsers())
       setVendors(readVendors())
       setTopViews(getAllViewsSorted().slice(0, 5))
     }
 
-    refresh()
-    window.addEventListener('storage', refresh)
-    window.addEventListener('focus', refresh)
+    void refresh()
+    const onRefresh = () => { void refresh() }
+    window.addEventListener('storage', onRefresh)
+    window.addEventListener('focus', onRefresh)
     return () => {
-      window.removeEventListener('storage', refresh)
-      window.removeEventListener('focus', refresh)
+      window.removeEventListener('storage', onRefresh)
+      window.removeEventListener('focus', onRefresh)
     }
   }, [])
 
@@ -566,8 +654,7 @@ function OrdersTab() {
         o.customer.email.toLowerCase().includes(q)
       )
     }
-    if (statusFilter === 'cancelled') { result = [] }
-    else if (statusFilter !== 'all') { result = result.filter(o => o.status === statusFilter) }
+    if (statusFilter !== 'all') { result = result.filter(o => o.status === statusFilter) }
     const now = new Date()
     if (dateFilter === 'today') { result = result.filter(o => new Date(o.date).toDateString() === now.toDateString()) }
     else if (dateFilter === 'week') { const ago = new Date(now.getTime() - 7*86400000); result = result.filter(o => new Date(o.date) >= ago) }
@@ -786,17 +873,19 @@ function UsersTab() {
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
 
   useEffect(() => {
-    const refresh = () => {
-      setUsers(readUsers())
+    const refresh = async () => {
+      const remoteUsers = await fetchRemoteAdminUsers()
+      setUsers(remoteUsers ?? readUsers())
       setAllOrders(getAllOrders())
     }
 
-    refresh()
-    window.addEventListener('storage', refresh)
-    window.addEventListener('focus', refresh)
+    void refresh()
+    const onRefresh = () => { void refresh() }
+    window.addEventListener('storage', onRefresh)
+    window.addEventListener('focus', onRefresh)
     return () => {
-      window.removeEventListener('storage', refresh)
-      window.removeEventListener('focus', refresh)
+      window.removeEventListener('storage', onRefresh)
+      window.removeEventListener('focus', onRefresh)
     }
   }, [])
 
@@ -1042,15 +1131,41 @@ function ProductsManagementTab() {
   const [editForm, setEditForm] = useState<ProductOverride>({})
   const [vendorProds, setVendorProds] = useState<VendorProduct[]>([])
   const [viewsMap, setViewsMap] = useState<Record<string, number>>({})
+  const [vendors, setVendors] = useState<Vendor[]>([])
+  const [vendorDraftEmail, setVendorDraftEmail] = useState('')
+  const [showVendorCreate, setShowVendorCreate] = useState(false)
 
-  useEffect(() => {
+  const refreshProductData = useCallback(() => {
     setInventoryState(getInventory())
     try { const r = localStorage.getItem('taries-product-overrides'); if (r) setOverrides(JSON.parse(r) as Record<string, ProductOverride>) } catch { /* ignore */ }
     setVendorProds(getVendorProducts())
+    setVendors(readVendors())
     const vm: Record<string, number> = {}
     getAllViewsSorted().forEach(v => { vm[v.slug] = v.views })
     setViewsMap(vm)
   }, [])
+
+  useEffect(() => {
+    refreshProductData()
+    window.addEventListener('storage', refreshProductData)
+    window.addEventListener('focus', refreshProductData)
+    return () => {
+      window.removeEventListener('storage', refreshProductData)
+      window.removeEventListener('focus', refreshProductData)
+    }
+  }, [refreshProductData])
+
+  const approvedVendors = useMemo(() => vendors.filter(v => v.status === 'approved'), [vendors])
+
+  useEffect(() => {
+    if (!approvedVendors.length) {
+      setVendorDraftEmail('')
+      return
+    }
+    if (!vendorDraftEmail || !approvedVendors.some(v => v.email === vendorDraftEmail)) {
+      setVendorDraftEmail(approvedVendors[0].email)
+    }
+  }, [approvedVendors, vendorDraftEmail])
 
   const filteredProducts = useMemo(() => {
     if (!search) return products
@@ -1075,12 +1190,53 @@ function ProductsManagementTab() {
     setOverrides(updated)
     localStorage.setItem('taries-product-overrides', JSON.stringify(updated))
     setEditingId(null)
+    recordAdminAction('Catalogue product updated', slug)
     toast.success('Product updated')
   }
   function handleVendorAction(vendorId: string, productId: string, status: VendorProduct['status']) {
     saveVendorProductStatus(vendorId, productId, status)
     setVendorProds(prev => prev.map(p => (p.id === productId && p.vendorId === vendorId) ? { ...p, status } : p))
+    recordAdminAction('Vendor product status changed', productId, `${vendorId} → ${status}`)
     toast.success(`Product ${status}`)
+  }
+
+  function handleCreateVendorProduct(formData: ProductFormData) {
+    const vendor = approvedVendors.find(entry => entry.email === vendorDraftEmail)
+    if (!vendor) {
+      toast.error('Select an approved vendor before creating a product')
+      return
+    }
+
+    const variants = formData.variants
+      .filter(v => v.label.trim())
+      .map(v => ({
+        label: v.label.trim(),
+        options: v.options.split(',').map(option => option.trim()).filter(Boolean),
+      }))
+
+    addVendorProduct(vendor.email, {
+      name: formData.name.trim(),
+      category: formData.category,
+      price: Number(formData.price),
+      originalPrice: formData.originalPrice ? Number(formData.originalPrice) : undefined,
+      description: formData.description.trim(),
+      shortDesc: formData.shortDesc.trim(),
+      images: formData.images,
+      video: formData.video.trim(),
+      inStock: formData.inStock,
+      stockCount: formData.stockCount ? Number(formData.stockCount) : undefined,
+      badge: (formData.badge || '') as VendorProduct['badge'],
+      whatsapp: formData.whatsapp.trim() || vendor.phone,
+      features: formData.features.filter(Boolean),
+      variants,
+      active: true,
+      status: 'approved',
+    })
+
+    recordAdminAction('Vendor product created', formData.name, vendor.email)
+    setVendorProds(getVendorProducts())
+    setShowVendorCreate(false)
+    toast.success('Vendor product created and approved')
   }
 
   const catColors: Record<string, string> = {
@@ -1105,6 +1261,9 @@ function ProductsManagementTab() {
 
       {subTab === 'catalogue' && (
         <div className="space-y-4">
+          <div className="rounded-xl border border-brand-gold/20 bg-brand-black-2 px-4 py-3 text-sm text-brand-cream/70">
+            Catalogue products are code-managed. Use inline edit controls below to update pricing and card metadata for this storefront.
+          </div>
           <div className="relative max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
             <input type="text" placeholder="Search products…" value={search} onChange={e => setSearch(e.target.value)}
@@ -1221,43 +1380,119 @@ function ProductsManagementTab() {
       )}
 
       {subTab === 'vendor' && (
-        <div className="overflow-x-auto rounded-xl border border-brand-gold/20">
-          <table className="min-w-[700px] w-full text-sm">
-            <thead className="bg-brand-black-3 text-left">
-              <tr>
-                <th className="p-3 text-brand-gold/70 font-medium">Product</th>
-                <th className="p-3 text-brand-gold/70 font-medium">Vendor</th>
-                <th className="p-3 text-brand-gold/70 font-medium">Category</th>
-                <th className="p-3 text-brand-gold/70 font-medium">Price</th>
-                <th className="p-3 text-brand-gold/70 font-medium">Status</th>
-                <th className="p-3 text-brand-gold/70 font-medium">Date</th>
-                <th className="p-3 text-brand-gold/70 font-medium text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {vendorProds.length === 0 && <tr><td colSpan={7} className="p-12 text-center text-white/40">No vendor products yet</td></tr>}
-              {vendorProds.map((vp, i) => (
-                <motion.tr key={`${vp.vendorId}-${vp.id}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
-                  className="border-t border-white/5 hover:bg-brand-black-3/50">
-                  <td className="p-3 text-white">{vp.name}</td>
-                  <td className="p-3 text-white/60">{vp.vendorName ?? vp.vendorId}</td>
-                  <td className="p-3 text-white/60">{vp.category}</td>
-                  <td className="p-3 text-white">${vp.price.toFixed(2)}</td>
-                  <td className="p-3">
-                    <span className={`px-2 py-0.5 rounded-full text-xs ${vp.status==='approved'?'bg-green-500/20 text-green-400':vp.status==='featured'?'bg-brand-gold/20 text-brand-gold':vp.status==='removed'?'bg-red-500/20 text-red-400':'bg-yellow-500/20 text-yellow-400'}`}>{vp.status}</span>
-                  </td>
-                  <td className="p-3 text-white/40 text-xs">{new Date(vp.createdAt).toLocaleDateString()}</td>
-                  <td className="p-3">
-                    <div className="flex items-center justify-center gap-1">
-                      <button onClick={() => handleVendorAction(vp.vendorId, vp.id, 'approved')} className="px-2 py-1 text-xs rounded bg-green-500/20 text-green-400 hover:bg-green-500/40 transition-all">Approve</button>
-                      <button onClick={() => handleVendorAction(vp.vendorId, vp.id, 'featured')} className="px-2 py-1 text-xs rounded bg-brand-gold/20 text-brand-gold hover:bg-brand-gold/40 transition-all">Feature</button>
-                      <button onClick={() => handleVendorAction(vp.vendorId, vp.id, 'removed')} className="px-2 py-1 text-xs rounded bg-red-500/20 text-red-400 hover:bg-red-500/40 transition-all">Remove</button>
+        <div className="space-y-4">
+          <div className="bg-brand-black-2 border border-brand-gold/20 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <h3 className="text-sm font-semibold text-white">Create Vendor Product (Admin)</h3>
+              <button
+                onClick={() => setShowVendorCreate(true)}
+                disabled={!approvedVendors.length}
+                className="btn-gold text-xs !py-2 !px-4 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Plus className="inline w-3 h-3 mr-1" /> Add Product
+              </button>
+            </div>
+            <div className="grid md:grid-cols-[1fr,auto] gap-3">
+              <select
+                value={vendorDraftEmail}
+                onChange={e => setVendorDraftEmail(e.target.value)}
+                className="px-3 py-2 bg-brand-black-3 border border-brand-gold/20 rounded-lg text-sm text-white focus:outline-none"
+              >
+                {approvedVendors.length === 0 && <option value="">No approved vendors yet</option>}
+                {approvedVendors.map(v => (
+                  <option key={v.email} value={v.email}>{v.businessName} ({v.email})</option>
+                ))}
+              </select>
+              <p className="text-xs text-brand-cream/45 self-center">Admin-created listings are auto-approved.</p>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-brand-gold/20">
+            <table className="min-w-[700px] w-full text-sm">
+              <thead className="bg-brand-black-3 text-left">
+                <tr>
+                  <th className="p-3 text-brand-gold/70 font-medium">Product</th>
+                  <th className="p-3 text-brand-gold/70 font-medium">Vendor</th>
+                  <th className="p-3 text-brand-gold/70 font-medium">Category</th>
+                  <th className="p-3 text-brand-gold/70 font-medium">Price</th>
+                  <th className="p-3 text-brand-gold/70 font-medium">Status</th>
+                  <th className="p-3 text-brand-gold/70 font-medium">Date</th>
+                  <th className="p-3 text-brand-gold/70 font-medium text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vendorProds.length === 0 && <tr><td colSpan={7} className="p-12 text-center text-white/40">No vendor products yet</td></tr>}
+                {vendorProds.map((vp, i) => (
+                  <motion.tr key={`${vp.vendorId}-${vp.id}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
+                    className="border-t border-white/5 hover:bg-brand-black-3/50">
+                    <td className="p-3 text-white">{vp.name}</td>
+                    <td className="p-3 text-white/60">{vp.vendorName ?? vp.vendorId}</td>
+                    <td className="p-3 text-white/60">{vp.category}</td>
+                    <td className="p-3 text-white">${vp.price.toFixed(2)}</td>
+                    <td className="p-3">
+                      <span className={`px-2 py-0.5 rounded-full text-xs ${vp.status==='approved'?'bg-green-500/20 text-green-400':vp.status==='featured'?'bg-brand-gold/20 text-brand-gold':vp.status==='removed'?'bg-red-500/20 text-red-400':'bg-yellow-500/20 text-yellow-400'}`}>{vp.status}</span>
+                    </td>
+                    <td className="p-3 text-white/40 text-xs">{new Date(vp.createdAt).toLocaleDateString()}</td>
+                    <td className="p-3">
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => handleVendorAction(vp.vendorId, vp.id, 'approved')} className="px-2 py-1 text-xs rounded bg-green-500/20 text-green-400 hover:bg-green-500/40 transition-all">Approve</button>
+                        <button onClick={() => handleVendorAction(vp.vendorId, vp.id, 'featured')} className="px-2 py-1 text-xs rounded bg-brand-gold/20 text-brand-gold hover:bg-brand-gold/40 transition-all">Feature</button>
+                        <button onClick={() => handleVendorAction(vp.vendorId, vp.id, 'removed')} className="px-2 py-1 text-xs rounded bg-red-500/20 text-red-400 hover:bg-red-500/40 transition-all">Remove</button>
+                      </div>
+                    </td>
+                  </motion.tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <AnimatePresence>
+            {showVendorCreate && (
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+                  onClick={() => setShowVendorCreate(false)}
+                />
+                <motion.div
+                  initial={{ x: '100%' }}
+                  animate={{ x: 0 }}
+                  exit={{ x: '100%' }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                  className="fixed right-0 top-0 bottom-0 w-full sm:w-[520px] lg:w-[580px] z-50 flex flex-col bg-brand-black-2 border-l border-brand-gold/20 shadow-gold-xl"
+                >
+                  <div className="sticky top-0 bg-brand-black-2 border-b border-brand-gold/20 px-5 py-4 flex items-center justify-between flex-shrink-0">
+                    <h3 className="text-brand-cream font-display font-semibold">Add Vendor Product</h3>
+                    <button onClick={() => setShowVendorCreate(false)} className="text-brand-cream/35 hover:text-brand-cream transition-colors">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto px-5 py-5">
+                    <div className="mb-4">
+                      <label className="text-xs text-brand-gold/70 uppercase tracking-wider block mb-1.5">Vendor</label>
+                      <select
+                        value={vendorDraftEmail}
+                        onChange={e => setVendorDraftEmail(e.target.value)}
+                        className="w-full px-3 py-2 bg-brand-black-3 border border-brand-gold/20 rounded-lg text-sm text-white focus:outline-none"
+                      >
+                        {approvedVendors.map(v => (
+                          <option key={v.email} value={v.email}>{v.businessName} ({v.email})</option>
+                        ))}
+                      </select>
                     </div>
-                  </td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
+                    <ProductForm
+                      initial={{ ...emptyFormData(), whatsapp: approvedVendors.find(v => v.email === vendorDraftEmail)?.phone ?? '' }}
+                      onSubmit={handleCreateVendorProduct}
+                      onCancel={() => setShowVendorCreate(false)}
+                      submitLabel="Create Product"
+                    />
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
         </div>
       )}
     </div>

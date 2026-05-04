@@ -131,29 +131,6 @@ export function readSupportThreads(users: User[], orders: Order[]): SupportThrea
     })
   }
 
-  if (threads.length === 0) {
-    const seeded = orders.slice(0, 2).map((order, index) => ({
-      id: `seeded-${order.orderId}`,
-      userId: order.customer.email.toLowerCase(),
-      customerName: `${order.customer.firstName} ${order.customer.lastName}`,
-      email: order.customer.email,
-      source: 'order' as const,
-      status: index === 0 ? 'open' as const : 'pending' as const,
-      priority: index === 0 ? 'high' as const : 'normal' as const,
-      updatedAt: new Date(order.date).getTime(),
-      messages: [
-        {
-          id: `seed-msg-${order.orderId}`,
-          role: 'user' as const,
-          text: `I need help with order ${order.orderId}.`,
-          timestamp: new Date(order.date).getTime(),
-        },
-      ],
-    }))
-
-    return seeded.sort((a, b) => b.updatedAt - a.updatedAt)
-  }
-
   return threads.sort((a, b) => b.updatedAt - a.updatedAt)
 }
 

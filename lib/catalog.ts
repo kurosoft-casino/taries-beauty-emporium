@@ -9,9 +9,16 @@ export interface StorefrontProduct extends Product {
 
 const vendorCategoryMap: Record<string, { category: Category; label: string }> = {
   'hair & wigs': { category: 'wigs', label: 'Human Hair Wigs' },
+  'bundles & weaves': { category: 'bundles', label: 'Hair Bundles' },
+  'custom wigs': { category: 'custom-wigs', label: 'Custom Made Wigs' },
+  'hair maintenance': { category: 'maintenance', label: 'Hair Maintenance' },
   'beauty & cosmetics': { category: 'beauty', label: 'Beauty Products' },
   'clothing & fashion': { category: 'coats', label: 'Female Coats' },
+  electronics: { category: 'electronics', label: 'Electronics' },
   accessories: { category: 'beauty', label: 'Beauty Products' },
+  kitchenware: { category: 'kitchenware', label: 'Kitchenware' },
+  bedding: { category: 'bedding', label: 'Bedding' },
+  cleaning: { category: 'cleaning', label: 'Cleaning Essentials' },
   other: { category: 'beauty', label: 'Beauty Products' },
 }
 

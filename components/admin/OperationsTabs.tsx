@@ -247,6 +247,11 @@ export function MarketingTab({ adminEmail }: { adminEmail: string }) {
     if (current?.channel === 'banner' && current.status === 'live') {
       const settings = getStoreSettings()
       saveStoreSettings({ ...settings, announcement: current.message })
+    } else if (current?.channel === 'banner') {
+      const settings = getStoreSettings()
+      if (settings.announcement === current.message) {
+        saveStoreSettings({ ...settings, announcement: '' })
+      }
     }
     appendAuditEvent({ actor: adminEmail, action: 'Broadcast updated', target: current?.title ?? id, detail: status })
   }
@@ -256,6 +261,12 @@ export function MarketingTab({ adminEmail }: { adminEmail: string }) {
     const updated = broadcasts.filter(item => item.id !== id)
     setBroadcasts(updated)
     saveBroadcasts(updated)
+    if (current?.channel === 'banner') {
+      const settings = getStoreSettings()
+      if (settings.announcement === current.message) {
+        saveStoreSettings({ ...settings, announcement: '' })
+      }
+    }
     appendAuditEvent({ actor: adminEmail, action: 'Broadcast deleted', target: current?.title ?? id })
   }
 

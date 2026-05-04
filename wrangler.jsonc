@@ -14,7 +14,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "taries-beauty-emporium"
+      "database_name": "taries-beauty-emporium",
+      "database_id": "1cd7958e-cbe3-4ecc-b4ad-915a1bf5d902"
     }
   ],
   "kv_namespaces": [

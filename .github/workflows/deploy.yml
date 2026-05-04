@@ -25,6 +25,8 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Build static export
+        env:
+          NEXT_PUBLIC_API_URL: https://taries-beauty-api.kurosoft01.workers.dev
         run: npm run build:static
       - uses: actions/upload-pages-artifact@v3
         with:
