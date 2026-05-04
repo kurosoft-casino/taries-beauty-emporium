@@ -17,6 +17,7 @@ if [[ -z "${TOKEN}" ]]; then
   echo "error: set CLOUDFLARE_API_TOKEN (or CF_API_TOKEN) with Zone:Read + Zone Settings:Edit + WAF:Edit" >&2
   exit 1
 fi
+SSL_MODE="${CF_SSL_MODE:-auto}"
 
 CF_API="https://api.cloudflare.com/client/v4"
 
@@ -51,6 +52,25 @@ if [[ "${zone_status}" != "active" ]]; then
   echo "warn: zone is '${zone_status}'. Some WAF/Bot/Ruleset features may be unavailable until nameservers finish activation."
 fi
 
+# GitHub Pages origins do not present a cert Cloudflare can validate in Strict mode
+# for custom domains; use Full unless caller explicitly sets CF_SSL_MODE.
+apex_records_resp="$(cf_api GET "/zones/${zone_id}/dns_records?name=${DOMAIN}&per_page=100")"
+www_records_resp="$(cf_api GET "/zones/${zone_id}/dns_records?name=www.${DOMAIN}&per_page=100")"
+records_payload="$(printf '%s\n%s\n' "${apex_records_resp}" "${www_records_resp}")"
+origin_is_github="false"
+if echo "${records_payload}" | jq -e '.result[]? | (.content // "") | test("(^|\\.)github\\.io$|^185\\.199\\.(108|109|110|111)\\.153$")' >/dev/null; then
+  origin_is_github="true"
+fi
+
+if [[ "${SSL_MODE}" == "auto" ]]; then
+  if [[ "${origin_is_github}" == "true" ]]; then
+    SSL_MODE="full"
+    echo "info: GitHub Pages origin detected; choosing ssl=full to avoid Cloudflare 526 on apex."
+  else
+    SSL_MODE="strict"
+  fi
+fi
+
 set_setting() {
   local key="$1"
   local value="$2"
@@ -69,7 +89,7 @@ set_setting() {
   fi
 }
 
-set_setting "ssl" "strict"
+set_setting "ssl" "${SSL_MODE}"
 set_setting "always_use_https" "on"
 set_setting "automatic_https_rewrites" "on"
 set_setting "min_tls_version" "1.2"
