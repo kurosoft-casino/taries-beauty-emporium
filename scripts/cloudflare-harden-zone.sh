@@ -72,33 +72,82 @@ set_setting "automatic_https_rewrites" "on"
 set_setting "min_tls_version" "1.2"
 set_setting "tls_1_3" "on"
 set_setting "browser_check" "on"
-set_setting "waf" "on"
 set_setting "security_level" "medium"
 
-# Optional: available on many plans; ignore if unavailable.
-set_setting "bot_fight_mode" "on"
-
-rate_rule='{
-  "description": "Taries default edge rate limit",
-  "expression": "(http.request.uri.path matches \"^/(api|auth|login|register|checkout)\")",
-  "action": "block",
-  "enabled": true,
-  "ratelimit": {
-    "characteristics": ["cf.colo.id", "ip.src"],
-    "period": 60,
-    "requests_per_period": 120,
-    "mitigation_timeout": 600
-  }
-}'
-
-rate_resp="$(cf_api POST "/zones/${zone_id}/rulesets/phases/http_ratelimit/entrypoint/rules" "${rate_rule}")"
-rate_ok="$(echo "${rate_resp}" | jq -r '.success')"
-if [[ "${rate_ok}" == "true" ]]; then
-  rule_id="$(echo "${rate_resp}" | jq -r '.result.id // empty')"
-  echo "ok: rate_limit_rule created (${rule_id})"
+# Managed WAF ruleset (replacement for deprecated waf setting).
+CF_MANAGED_WAF_RULESET_ID="efb7b8c949ac4650a09736fc376e9aee"
+managed_entry_resp="$(cf_api GET "/zones/${zone_id}/rulesets/phases/http_request_firewall_managed/entrypoint")"
+managed_entry_ok="$(echo "${managed_entry_resp}" | jq -r '.success')"
+if [[ "${managed_entry_ok}" == "true" ]]; then
+  managed_entry_id="$(echo "${managed_entry_resp}" | jq -r '.result.id')"
+  has_managed_waf="$(echo "${managed_entry_resp}" | jq -r --arg rid "${CF_MANAGED_WAF_RULESET_ID}" '.result.rules // [] | any(.action == "execute" and (.action_parameters.id // "") == $rid)')"
+  if [[ "${has_managed_waf}" == "true" ]]; then
+    echo "ok: managed_waf already deployed"
+  else
+    add_managed_resp="$(cf_api POST "/zones/${zone_id}/rulesets/${managed_entry_id}/rules" "{\"action\":\"execute\",\"action_parameters\":{\"id\":\"${CF_MANAGED_WAF_RULESET_ID}\"},\"expression\":\"true\",\"description\":\"Execute Cloudflare Managed Ruleset\"}")"
+    add_managed_ok="$(echo "${add_managed_resp}" | jq -r '.success')"
+    if [[ "${add_managed_ok}" == "true" ]]; then
+      echo "ok: managed_waf deployed"
+    else
+      add_managed_msg="$(echo "${add_managed_resp}" | jq -r '.errors[0].message // "unknown error"')"
+      echo "warn: managed_waf deploy failed (${add_managed_msg})"
+    fi
+  fi
 else
-  rate_msg="$(echo "${rate_resp}" | jq -r '.errors[0].message // "unknown error"')"
-  echo "warn: rate_limit_rule failed (${rate_msg})"
+  managed_entry_code="$(echo "${managed_entry_resp}" | jq -r '.errors[0].code // 0')"
+  if [[ "${managed_entry_code}" == "7003" || "${managed_entry_code}" == "7000" || "${managed_entry_code}" == "1001" ]]; then
+    :
+  fi
+  create_managed_resp="$(cf_api POST "/zones/${zone_id}/rulesets" "{\"name\":\"Managed WAF entry point\",\"description\":\"Zone-level WAF managed rules\",\"kind\":\"zone\",\"phase\":\"http_request_firewall_managed\",\"rules\":[{\"action\":\"execute\",\"action_parameters\":{\"id\":\"${CF_MANAGED_WAF_RULESET_ID}\"},\"expression\":\"true\",\"description\":\"Execute Cloudflare Managed Ruleset\"}]}")"
+  create_managed_ok="$(echo "${create_managed_resp}" | jq -r '.success')"
+  if [[ "${create_managed_ok}" == "true" ]]; then
+    echo "ok: managed_waf entrypoint created"
+  else
+    create_managed_msg="$(echo "${create_managed_resp}" | jq -r '.errors[0].message // "unknown error"')"
+    echo "warn: managed_waf setup failed (${create_managed_msg})"
+  fi
+fi
+
+# Bot Fight Mode via bot_management API (replaces unsupported zone setting key).
+bot_resp="$(cf_api PUT "/zones/${zone_id}/bot_management" '{"fight_mode":true}')"
+bot_ok="$(echo "${bot_resp}" | jq -r '.success')"
+if [[ "${bot_ok}" == "true" ]]; then
+  bot_mode="$(echo "${bot_resp}" | jq -r '.result.fight_mode // false')"
+  echo "ok: bot_fight_mode=${bot_mode}"
+else
+  bot_msg="$(echo "${bot_resp}" | jq -r '.errors[0].message // "unknown error"')"
+  echo "warn: bot_fight_mode failed (${bot_msg})"
+fi
+
+# Zone-level rate limiting using Rulesets API.
+rate_rule_json='{"action":"block","expression":"(http.request.uri.path matches \"^/(api|auth|login|register|checkout)\")","description":"Taries default edge rate limit","enabled":true,"ratelimit":{"characteristics":["cf.colo.id","ip.src"],"period":60,"requests_per_period":120,"mitigation_timeout":600}}'
+rate_entry_resp="$(cf_api GET "/zones/${zone_id}/rulesets/phases/http_ratelimit/entrypoint")"
+rate_entry_ok="$(echo "${rate_entry_resp}" | jq -r '.success')"
+if [[ "${rate_entry_ok}" == "true" ]]; then
+  rate_entry_id="$(echo "${rate_entry_resp}" | jq -r '.result.id')"
+  has_rate_rule="$(echo "${rate_entry_resp}" | jq -r '.result.rules // [] | any(.description == "Taries default edge rate limit")')"
+  if [[ "${has_rate_rule}" == "true" ]]; then
+    echo "ok: rate_limit_rule already present"
+  else
+    rate_add_resp="$(cf_api POST "/zones/${zone_id}/rulesets/${rate_entry_id}/rules" "${rate_rule_json}")"
+    rate_add_ok="$(echo "${rate_add_resp}" | jq -r '.success')"
+    if [[ "${rate_add_ok}" == "true" ]]; then
+      rate_rule_id="$(echo "${rate_add_resp}" | jq -r '.result.id // empty')"
+      echo "ok: rate_limit_rule created (${rate_rule_id})"
+    else
+      rate_add_msg="$(echo "${rate_add_resp}" | jq -r '.errors[0].message // "unknown error"')"
+      echo "warn: rate_limit_rule failed (${rate_add_msg})"
+    fi
+  fi
+else
+  rate_create_resp="$(cf_api POST "/zones/${zone_id}/rulesets" "{\"name\":\"Rate limit entry point\",\"description\":\"Zone-level rate limiting\",\"kind\":\"zone\",\"phase\":\"http_ratelimit\",\"rules\":[${rate_rule_json}]}")"
+  rate_create_ok="$(echo "${rate_create_resp}" | jq -r '.success')"
+  if [[ "${rate_create_ok}" == "true" ]]; then
+    echo "ok: rate_limit entrypoint created"
+  else
+    rate_create_msg="$(echo "${rate_create_resp}" | jq -r '.errors[0].message // "unknown error"')"
+    echo "warn: rate_limit setup failed (${rate_create_msg})"
+  fi
 fi
 
 echo "done"
