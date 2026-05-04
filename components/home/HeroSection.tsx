@@ -55,13 +55,13 @@ export default function HeroSection() {
         { icon: '⭐', label: '4.9/5 评分', sub: '1,200+ 条评价' },
         { icon: '🌍', label: '发货至尼日利亚和加纳', sub: '7–14 个工作日' },
         { icon: '💎', label: '100% 真人发', sub: '正品保证' },
-        { icon: '🔒', label: '安全结账', sub: 'Paystack 与转账' },
+        { icon: '🔒', label: '安全结账', sub: 'Flutterwave 与转账' },
       ]
     : [
         { icon: '⭐', label: '4.9/5 Rating', sub: '1,200+ Reviews' },
         { icon: '🌍', label: 'Ships to NG & GH', sub: '7–14 Business Days' },
         { icon: '💎', label: '100% Human Hair', sub: 'Authenticity Guaranteed' },
-        { icon: '🔒', label: 'Secure Checkout', sub: 'Paystack & Transfer' },
+        { icon: '🔒', label: 'Secure Checkout', sub: 'Flutterwave & Transfer' },
       ]
 
   return (

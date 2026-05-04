@@ -246,7 +246,7 @@ export default function Footer() {
             {lang === 'ZH' ? '中国匠心打造，献给尼日利亚与加纳的女王们' : <>Crafted with <Heart size={12} className="text-brand-gold-2 fill-current" /> in China, for queens in Nigeria & Ghana</>}
           </p>
           <div className="flex items-center gap-3">
-            {['visa', 'mastercard', 'paystack', 'transfer'].map(p => (
+            {['visa', 'mastercard', 'flutterwave', 'transfer'].map(p => (
               <span key={p} className="font-body text-[10px] tracking-widest text-brand-gold-2/50 uppercase border border-brand-gold/10 px-2 py-0.5 rounded">
                 {p}
               </span>
