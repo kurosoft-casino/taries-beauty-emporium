@@ -47,6 +47,9 @@ if [[ -z "${zone_id}" ]]; then
 fi
 
 echo "zone: ${DOMAIN} (${zone_id}) status=${zone_status}"
+if [[ "${zone_status}" != "active" ]]; then
+  echo "warn: zone is '${zone_status}'. Some WAF/Bot/Ruleset features may be unavailable until nameservers finish activation."
+fi
 
 set_setting() {
   local key="$1"
@@ -91,6 +94,9 @@ if [[ "${managed_entry_ok}" == "true" ]]; then
     else
       add_managed_msg="$(echo "${add_managed_resp}" | jq -r '.errors[0].message // "unknown error"')"
       echo "warn: managed_waf deploy failed (${add_managed_msg})"
+      if [[ "${add_managed_msg}" == *"not allowed for id because not entitled"* ]]; then
+        echo "hint: managed WAF usually becomes available after zone activation and plan entitlement sync."
+      fi
     fi
   fi
 else
@@ -105,6 +111,9 @@ else
   else
     create_managed_msg="$(echo "${create_managed_resp}" | jq -r '.errors[0].message // "unknown error"')"
     echo "warn: managed_waf setup failed (${create_managed_msg})"
+    if [[ "${create_managed_msg}" == *"not allowed for id because not entitled"* ]]; then
+      echo "hint: managed WAF usually becomes available after zone activation and plan entitlement sync."
+    fi
   fi
 fi
 
@@ -117,10 +126,13 @@ if [[ "${bot_ok}" == "true" ]]; then
 else
   bot_msg="$(echo "${bot_resp}" | jq -r '.errors[0].message // "unknown error"')"
   echo "warn: bot_fight_mode failed (${bot_msg})"
+  if [[ "${bot_msg}" == *"Authentication error"* ]]; then
+    echo "hint: token likely needs 'Bot Management Write' permission (zone scoped)."
+  fi
 fi
 
 # Zone-level rate limiting using Rulesets API.
-rate_rule_json='{"action":"block","expression":"(http.request.uri.path matches \"^/(api|auth|login|register|checkout)\")","description":"Taries default edge rate limit","enabled":true,"ratelimit":{"characteristics":["cf.colo.id","ip.src"],"period":60,"requests_per_period":120,"mitigation_timeout":600}}'
+rate_rule_json='{"action":"block","expression":"(http.request.uri.path matches \"^/(api|auth|login|register|checkout)\")","description":"Taries default edge rate limit","enabled":true,"ratelimit":{"characteristics":["cf.colo.id","ip.src"],"period":10,"requests_per_period":30,"mitigation_timeout":600}}'
 rate_entry_resp="$(cf_api GET "/zones/${zone_id}/rulesets/phases/http_ratelimit/entrypoint")"
 rate_entry_ok="$(echo "${rate_entry_resp}" | jq -r '.success')"
 if [[ "${rate_entry_ok}" == "true" ]]; then
