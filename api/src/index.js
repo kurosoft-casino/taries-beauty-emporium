@@ -96,7 +96,21 @@ function corsHeaders(env, origin) {
 function withCors(res, env, origin) {
   const headers = new Headers(res.headers);
   Object.entries(corsHeaders(env, origin)).forEach(([k, v]) => headers.set(k, v));
+  headers.set('x-content-type-options', 'nosniff');
+  headers.set('x-frame-options', 'DENY');
+  headers.set('referrer-policy', 'strict-origin-when-cross-origin');
+  headers.set('permissions-policy', 'camera=(), microphone=(), geolocation=()');
+  headers.set('cross-origin-resource-policy', 'same-site');
   return new Response(res.body, { status: res.status, headers });
+}
+
+function constantTimeEqual(a, b) {
+  const sa = String(a || '');
+  const sb = String(b || '');
+  if (sa.length !== sb.length) return false;
+  let out = 0;
+  for (let i = 0; i < sa.length; i += 1) out |= sa.charCodeAt(i) ^ sb.charCodeAt(i);
+  return out === 0;
 }
 
 // ---------- auth ----------
@@ -797,6 +811,7 @@ async function verifyFlutterwaveAndMarkOrderPaid(env, txRef, transactionId = nul
   const currencyOk = chargedCurrency === expected.currency;
   const paid = status === 'successful' && sameRef && currencyOk && amountOk;
 
+  const wasAlreadyPaid = String(order.payment_status || '').toLowerCase() === 'paid';
   if (paid) {
     await env.DB.prepare(
       `UPDATE orders
@@ -805,7 +820,9 @@ async function verifyFlutterwaveAndMarkOrderPaid(env, txRef, transactionId = nul
            updated_at = ?
        WHERE order_id = ?`
     ).bind(nowIso(), txRef).run();
-    try { await finalizeOrderAfterPayment(env, txRef); } catch {}
+    if (!wasAlreadyPaid) {
+      try { await finalizeOrderAfterPayment(env, txRef); } catch {}
+    }
   }
 
   return {
@@ -856,9 +873,15 @@ route('POST', '/payments/flutterwave/initialize', async (req, env) => {
   if (!txRef || !email.includes('@')) return err(400, 'orderId and customer email required');
 
   const order = await env.DB.prepare(
-    'SELECT order_id, grand_total_usd, currency FROM orders WHERE order_id = ? LIMIT 1'
+    'SELECT order_id, grand_total_usd, currency, customer_json FROM orders WHERE order_id = ? LIMIT 1'
   ).bind(txRef).first();
   if (!order) return err(404, 'order not found');
+  let orderCustomerEmail = '';
+  try {
+    const orderCustomer = JSON.parse(order.customer_json || '{}');
+    orderCustomerEmail = lower(orderCustomer.email);
+  } catch {}
+  if (orderCustomerEmail && orderCustomerEmail !== email) return err(400, 'customer email mismatch');
 
   const { currency, amount } = toChargeAmount(order.grand_total_usd, order.currency || 'USD');
   const baseSiteUrl = (env.PUBLIC_SITE_URL || 'https://www.tariesbeauty.com').replace(/\/+$/, '');
@@ -919,7 +942,7 @@ route('POST', '/payments/flutterwave/webhook', async (req, env) => {
   const secretHash = String(env.FLW_WEBHOOK_HASH || '').trim();
   if (!secretHash) return err(503, 'webhook hash not configured');
   const signature = req.headers.get('verif-hash') || req.headers.get('flutterwave-signature') || '';
-  if (secretHash && signature !== secretHash) return err(401, 'invalid webhook signature');
+  if (!constantTimeEqual(secretHash, signature)) return err(401, 'invalid webhook signature');
 
   const body = await req.json().catch(() => ({}));
   const txRef = String(body?.data?.tx_ref || body?.tx_ref || '').trim();
