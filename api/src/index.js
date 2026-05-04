@@ -732,8 +732,20 @@ route('POST', '/orders', async (req, env) => {
 });
 
 route('GET', '/orders/:id', async (req, env, params) => {
+  const url = new URL(req.url);
+  const emailQuery = lower(url.searchParams.get('email') || '');
   const o = await env.DB.prepare('SELECT * FROM orders WHERE order_id = ?').bind(params.id).first();
   if (!o) return err(404, 'not found');
+  const session = await getSession(req, env);
+  const isAdmin = session?.role === 'admin';
+  const isOwner = Boolean(session?.user_id && o.user_id && session.user_id === o.user_id);
+  let customerEmail = '';
+  try {
+    const customer = JSON.parse(o.customer_json || '{}');
+    customerEmail = lower(customer.email);
+  } catch {}
+  const hasEmailMatch = Boolean(emailQuery && customerEmail && emailQuery === customerEmail);
+  if (!isAdmin && !isOwner && !hasEmailMatch) return err(403, 'forbidden');
   const items = await env.DB.prepare('SELECT * FROM order_items WHERE order_id = ?').bind(params.id).all();
   return ok({ order: o, items: items.results });
 });
