@@ -14,7 +14,7 @@ const categories = [
       },
       {
         q: 'What payment methods do you accept?',
-        a: 'We currently accept bank transfers (NGN, GHS, CNY), and mobile money. Payment details are provided at checkout. WhatsApp orders can be paid via direct bank transfer.',
+        a: 'We accept secure Flutterwave checkout (card, transfer, and supported mobile money options) plus manual bank transfer where applicable. Payment options are shown at checkout based on your order currency.',
       },
       {
         q: 'Can I modify or cancel my order?',

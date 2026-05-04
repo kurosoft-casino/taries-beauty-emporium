@@ -89,7 +89,7 @@ export function formatOrderDate(isoString: string): string {
 
 export function paymentMethodLabel(method: string): string {
   const labels: Record<string, string> = {
-    card: 'Credit / Debit Card (Paystack)',
+    card: 'Credit / Debit Card (Flutterwave)',
     transfer: 'Bank Transfer',
     mobile: 'Mobile Money',
   }

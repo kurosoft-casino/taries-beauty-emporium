@@ -10,11 +10,14 @@ import { saveOrder } from '@/lib/orders'
 import { estimateWeight, calcShipping, getCargoType } from '@/lib/shipping'
 import { calculateCouponDiscount, clearAppliedCoupon, getAppliedCoupon } from '@/lib/coupons'
 import { isValidEmail, normalizeEmail, sanitizeInlineText, sanitizeMultilineText, sanitizePhone } from '@/lib/validation'
+import { withApiBase } from '@/lib/site'
 
-const steps = ['Cart', 'Details', 'Payment', 'Confirm']
+const steps = ['Details', 'Payment', 'Review']
 const countries = ['Nigeria', 'Ghana']
 const ngStates = ['Abia','Adamawa','Akwa Ibom','Anambra','Bauchi','Bayelsa','Benue','Borno','Cross River','Delta','Ebonyi','Edo','Ekiti','Enugu','Gombe','Imo','Jigawa','Kaduna','Kano','Katsina','Kebbi','Kogi','Kwara','Lagos','Nasarawa','Niger','Ogun','Ondo','Osun','Oyo','Plateau','Rivers','Sokoto','Taraba','Yobe','Zamfara','FCT Abuja']
 const ghRegions = ['Greater Accra','Ashanti','Western','Eastern','Central','Volta','Northern','Upper East','Upper West','Brong-Ahafo','Western North','Ahafo','Bono East','Oti','North East','Savannah']
+const remoteOrdersPath = withApiBase('/orders')
+const remotePaymentInitPath = withApiBase('/payments/flutterwave/initialize')
 
 export default function CheckoutPage() {
   const { items, getTotalUSD, currency, clearCart } = useCartStore()
@@ -25,8 +28,6 @@ export default function CheckoutPage() {
     notes: '',
     giftMessage: '',
     payMethod: 'card',
-    cardNumber: '', cardName: '', cardExpiry: '', cardCvv: '',
-    bankRef: '',
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [ordered, setOrdered] = useState(false)
@@ -59,15 +60,8 @@ export default function CheckoutPage() {
   }
 
   function validateStep2() {
-    const e: Record<string, string> = {}
-    if (form.payMethod === 'card') {
-      if (!form.cardNumber.replace(/\s/g, '').match(/^\d{16}$/)) e.cardNumber = 'Enter 16-digit card number'
-      if (!form.cardName.trim()) e.cardName = 'Required'
-      if (!form.cardExpiry.match(/^\d{2}\/\d{2}$/)) e.cardExpiry = 'Format: MM/YY'
-      if (!form.cardCvv.match(/^\d{3,4}$/)) e.cardCvv = '3–4 digits'
-    }
-    setErrors(e)
-    return Object.keys(e).length === 0
+    setErrors({})
+    return true
   }
 
   function handleNext() {
@@ -77,6 +71,7 @@ export default function CheckoutPage() {
   }
 
   async function handlePlaceOrder() {
+    const isHostedPayment = form.payMethod === 'card' || form.payMethod === 'mobile'
     const orderPayload = {
       orderId: orderNum,
       date: new Date().toISOString(),
@@ -110,14 +105,56 @@ export default function CheckoutPage() {
     setPlacingOrder(true)
 
     try {
-      const response = await fetch('/api/orders', {
+      const response = await fetch(remoteOrdersPath === '/orders' ? '/api/orders' : remoteOrdersPath, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(orderPayload),
+        body: JSON.stringify({
+          ...orderPayload,
+          subtotalUsd: orderPayload.subtotalUSD,
+          shippingUsd: orderPayload.shippingUSD,
+          grandTotalUsd: orderPayload.grandTotalUSD,
+          discountUsd: orderPayload.discountUSD,
+          items: items.map(item => ({
+            productId: item.product.id,
+            productName: item.product.name,
+            unitPriceUsd: item.product.price,
+            quantity: item.quantity,
+            selectedVariants: item.selectedVariants,
+            productSnapshot: item.product,
+          })),
+        }),
       })
 
       if (!response.ok) {
-        throw new Error((await response.json().catch(() => null))?.error ?? 'Live order backup is unavailable right now.')
+        throw new Error((await response.json().catch(() => null))?.error ?? 'Order service is unavailable right now.')
+      }
+
+      if (isHostedPayment) {
+        if (remotePaymentInitPath === '/payments/flutterwave/initialize') {
+          throw new Error('Payment backend is not configured. Set NEXT_PUBLIC_API_URL and redeploy.')
+        }
+        const paymentResponse = await fetch(remotePaymentInitPath, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: orderNum,
+            paymentMethod: form.payMethod,
+            customer: {
+              email: orderPayload.customer.email,
+              firstName: orderPayload.customer.firstName,
+              lastName: orderPayload.customer.lastName,
+              phone: orderPayload.customer.phone,
+            },
+          }),
+        })
+        const paymentPayload = await paymentResponse.json().catch(() => null)
+        if (!paymentResponse.ok || !paymentPayload?.link) {
+          throw new Error(paymentPayload?.error ?? 'Could not initialize secure checkout.')
+        }
+        saveOrder(orderPayload)
+        sessionStorage.setItem('taries-pending-order-id', orderNum)
+        window.location.href = paymentPayload.link
+        return
       }
 
       saveOrder(orderPayload)
@@ -126,15 +163,19 @@ export default function CheckoutPage() {
       clearCart()
     } catch (error) {
       console.error(error)
-      try {
-        saveOrder(orderPayload)
-        clearAppliedCoupon()
-        setOrdered(true)
-        clearCart()
-        toast.error('Live order backup is unavailable right now, but your order was saved on this device.')
-      } catch (localError) {
-        console.error(localError)
-        toast.error('We could not save your order right now. Please try again.')
+      if (isHostedPayment) {
+        toast.error(error instanceof Error ? error.message : 'Payment initialization failed. Please try again.')
+      } else {
+        try {
+          saveOrder(orderPayload)
+          clearAppliedCoupon()
+          setOrdered(true)
+          clearCart()
+          toast.error('Live order backup is unavailable right now, but your order was saved on this device.')
+        } catch (localError) {
+          console.error(localError)
+          toast.error('We could not save your order right now. Please try again.')
+        }
       }
     } finally {
       setPlacingOrder(false)
@@ -281,9 +322,9 @@ export default function CheckoutPage() {
                 <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
                   <h2 className="font-heading text-2xl text-brand-cream mb-6">Payment Method</h2>
                   {[
-                    { id: 'card',     icon: CreditCard,    label: 'Debit / Credit Card',    sub: 'Visa, Mastercard via Paystack' },
-                    { id: 'transfer', icon: Building2,     label: 'Bank Transfer',           sub: 'NGN / GHS direct bank transfer' },
-                    { id: 'mobile',   icon: Smartphone,    label: 'Mobile Money',            sub: 'MTN, Airtel, Vodafone (Ghana)' },
+                    { id: 'card',     icon: CreditCard,    label: 'Card Checkout',    sub: 'Secure Flutterwave hosted checkout' },
+                    { id: 'transfer', icon: Building2,     label: 'Manual Bank Transfer',           sub: 'Direct transfer with manual confirmation' },
+                    { id: 'mobile',   icon: Smartphone,    label: 'Mobile Money / Transfer',            sub: 'Flutterwave hosted checkout options' },
                   ].map(method => (
                     <label key={method.id} className={`flex items-center gap-4 p-4 border cursor-pointer transition-all duration-200 ${form.payMethod === method.id ? 'border-brand-gold-2 bg-brand-gold/5' : 'border-brand-gold/20 hover:border-brand-gold/40'}`}>
                       <input type="radio" name="pay" value={method.id} checked={form.payMethod === method.id} onChange={e => update('payMethod', e.target.value)} className="hidden" />
@@ -300,43 +341,26 @@ export default function CheckoutPage() {
 
                   {form.payMethod === 'card' && (
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-4 pt-2">
-                      <div>
-                        <label className="font-body text-xs tracking-widest text-brand-gold-2 uppercase block mb-2">Card Number</label>
-                        <input value={form.cardNumber} onChange={e => update('cardNumber', e.target.value.replace(/\D/g, '').replace(/(.{4})/g, '$1 ').trim())} maxLength={19} placeholder="0000 0000 0000 0000"
-                          className={`w-full bg-brand-black-2 border ${errors.cardNumber ? 'border-red-500' : 'border-brand-gold/20'} text-brand-cream font-body text-sm px-4 py-3 focus:outline-none focus:border-brand-gold-2 tracking-widest`} />
-                        {errors.cardNumber && <p className="text-red-400 text-xs mt-1">{errors.cardNumber}</p>}
+                      <div className="p-4 bg-brand-black-2 border border-brand-gold/20">
+                        <p className="font-body text-sm text-brand-cream/70">
+                          You&apos;ll be redirected to Flutterwave&apos;s secure hosted checkout to complete payment.
+                        </p>
+                        <p className="font-body text-xs text-brand-cream/40 mt-2">
+                          We do not collect or store card details on this site.
+                        </p>
                       </div>
-                      <div>
-                        <label className="font-body text-xs tracking-widest text-brand-gold-2 uppercase block mb-2">Cardholder Name</label>
-                        <input value={form.cardName} onChange={e => update('cardName', e.target.value)}
-                          className={`w-full bg-brand-black-2 border ${errors.cardName ? 'border-red-500' : 'border-brand-gold/20'} text-brand-cream font-body text-sm px-4 py-3 focus:outline-none focus:border-brand-gold-2`} />
-                        {errors.cardName && <p className="text-red-400 text-xs mt-1">{errors.cardName}</p>}
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="font-body text-xs tracking-widest text-brand-gold-2 uppercase block mb-2">Expiry (MM/YY)</label>
-                          <input value={form.cardExpiry} onChange={e => { let v = e.target.value.replace(/\D/g, ''); if (v.length > 2) v = v.slice(0, 2) + '/' + v.slice(2, 4); update('cardExpiry', v) }} maxLength={5} placeholder="MM/YY"
-                            className={`w-full bg-brand-black-2 border ${errors.cardExpiry ? 'border-red-500' : 'border-brand-gold/20'} text-brand-cream font-body text-sm px-4 py-3 focus:outline-none focus:border-brand-gold-2`} />
-                          {errors.cardExpiry && <p className="text-red-400 text-xs mt-1">{errors.cardExpiry}</p>}
-                        </div>
-                        <div>
-                          <label className="font-body text-xs tracking-widest text-brand-gold-2 uppercase block mb-2">CVV</label>
-                          <input type="password" value={form.cardCvv} onChange={e => update('cardCvv', e.target.value.replace(/\D/g, '').slice(0, 4))} maxLength={4} placeholder="•••"
-                            className={`w-full bg-brand-black-2 border ${errors.cardCvv ? 'border-red-500' : 'border-brand-gold/20'} text-brand-cream font-body text-sm px-4 py-3 focus:outline-none focus:border-brand-gold-2`} />
-                          {errors.cardCvv && <p className="text-red-400 text-xs mt-1">{errors.cardCvv}</p>}
-                        </div>
-                      </div>
-                      <p className="font-body text-xs text-brand-cream/30 flex items-center gap-1">🔒 Secured by Paystack SSL encryption</p>
                     </motion.div>
                   )}
 
                   {form.payMethod === 'transfer' && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 bg-brand-black-2 border border-brand-gold/20 space-y-2">
-                      <p className="font-heading text-sm font-semibold text-brand-cream mb-3">Bank Transfer Details</p>
-                      <p className="font-body text-sm text-brand-cream/70">Bank: <span className="text-brand-cream">Zenith Bank Nigeria / GCB Ghana</span></p>
-                      <p className="font-body text-sm text-brand-cream/70">Account Name: <span className="text-brand-cream">Taries Beauty Emporium</span></p>
-                      <p className="font-body text-sm text-brand-cream/70">Account No: <span className="text-brand-gold-3 font-bold">0123456789</span></p>
-                      <p className="font-body text-xs text-brand-cream/40 pt-2">Use your order number <strong className="text-brand-gold-2">{orderNum}</strong> as payment reference. Your order will be processed after payment confirmation.</p>
+                      <p className="font-heading text-sm font-semibold text-brand-cream mb-3">Manual Transfer Instructions</p>
+                      <p className="font-body text-sm text-brand-cream/70">
+                        Place your order first, then message support on WhatsApp with your order number for the current transfer account details.
+                      </p>
+                      <p className="font-body text-xs text-brand-cream/40 pt-2">
+                        Use your order number <strong className="text-brand-gold-2">{orderNum}</strong> as payment reference. Your order will be processed after payment confirmation.
+                      </p>
                     </motion.div>
                   )}
                 </motion.div>
@@ -363,10 +387,10 @@ export default function CheckoutPage() {
                     <p className="font-body text-sm text-brand-cream/60">📍 <span className="text-brand-cream">{form.firstName} {form.lastName}</span></p>
                     <p className="font-body text-sm text-brand-cream/60">{form.address}, {form.city}, {form.state}, {form.country}</p>
                     <p className="font-body text-sm text-brand-cream/60">📧 {form.email} · 📞 {form.phone}</p>
-                <p className="font-body text-sm text-brand-cream/60">💳 {form.payMethod === 'card' ? 'Card checkout (manual confirmation)' : form.payMethod === 'transfer' ? 'Bank Transfer' : 'Mobile Money (manual confirmation)'}</p>
+                <p className="font-body text-sm text-brand-cream/60">💳 {form.payMethod === 'transfer' ? 'Manual Bank Transfer' : 'Flutterwave hosted checkout'}</p>
                   </div>
                   <button onClick={handlePlaceOrder} disabled={placingOrder} className="btn-gold w-full py-4 text-base flex items-center justify-center gap-2 disabled:opacity-60">
-                    <Check size={18} /> {placingOrder ? 'Saving Order...' : `Place Order · ${formatPrice(grandTotal, currency)}`}
+                    <Check size={18} /> {placingOrder ? 'Processing...' : form.payMethod === 'transfer' ? `Place Order · ${formatPrice(grandTotal, currency)}` : `Continue to Secure Checkout · ${formatPrice(grandTotal, currency)}`}
                   </button>
                   <p className="font-body text-xs text-brand-cream/30 text-center mt-3">By placing this order you agree to our Terms & Conditions.</p>
                 </motion.div>

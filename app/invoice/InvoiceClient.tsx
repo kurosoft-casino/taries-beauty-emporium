@@ -9,7 +9,7 @@ import type { Order } from '@/lib/orders'
 import { formatPrice, EXCHANGE_RATES } from '@/lib/products'
 import { getCurrentUser } from '@/lib/auth'
 import { normalizeEmail } from '@/lib/validation'
-import { SITE_URL, withBasePath } from '@/lib/site'
+import { SITE_URL, withApiBase, withBasePath } from '@/lib/site'
 
 const STATUS_MAP = {
   pending:    { label: 'Pending',     color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/30' },
@@ -27,23 +27,59 @@ export default function InvoiceClient() {
   const orderId = params.get('orderId')
   const [order, setOrder] = useState<Order | null>(null)
   const [notFound, setNotFound] = useState(false)
+  const [lookupLoading, setLookupLoading] = useState(false)
   const [unlocked, setUnlocked] = useState(false)
   const [unlockEmail, setUnlockEmail] = useState('')
   const [unlockError, setUnlockError] = useState('')
   const invoiceRef = useRef<HTMLDivElement>(null)
 
+  async function fetchRemoteInvoice(email: string): Promise<Order | null> {
+    if (!orderId) return null
+    const query = new URLSearchParams({ email: normalizeEmail(email) })
+    const remotePath = withApiBase(`/orders/${encodeURIComponent(orderId)}?${query.toString()}`)
+    const endpoint = remotePath.startsWith('/orders/') ? `/api/orders/${encodeURIComponent(orderId)}?${query.toString()}` : remotePath
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      cache: 'no-store',
+    })
+    const payload = await response.json().catch(() => null)
+    if (!response.ok || !payload?.ok || !payload?.order) return null
+    return payload.order as Order
+  }
+
   useEffect(() => {
-    if (!orderId) { setNotFound(true); return }
-    const found = getOrder(orderId)
-    if (!found) {
-      setNotFound(true)
-      return
+    async function run() {
+      if (!orderId) {
+        setNotFound(true)
+        return
+      }
+      const local = getOrder(orderId)
+      if (local) {
+        setOrder(local)
+        const currentUser = getCurrentUser()
+        const allowed = currentUser?.email.toLowerCase() === local.customer.email.toLowerCase()
+        const sessionEmail = sessionStorage.getItem(`taries-invoice-access-${local.orderId}`)
+        setUnlocked(allowed || sessionEmail?.toLowerCase() === local.customer.email.toLowerCase())
+        return
+      }
+
+      const currentUser = getCurrentUser()
+      const sessionEmail = sessionStorage.getItem(`taries-invoice-access-${orderId}`) || ''
+      const emailCandidates = [currentUser?.email || '', sessionEmail].map(normalizeEmail).filter(Boolean)
+      for (const email of emailCandidates) {
+        const remote = await fetchRemoteInvoice(email)
+        if (remote) {
+          setOrder(remote)
+          setUnlocked(true)
+          return
+        }
+      }
+      setOrder(null)
+      setUnlocked(false)
+      setNotFound(false)
     }
-    setOrder(found)
-    const currentUser = getCurrentUser()
-    const allowed = currentUser?.email.toLowerCase() === found.customer.email.toLowerCase()
-    const sessionEmail = sessionStorage.getItem(`taries-invoice-access-${found.orderId}`)
-    setUnlocked(allowed || sessionEmail?.toLowerCase() === found.customer.email.toLowerCase())
+
+    void run()
   }, [orderId])
 
   function handlePrint() {
@@ -57,8 +93,7 @@ export default function InvoiceClient() {
           <div className="text-6xl mb-4">📋</div>
           <h1 className="font-heading text-2xl text-brand-cream mb-2">Invoice Not Found</h1>
           <p className="font-body text-sm text-brand-cream/60 mb-6">
-            We couldn't find order <strong className="text-brand-gold-2">{orderId}</strong>.<br />
-            Invoices are stored on this device. Please view the invoice on the same device used to place the order.
+            We couldn't find order <strong className="text-brand-gold-2">{orderId}</strong>.
           </p>
           <Link href="/shop" className="btn-gold">Back to Shop</Link>
         </div>
@@ -68,8 +103,51 @@ export default function InvoiceClient() {
 
   if (!order) {
     return (
-      <div className="min-h-screen bg-brand-black flex items-center justify-center">
-        <div className="w-12 h-12 rounded-full border-2 border-brand-gold/30 border-t-brand-gold-2 animate-spin" />
+      <div className="min-h-screen bg-brand-black flex items-center justify-center px-4">
+        <div className="w-full max-w-md bg-brand-black-2 border border-brand-gold/20 p-6">
+          <p className="section-label mb-2">Lookup Invoice</p>
+          <h1 className="font-display text-3xl gold-text mb-3">Find Your Invoice</h1>
+          <p className="font-body text-sm text-brand-cream/60 mb-5">
+            Enter the same email used at checkout for order <strong className="text-brand-gold-2">{orderId}</strong>.
+          </p>
+          <form
+            onSubmit={async event => {
+              event.preventDefault()
+              const email = normalizeEmail(unlockEmail)
+              if (!email) {
+                setUnlockError('Please enter a valid email address.')
+                return
+              }
+              setUnlockError('')
+              setLookupLoading(true)
+              try {
+                const remote = await fetchRemoteInvoice(email)
+                if (!remote) {
+                  setUnlockError('Order not found for this email.')
+                  return
+                }
+                setOrder(remote)
+                sessionStorage.setItem(`taries-invoice-access-${remote.orderId}`, email)
+                setUnlocked(true)
+              } finally {
+                setLookupLoading(false)
+              }
+            }}
+            className="space-y-4"
+          >
+            <input
+              type="email"
+              value={unlockEmail}
+              onChange={event => { setUnlockEmail(event.target.value); setUnlockError('') }}
+              placeholder="you@example.com"
+              className="w-full bg-brand-black-3 border border-brand-gold/20 px-4 py-3 text-brand-cream focus:outline-none focus:border-brand-gold/50"
+            />
+            {unlockError && <p className="text-red-400 text-xs">{unlockError}</p>}
+            <button type="submit" disabled={lookupLoading} className="btn-gold w-full disabled:opacity-60">
+              {lookupLoading ? 'Looking up…' : 'Find Invoice'}
+            </button>
+          </form>
+        </div>
       </div>
     )
   }
@@ -84,15 +162,27 @@ export default function InvoiceClient() {
             To view invoice <strong className="text-brand-gold-2">{order.orderId}</strong>, enter the same email used at checkout.
           </p>
           <form
-            onSubmit={event => {
+            onSubmit={async event => {
               event.preventDefault()
               const email = normalizeEmail(unlockEmail)
-              if (email !== order.customer.email.toLowerCase()) {
-                setUnlockError('That email does not match this order.')
+              if (!email) {
+                setUnlockError('Please enter a valid email address.')
                 return
               }
-              sessionStorage.setItem(`taries-invoice-access-${order.orderId}`, email)
-              setUnlocked(true)
+              setLookupLoading(true)
+              setUnlockError('')
+              try {
+                const remote = await fetchRemoteInvoice(email)
+                if (!remote || email !== remote.customer.email.toLowerCase()) {
+                  setUnlockError('That email does not match this order.')
+                  return
+                }
+                setOrder(remote)
+                sessionStorage.setItem(`taries-invoice-access-${remote.orderId}`, email)
+                setUnlocked(true)
+              } finally {
+                setLookupLoading(false)
+              }
             }}
             className="space-y-4"
           >
@@ -104,7 +194,9 @@ export default function InvoiceClient() {
               className="w-full bg-brand-black-3 border border-brand-gold/20 px-4 py-3 text-brand-cream focus:outline-none focus:border-brand-gold/50"
             />
             {unlockError && <p className="text-red-400 text-xs">{unlockError}</p>}
-            <button type="submit" className="btn-gold w-full">Unlock Invoice</button>
+            <button type="submit" disabled={lookupLoading} className="btn-gold w-full disabled:opacity-60">
+              {lookupLoading ? 'Checking…' : 'Unlock Invoice'}
+            </button>
           </form>
         </div>
       </div>

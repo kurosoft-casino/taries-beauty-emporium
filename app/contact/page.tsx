@@ -46,7 +46,7 @@ const faqs = [
   { q: 'How long does delivery take?', a: 'Standard delivery to Nigeria and Ghana takes 7–14 business days. Express shipping options (3–5 days) are available at checkout.' },
   { q: 'Can I track my order?', a: 'Yes! Once your order is dispatched, we will send a tracking number via WhatsApp or email within 24 hours.' },
   { q: 'Do you do custom wigs?', a: 'Absolutely! We specialise in custom wigs. Visit our Custom Wigs page to configure your order and submit your preferences.' },
-  { q: 'What payment methods do you accept?', a: 'We accept bank transfers, Paystack (card/USSD), and mobile money (Ghana). All prices are shown in your preferred currency.' },
+  { q: 'What payment methods do you accept?', a: 'We accept bank transfers and secure Flutterwave checkout (card, transfer, and supported mobile money options). All prices are shown in your preferred currency.' },
   { q: 'Are your products 100% human hair?', a: 'Yes. All our wigs and bundles are certified 100% human hair sourced directly from ethical suppliers.' },
 ]
 

@@ -21,7 +21,7 @@ const sections = [
   },
   {
     title: '4. Data Storage & Security',
-    body: `Order and cart data is currently stored in your browser's local storage on your device. We do not store payment card details. We take reasonable precautions to protect your information but cannot guarantee absolute security over internet transmissions.`,
+    body: `Order and account data is stored on our backend systems with access controls and session protections. We may keep limited local browser data for shopping continuity. Card details are processed on secure payment-provider pages and are not stored on this website. While we apply reasonable safeguards, no online transmission is completely risk-free.`,
   },
   {
     title: '5. Cookies',

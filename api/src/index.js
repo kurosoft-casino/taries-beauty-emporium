@@ -26,6 +26,23 @@ const lower = (s) => (s || '').toString().trim().toLowerCase();
 const ADMIN_EMAILS = new Set(['kurosoft01@gmail.com', 'tarimoboere18@gmail.com']);
 const isAdminEmail = (email) => ADMIN_EMAILS.has(lower(email));
 const getEffectiveRole = (email, role) => (isAdminEmail(email) ? 'admin' : (role || 'customer'));
+const FX_RATES = { NGN: 1620, GHS: 16.2, USD: 1, CNY: 7.25 };
+const FLW_SETTLE_CURRENCY = new Set(['NGN', 'GHS', 'USD']);
+
+function round2(n) {
+  return Math.round(Number(n || 0) * 100) / 100;
+}
+
+function toChargeCurrency(orderCurrency) {
+  if (FLW_SETTLE_CURRENCY.has(orderCurrency)) return orderCurrency;
+  return 'USD';
+}
+
+function toChargeAmount(grandTotalUsd, orderCurrency) {
+  const currency = toChargeCurrency(orderCurrency);
+  const fx = FX_RATES[currency] || 1;
+  return { currency, amount: round2(Number(grandTotalUsd || 0) * fx) };
+}
 
 async function sha256Hex(input) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
@@ -626,12 +643,32 @@ route('POST', '/orders', async (req, env) => {
   if (!b.orderId || !b.items) return err(400, 'orderId + items required');
   const s = await getSession(req, env);
   const now = nowIso();
+  const subtotalUsd = Number(b.subtotalUsd ?? b.subtotalUSD ?? 0);
+  const shippingUsd = Number(b.shippingUsd ?? b.shippingUSD ?? 0);
+  const grandTotalUsd = Number(b.grandTotalUsd ?? b.grandTotalUSD ?? 0);
+  const discountUsd = Number(b.discountUsd ?? b.discountUSD ?? 0);
   await env.DB.prepare(
     `INSERT INTO orders (order_id, user_id, date, status, payment_status, payment_method, currency,
       subtotal_usd, shipping_usd, grand_total_usd, discount_usd, coupon_code,
       customer_json, shipping_json, notes, gift_message, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(order_id) DO NOTHING`
+     ON CONFLICT(order_id) DO UPDATE SET
+       user_id = excluded.user_id,
+       date = excluded.date,
+       status = excluded.status,
+       payment_status = excluded.payment_status,
+       payment_method = excluded.payment_method,
+       currency = excluded.currency,
+       subtotal_usd = excluded.subtotal_usd,
+       shipping_usd = excluded.shipping_usd,
+       grand_total_usd = excluded.grand_total_usd,
+       discount_usd = excluded.discount_usd,
+       coupon_code = excluded.coupon_code,
+       customer_json = excluded.customer_json,
+       shipping_json = excluded.shipping_json,
+       notes = excluded.notes,
+       gift_message = excluded.gift_message,
+       updated_at = excluded.updated_at`
   )
     .bind(
       b.orderId,
@@ -641,10 +678,10 @@ route('POST', '/orders', async (req, env) => {
       b.paymentStatus || 'pending',
       b.paymentMethod || 'unknown',
       b.currency || 'USD',
-      Number(b.subtotalUsd || 0),
-      Number(b.shippingUsd || 0),
-      Number(b.grandTotalUsd || 0),
-      Number(b.discountUsd || 0),
+      Number.isFinite(subtotalUsd) ? subtotalUsd : 0,
+      Number.isFinite(shippingUsd) ? shippingUsd : 0,
+      Number.isFinite(grandTotalUsd) ? grandTotalUsd : 0,
+      Number.isFinite(discountUsd) ? discountUsd : 0,
       b.couponCode || null,
       JSON.stringify(b.customer || {}),
       JSON.stringify(b.shipping || {}),
@@ -654,7 +691,12 @@ route('POST', '/orders', async (req, env) => {
       now
     )
     .run();
+  await env.DB.prepare('DELETE FROM order_items WHERE order_id = ?').bind(b.orderId).run();
   for (const it of b.items || []) {
+    const productId = it.productId || it.id || it.product?.id || 'unknown';
+    const productName = it.productName || it.name || it.product?.name || 'Item';
+    const unitPriceUsd = Number(it.unitPriceUsd ?? it.priceUsd ?? it.product?.price ?? 0);
+    const quantity = Math.max(1, Number(it.quantity || 1));
     await env.DB.prepare(
       `INSERT INTO order_items (id, order_id, product_id, product_name, unit_price_usd, quantity, selected_variants_json, product_snapshot_json, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -662,12 +704,12 @@ route('POST', '/orders', async (req, env) => {
       .bind(
         uid('itm_'),
         b.orderId,
-        it.id || it.productId || 'unknown',
-        it.name || 'Item',
-        Number(it.unitPriceUsd || it.priceUsd || 0),
-        Number(it.quantity || 1),
+        productId,
+        productName,
+        Number.isFinite(unitPriceUsd) ? unitPriceUsd : 0,
+        quantity,
         JSON.stringify(it.selectedVariants || {}),
-        JSON.stringify(it),
+        JSON.stringify(it.productSnapshot || it.product || it),
         now
       )
       .run();
@@ -715,6 +757,180 @@ route('PATCH', '/admin/orders/:id', async (req, env, params) => {
   vals.push(nowIso(), params.id);
   await env.DB.prepare(`UPDATE orders SET ${fields.join(',')} WHERE order_id = ?`).bind(...vals).run();
   return ok();
+});
+
+async function verifyFlutterwaveAndMarkOrderPaid(env, txRef, transactionId = null) {
+  const secretKey = env.FLW_SECRET_KEY;
+  if (!secretKey) return { error: 'flutterwave not configured' };
+  if (!txRef) return { error: 'tx_ref required' };
+
+  const order = await env.DB.prepare(
+    'SELECT order_id, grand_total_usd, currency, payment_status FROM orders WHERE order_id = ? LIMIT 1'
+  ).bind(txRef).first();
+  if (!order) return { error: 'order not found' };
+
+  let verifyUrl = null;
+  if (transactionId) {
+    verifyUrl = `https://api.flutterwave.com/v3/transactions/${encodeURIComponent(String(transactionId))}/verify`;
+  } else {
+    verifyUrl = `https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=${encodeURIComponent(txRef)}`;
+  }
+  const response = await fetch(verifyUrl, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${secretKey}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  const payload = await response.json().catch(() => null);
+  const data = payload?.data;
+  if (!response.ok || !data) {
+    return { error: payload?.message || 'flutterwave verification failed' };
+  }
+
+  const expected = toChargeAmount(order.grand_total_usd, order.currency || 'USD');
+  const chargedAmount = Number(data.amount ?? data.charged_amount ?? 0);
+  const chargedCurrency = String(data.currency || '').toUpperCase();
+  const status = String(data.status || '').toLowerCase();
+  const sameRef = String(data.tx_ref || '').trim() === txRef;
+  const amountOk = Math.abs(chargedAmount - expected.amount) <= 0.5;
+  const currencyOk = chargedCurrency === expected.currency;
+  const paid = status === 'successful' && sameRef && currencyOk && amountOk;
+
+  if (paid) {
+    await env.DB.prepare(
+      `UPDATE orders
+       SET payment_status = 'paid',
+           status = CASE WHEN status = 'pending' THEN 'processing' ELSE status END,
+           updated_at = ?
+       WHERE order_id = ?`
+    ).bind(nowIso(), txRef).run();
+    try { await finalizeOrderAfterPayment(env, txRef); } catch {}
+  }
+
+  return {
+    ok: paid,
+    txRef,
+    expected,
+    chargedAmount,
+    chargedCurrency,
+    verificationStatus: status || 'unknown',
+    paymentStatus: paid ? 'paid' : order.payment_status,
+  };
+}
+
+async function finalizeOrderAfterPayment(env, orderId) {
+  const o = await env.DB.prepare('SELECT * FROM orders WHERE order_id = ?').bind(orderId).first();
+  if (!o) return false;
+  const items = await env.DB.prepare('SELECT * FROM order_items WHERE order_id = ?').bind(orderId).all();
+  for (const it of items.results || []) {
+    try {
+      await env.DB.prepare('UPDATE vendor_products SET stock_count = MAX(COALESCE(stock_count, 0) - ?, 0) WHERE id = ?')
+        .bind(Number(it.quantity || 1), it.product_id).run();
+      await env.DB.prepare('INSERT INTO stock_movements (id, product_id, delta, reason, ref_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(uid('stk_'), it.product_id, -Number(it.quantity || 1), 'order', orderId, nowIso()).run();
+    } catch {}
+  }
+  let cust = {};
+  try { cust = JSON.parse(o.customer_json || '{}'); } catch {}
+  if (cust.email) {
+    await sendEmail(cust.email, `Order ${orderId} confirmed`,
+      brandedEmail('Thank you for your order ✨',
+        `<p>Your order <strong>${orderId}</strong> has been received and payment was confirmed.</p>
+         <p>Total: <strong>${o.currency} ${Number(o.grand_total_usd || 0).toFixed(2)}</strong></p>
+         <p>You will receive tracking information when your parcel ships.</p>`));
+  }
+  return true;
+}
+
+route('POST', '/payments/flutterwave/initialize', async (req, env) => {
+  const secretKey = env.FLW_SECRET_KEY;
+  if (!secretKey) return err(503, 'flutterwave not configured');
+
+  const b = await req.json().catch(() => ({}));
+  const txRef = String(b.orderId || '').trim();
+  const customer = b.customer || {};
+  const email = lower(customer.email);
+  const name = String(customer.name || `${customer.firstName || ''} ${customer.lastName || ''}` || 'Customer').trim();
+  const phone = String(customer.phone || customer.phone_number || '').trim();
+  if (!txRef || !email.includes('@')) return err(400, 'orderId and customer email required');
+
+  const order = await env.DB.prepare(
+    'SELECT order_id, grand_total_usd, currency FROM orders WHERE order_id = ? LIMIT 1'
+  ).bind(txRef).first();
+  if (!order) return err(404, 'order not found');
+
+  const { currency, amount } = toChargeAmount(order.grand_total_usd, order.currency || 'USD');
+  const baseSiteUrl = (env.PUBLIC_SITE_URL || 'https://www.tariesbeauty.com').replace(/\/+$/, '');
+  const redirectUrl = `${baseSiteUrl}/checkout/complete`;
+  const paymentMethod = String(b.paymentMethod || 'card');
+  const paymentOptions = paymentMethod === 'mobile' ? 'card, mobilemoneyghana, banktransfer' : 'card, banktransfer, ussd';
+
+  const initResponse = await fetch('https://api.flutterwave.com/v3/payments', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${secretKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      tx_ref: txRef,
+      amount,
+      currency,
+      redirect_url: redirectUrl,
+      payment_options: paymentOptions,
+      customer: {
+        email,
+        name: name || 'Customer',
+        phonenumber: phone || undefined,
+      },
+      customizations: {
+        title: 'Taries Beauty Emporium',
+        description: `Order ${txRef}`,
+      },
+      meta: {
+        order_id: txRef,
+      },
+    }),
+  });
+  const initPayload = await initResponse.json().catch(() => null);
+  const link = initPayload?.data?.link;
+  if (!initResponse.ok || !link) {
+    return err(502, initPayload?.message || 'flutterwave initialization failed');
+  }
+
+  return ok({
+    txRef,
+    link,
+    chargeAmount: amount,
+    chargeCurrency: currency,
+  });
+});
+
+route('GET', '/payments/flutterwave/verify', async (req, env) => {
+  const url = new URL(req.url);
+  const txRef = String(url.searchParams.get('tx_ref') || '').trim();
+  const transactionId = url.searchParams.get('transaction_id');
+  const result = await verifyFlutterwaveAndMarkOrderPaid(env, txRef, transactionId);
+  if (result.error) return err(400, result.error);
+  return ok(result);
+});
+
+route('POST', '/payments/flutterwave/webhook', async (req, env) => {
+  const secretHash = String(env.FLW_WEBHOOK_HASH || '').trim();
+  if (!secretHash) return err(503, 'webhook hash not configured');
+  const signature = req.headers.get('verif-hash') || req.headers.get('flutterwave-signature') || '';
+  if (secretHash && signature !== secretHash) return err(401, 'invalid webhook signature');
+
+  const body = await req.json().catch(() => ({}));
+  const txRef = String(body?.data?.tx_ref || body?.tx_ref || '').trim();
+  const txStatus = String(body?.data?.status || body?.status || '').toLowerCase();
+  if (!txRef) return ok({ ignored: true });
+  if (txStatus !== 'successful') return ok({ ignored: true, status: txStatus || 'unknown' });
+
+  const txId = body?.data?.id || body?.id || null;
+  const result = await verifyFlutterwaveAndMarkOrderPaid(env, txRef, txId);
+  if (result.error) return err(400, result.error);
+  return ok({ received: true, ...result });
 });
 
 // ----- newsletter / stock alerts -----
@@ -1504,27 +1720,8 @@ route('GET', '/health/deep', async (req, env) => {
 // success.)
 // ============================================================
 route('POST', '/orders/:id/confirm', async (req, env, params) => {
-  const o = await env.DB.prepare('SELECT * FROM orders WHERE order_id = ?').bind(params.id).first();
-  if (!o) return err(404, 'not found');
-  // decrement stock
-  const items = await env.DB.prepare('SELECT * FROM order_items WHERE order_id = ?').bind(params.id).all();
-  for (const it of items.results) {
-    try {
-      await env.DB.prepare('UPDATE vendor_products SET stock_count = MAX(COALESCE(stock_count, 0) - ?, 0) WHERE id = ?')
-        .bind(Number(it.quantity || 1), it.product_id).run();
-      await env.DB.prepare('INSERT INTO stock_movements (id, product_id, delta, reason, ref_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-        .bind(uid('stk_'), it.product_id, -Number(it.quantity || 1), 'order', params.id, nowIso()).run();
-    } catch {}
-  }
-  let cust = {};
-  try { cust = JSON.parse(o.customer_json || '{}'); } catch {}
-  if (cust.email) {
-    await sendEmail(cust.email, `Order ${params.id} confirmed`,
-      brandedEmail('Thank you for your order ✨',
-        `<p>Your order <strong>${params.id}</strong> has been received and is being prepared.</p>
-         <p>Total: <strong>${o.currency} ${Number(o.grand_total_usd).toFixed(2)}</strong></p>
-         <p>You will receive tracking information when your parcel ships.</p>`));
-  }
+  const okConfirm = await finalizeOrderAfterPayment(env, params.id);
+  if (!okConfirm) return err(404, 'not found');
   return ok();
 });
 
