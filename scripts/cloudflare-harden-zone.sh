@@ -17,7 +17,7 @@ if [[ -z "${TOKEN}" ]]; then
   echo "error: set CLOUDFLARE_API_TOKEN (or CF_API_TOKEN) with Zone:Read + Zone Settings:Edit + WAF:Edit" >&2
   exit 1
 fi
-SSL_MODE="${CF_SSL_MODE:-auto}"
+SSL_MODE="${CF_SSL_MODE:-full}"
 
 CF_API="https://api.cloudflare.com/client/v4"
 
@@ -56,9 +56,8 @@ fi
 # for custom domains; use Full unless caller explicitly sets CF_SSL_MODE.
 apex_records_resp="$(cf_api GET "/zones/${zone_id}/dns_records?name=${DOMAIN}&per_page=100")"
 www_records_resp="$(cf_api GET "/zones/${zone_id}/dns_records?name=www.${DOMAIN}&per_page=100")"
-records_payload="$(printf '%s\n%s\n' "${apex_records_resp}" "${www_records_resp}")"
 origin_is_github="false"
-if echo "${records_payload}" | jq -e '.result[]? | (.content // "") | test("(^|\\.)github\\.io$|^185\\.199\\.(108|109|110|111)\\.153$")' >/dev/null; then
+if printf '%s\n%s\n' "${apex_records_resp}" "${www_records_resp}" | jq -s -e '.[] | .result[]? | (.content // "") | test("(^|\\.)github\\.io\\.?$|^185\\.199\\.(108|109|110|111)\\.153$")' >/dev/null; then
   origin_is_github="true"
 fi
 
