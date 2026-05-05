@@ -10,7 +10,7 @@ import {
   setDefaultAddress, changePassword, deleteAccount, getAdminLevel, isAdminUser,
   type User, type SavedAddress,
 } from '@/lib/auth'
-import { getAllOrders, formatOrderDate } from '@/lib/orders'
+import { getAllOrders, formatOrderDate, type Order } from '@/lib/orders'
 import { getWishlist, toggleWishlist } from '@/lib/wishlist'
 import { products, formatPrice } from '@/lib/products'
 import { useCartStore } from '@/lib/store'
@@ -18,6 +18,7 @@ import { getRecentlyViewed } from '@/lib/recentlyViewed'
 import { getVendorProducts } from '@/lib/productStore'
 import { findVendorProfileByEmail, type VendorProfile } from '@/lib/vendorProfile'
 import { getViews } from '@/lib/views'
+import { withApiBase } from '@/lib/site'
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -29,6 +30,68 @@ const TABS = [
 ] as const
 
 type Tab = typeof TABS[number]['id']
+
+interface RemoteOrderRow {
+  order_id: string
+  date: string
+  status?: string
+  payment_status?: string
+  payment_method?: string
+  currency?: string
+  subtotal_usd?: number
+  shipping_usd?: number
+  grand_total_usd?: number
+  discount_usd?: number | null
+  coupon_code?: string | null
+  customer_json?: string | null
+  shipping_json?: string | null
+  notes?: string | null
+  gift_message?: string | null
+}
+
+function parseObject(value: string | null | undefined): Record<string, unknown> {
+  if (!value) return {}
+  try {
+    const parsed = JSON.parse(value)
+    return typeof parsed === 'object' && parsed !== null ? parsed as Record<string, unknown> : {}
+  } catch {
+    return {}
+  }
+}
+
+function mapRemoteOrder(row: RemoteOrderRow): Order {
+  const customer = parseObject(row.customer_json)
+  const shipping = parseObject(row.shipping_json)
+  return {
+    orderId: row.order_id,
+    date: row.date ?? new Date().toISOString(),
+    status: row.status === 'processing' || row.status === 'shipped' || row.status === 'delivered' ? row.status : 'pending',
+    paymentStatus: row.payment_status === 'paid' ? 'paid' : 'pending',
+    paymentMethod: typeof row.payment_method === 'string' ? row.payment_method : 'unknown',
+    currency: row.currency === 'NGN' || row.currency === 'GHS' || row.currency === 'USD' || row.currency === 'CNY' ? row.currency : 'USD',
+    items: [],
+    subtotalUSD: Number(row.subtotal_usd ?? 0),
+    shippingUSD: Number(row.shipping_usd ?? 0),
+    grandTotalUSD: Number(row.grand_total_usd ?? 0),
+    discountUSD: Number(row.discount_usd ?? 0) || undefined,
+    couponCode: typeof row.coupon_code === 'string' ? row.coupon_code : undefined,
+    customer: {
+      firstName: typeof customer.firstName === 'string' ? customer.firstName : '',
+      lastName: typeof customer.lastName === 'string' ? customer.lastName : '',
+      email: typeof customer.email === 'string' ? customer.email : '',
+      phone: typeof customer.phone === 'string' ? customer.phone : '',
+    },
+    shipping: {
+      address: typeof shipping.address === 'string' ? shipping.address : '',
+      city: typeof shipping.city === 'string' ? shipping.city : '',
+      state: typeof shipping.state === 'string' ? shipping.state : '',
+      country: typeof shipping.country === 'string' ? shipping.country : '',
+      postalCode: typeof shipping.postalCode === 'string' ? shipping.postalCode : '',
+    },
+    notes: typeof row.notes === 'string' ? row.notes : undefined,
+    giftMessage: typeof row.gift_message === 'string' ? row.gift_message : undefined,
+  }
+}
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
@@ -50,6 +113,7 @@ export default function AccountPage() {
   const [linkedVendor, setLinkedVendor] = useState<VendorProfile | null>(null)
   const [authChecked, setAuthChecked] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>('overview')
+  const [userOrders, setUserOrders] = useState<Order[]>([])
 
   // Wishlist
   const [wishlistSlugs, setWishlistSlugs] = useState<string[]>([])
@@ -102,9 +166,25 @@ export default function AccountPage() {
     if (activeTab === 'wishlist') setWishlistSlugs(getWishlist())
   }, [activeTab])
 
-  const userOrders = user
-    ? getAllOrders().filter(o => o.customer.email.toLowerCase() === user.email.toLowerCase())
-    : []
+  useEffect(() => {
+    if (!user) return
+    const loadOrders = async () => {
+      try {
+        const response = await fetch(withApiBase('/orders/me'), {
+          method: 'GET',
+          credentials: 'include',
+          cache: 'no-store',
+        })
+        if (!response.ok) throw new Error('remote unavailable')
+        const payload = await response.json().catch(() => null) as { orders?: RemoteOrderRow[] } | null
+        if (!payload?.orders) throw new Error('invalid payload')
+        setUserOrders(payload.orders.map(mapRemoteOrder))
+      } catch {
+        setUserOrders(getAllOrders().filter(o => o.customer.email.toLowerCase() === user.email.toLowerCase()))
+      }
+    }
+    void loadOrders()
+  }, [user])
 
   const recentlyViewedCount = typeof window !== 'undefined'
     ? getRecentlyViewed().length

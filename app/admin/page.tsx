@@ -49,6 +49,36 @@ interface VendorProduct {
   inStock?: boolean; stockCount?: number; badge?: 'new' | 'sale' | 'hot' | 'bestseller' | ''
   whatsapp?: string; features?: string[]; variants?: { label: string; options: string[] }[]; active?: boolean
 }
+interface RemoteOrderRow {
+  order_id: string
+  date: string
+  status?: string
+  payment_status?: string
+  payment_method?: string
+  currency?: string
+  subtotal_usd?: number
+  shipping_usd?: number
+  grand_total_usd?: number
+  discount_usd?: number | null
+  coupon_code?: string | null
+  customer_json?: string | null
+  shipping_json?: string | null
+  notes?: string | null
+  gift_message?: string | null
+}
+interface RemoteVendorRow {
+  id: string
+  brand_name?: string | null
+  business_name?: string | null
+  display_name?: string | null
+  bio?: string | null
+  status?: string | null
+  created_at?: string | null
+  email?: string | null
+  first_name?: string | null
+  last_name?: string | null
+  phone?: string | null
+}
 
 const adminTranslations = {
   EN: {
@@ -204,6 +234,142 @@ async function fetchRemoteAdminUsers(): Promise<AdminUser[] | null> {
     return users
   } catch {
     return null
+  }
+}
+function safeParseObject(value: string | null | undefined): Record<string, unknown> {
+  if (!value) return {}
+  try {
+    const parsed = JSON.parse(value)
+    return typeof parsed === 'object' && parsed !== null ? parsed as Record<string, unknown> : {}
+  } catch {
+    return {}
+  }
+}
+function toOrderStatus(value: unknown): Order['status'] {
+  if (value === 'processing' || value === 'shipped' || value === 'delivered') return value
+  return 'pending'
+}
+function toPaymentStatus(value: unknown): Order['paymentStatus'] {
+  return value === 'paid' ? 'paid' : 'pending'
+}
+function toCurrency(value: unknown): Order['currency'] {
+  if (value === 'NGN' || value === 'GHS' || value === 'USD' || value === 'CNY') return value
+  return 'USD'
+}
+function mapRemoteOrderRow(row: RemoteOrderRow): Order {
+  const customer = safeParseObject(row.customer_json)
+  const shipping = safeParseObject(row.shipping_json)
+  return {
+    orderId: row.order_id,
+    date: row.date ?? new Date().toISOString(),
+    status: toOrderStatus(row.status),
+    paymentStatus: toPaymentStatus(row.payment_status),
+    paymentMethod: typeof row.payment_method === 'string' ? row.payment_method : 'unknown',
+    currency: toCurrency(row.currency),
+    items: [],
+    subtotalUSD: Number(row.subtotal_usd ?? 0),
+    shippingUSD: Number(row.shipping_usd ?? 0),
+    grandTotalUSD: Number(row.grand_total_usd ?? 0),
+    discountUSD: Number(row.discount_usd ?? 0) || undefined,
+    couponCode: typeof row.coupon_code === 'string' ? row.coupon_code : undefined,
+    customer: {
+      firstName: typeof customer.firstName === 'string' ? customer.firstName : '',
+      lastName: typeof customer.lastName === 'string' ? customer.lastName : '',
+      email: typeof customer.email === 'string' ? customer.email : '',
+      phone: typeof customer.phone === 'string' ? customer.phone : '',
+    },
+    shipping: {
+      address: typeof shipping.address === 'string' ? shipping.address : '',
+      city: typeof shipping.city === 'string' ? shipping.city : '',
+      state: typeof shipping.state === 'string' ? shipping.state : '',
+      country: typeof shipping.country === 'string' ? shipping.country : '',
+      postalCode: typeof shipping.postalCode === 'string' ? shipping.postalCode : '',
+    },
+    notes: typeof row.notes === 'string' ? row.notes : undefined,
+    giftMessage: typeof row.gift_message === 'string' ? row.gift_message : undefined,
+  }
+}
+async function fetchRemoteAdminOrders(): Promise<Order[] | null> {
+  if (typeof window === 'undefined') return null
+  try {
+    const response = await fetch(withApiBase('/admin/orders'), {
+      method: 'GET',
+      credentials: 'include',
+      cache: 'no-store',
+    })
+    if (!response.ok) return null
+    const payload = await response.json().catch(() => null) as { orders?: RemoteOrderRow[] } | null
+    if (!payload?.orders) return null
+    return payload.orders.map(mapRemoteOrderRow)
+  } catch {
+    return null
+  }
+}
+async function updateRemoteOrder(orderId: string, status: Order['status']): Promise<boolean> {
+  if (typeof window === 'undefined') return false
+  try {
+    const response = await fetch(withApiBase(`/admin/orders/${encodeURIComponent(orderId)}`), {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    })
+    return response.ok
+  } catch {
+    return false
+  }
+}
+function mapRemoteVendorStatus(status: string | null | undefined): Vendor['status'] {
+  if (status === 'approved' || status === 'featured') return 'approved'
+  if (status === 'pending') return 'pending'
+  return 'rejected'
+}
+function mapRemoteVendor(vendor: RemoteVendorRow): Vendor {
+  const ownerName = `${vendor.first_name ?? ''} ${vendor.last_name ?? ''}`.trim()
+  return {
+    id: vendor.id,
+    businessName: vendor.business_name || vendor.brand_name || vendor.display_name || ownerName || 'Vendor',
+    ownerName: ownerName || vendor.display_name || 'Vendor Owner',
+    email: vendor.email || '',
+    phone: vendor.phone || '',
+    category: vendor.brand_name || 'General',
+    description: vendor.bio || '',
+    status: mapRemoteVendorStatus(vendor.status),
+    appliedAt: vendor.created_at || new Date().toISOString(),
+    feeStatus: 'paid',
+  }
+}
+async function fetchRemoteVendors(): Promise<Vendor[] | null> {
+  if (typeof window === 'undefined') return null
+  try {
+    const response = await fetch(withApiBase('/admin/vendors'), {
+      method: 'GET',
+      credentials: 'include',
+      cache: 'no-store',
+    })
+    if (!response.ok) return null
+    const payload = await response.json().catch(() => null) as { vendors?: RemoteVendorRow[] } | null
+    if (!payload?.vendors) return null
+    const vendors = payload.vendors.map(mapRemoteVendor)
+    saveVendors(vendors)
+    return vendors
+  } catch {
+    return null
+  }
+}
+async function updateRemoteVendorStatus(vendorId: string, status: Vendor['status']): Promise<boolean> {
+  if (typeof window === 'undefined') return false
+  const remoteStatus = status === 'rejected' ? 'removed' : status
+  try {
+    const response = await fetch(withApiBase(`/admin/vendors/${encodeURIComponent(vendorId)}`), {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: remoteStatus }),
+    })
+    return response.ok
+  } catch {
+    return false
   }
 }
 function readVendors(): Vendor[] {
@@ -495,10 +661,12 @@ function DashboardTab({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
   useEffect(() => {
     const refresh = async () => {
       localStorage.setItem('taries-presence-admin', Date.now().toString())
-      setOrders(getAllOrders())
+      const remoteOrders = await fetchRemoteAdminOrders()
+      setOrders(remoteOrders ?? getAllOrders())
       const remoteUsers = await fetchRemoteAdminUsers()
       setUsers(remoteUsers ?? readUsers())
-      setVendors(readVendors())
+      const remoteVendors = await fetchRemoteVendors()
+      setVendors(remoteVendors ?? readVendors())
       setTopViews(getAllViewsSorted().slice(0, 5))
     }
 
@@ -641,7 +809,13 @@ function OrdersTab() {
   const [bulkStatus, setBulkStatus] = useState<Order['status']>('processing')
   const [page, setPage] = useState(1)
 
-  useEffect(() => { setOrders(getAllOrders()) }, [])
+  useEffect(() => {
+    const refresh = async () => {
+      const remoteOrders = await fetchRemoteAdminOrders()
+      setOrders(remoteOrders ?? getAllOrders())
+    }
+    void refresh()
+  }, [])
 
   const filtered = useMemo(() => {
     let result = [...orders]
@@ -672,8 +846,11 @@ function OrdersTab() {
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const pageOrders = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
-  function handleStatusChange(orderId: string, status: Order['status']) {
-    updateOrderStatus(orderId, status)
+  async function handleStatusChange(orderId: string, status: Order['status']) {
+    const remoteOk = await updateRemoteOrder(orderId, status)
+    if (!remoteOk) {
+      updateOrderStatus(orderId, status)
+    }
     setOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, status } : o))
     toast.success(`Order updated to ${status}`)
   }
@@ -684,8 +861,9 @@ function OrdersTab() {
     setSelected(prev => { const s = new Set(prev); s.delete(orderId); return s })
     toast.success('Order deleted')
   }
-  function handleBulkApply() {
+  async function handleBulkApply() {
     const ids = Array.from(selected)
+    await Promise.all(ids.map(id => updateRemoteOrder(id, bulkStatus)))
     const updated = orders.map(o => ids.includes(o.orderId) ? { ...o, status: bulkStatus } : o)
     setOrders(updated)
     localStorage.setItem('taries-orders', JSON.stringify(updated))
@@ -876,7 +1054,8 @@ function UsersTab() {
     const refresh = async () => {
       const remoteUsers = await fetchRemoteAdminUsers()
       setUsers(remoteUsers ?? readUsers())
-      setAllOrders(getAllOrders())
+      const remoteOrders = await fetchRemoteAdminOrders()
+      setAllOrders(remoteOrders ?? getAllOrders())
     }
 
     void refresh()
@@ -1506,7 +1685,13 @@ function VendorsTab() {
   const [filter, setFilter] = useState<'all' | Vendor['status']>('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
-  useEffect(() => { setVendors(readVendors()) }, [])
+  useEffect(() => {
+    const refresh = async () => {
+      const remoteVendors = await fetchRemoteVendors()
+      setVendors(remoteVendors ?? readVendors())
+    }
+    void refresh()
+  }, [])
 
   const filtered = useMemo(() => {
     let result = [...vendors]
@@ -1523,7 +1708,8 @@ function VendorsTab() {
     pending: vendors.filter(v=>v.status==='pending').length, rejected: vendors.filter(v=>v.status==='rejected').length,
   }), [vendors])
 
-  function updateStatus(id: string, status: Vendor['status']) {
+  async function updateStatus(id: string, status: Vendor['status']) {
+    await updateRemoteVendorStatus(id, status)
     const updated = vendors.map(v => v.id === id ? { ...v, status } : v)
     setVendors(updated); saveVendors(updated)
     toast.success(`Vendor ${status}`)
@@ -1604,7 +1790,14 @@ function AnalyticsTab() {
   const [orders, setOrders] = useState<Order[]>([])
   const [topViews, setTopViews] = useState<{ slug: string; views: number }[]>([])
 
-  useEffect(() => { setOrders(getAllOrders()); setTopViews(getAllViewsSorted()) }, [])
+  useEffect(() => {
+    const refresh = async () => {
+      const remoteOrders = await fetchRemoteAdminOrders()
+      setOrders(remoteOrders ?? getAllOrders())
+      setTopViews(getAllViewsSorted())
+    }
+    void refresh()
+  }, [])
 
   const kpis = useMemo(() => {
     const revenue = orders.reduce((s,o) => s+o.grandTotalUSD, 0)
@@ -1982,8 +2175,13 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!authenticated || !isAdminUser(adminUser)) return
-    setOrderBadge(getAllOrders().filter(o => o.status === 'pending').length)
-    setVendorBadge(readVendors().filter(v => v.status === 'pending').length)
+    const refreshBadges = async () => {
+      const remoteOrders = await fetchRemoteAdminOrders()
+      const remoteVendors = await fetchRemoteVendors()
+      setOrderBadge((remoteOrders ?? getAllOrders()).filter(o => o.status === 'pending').length)
+      setVendorBadge((remoteVendors ?? readVendors()).filter(v => v.status === 'pending').length)
+    }
+    void refreshBadges()
   }, [adminUser, authenticated])
 
   if (!accessChecked) return null
