@@ -263,32 +263,7 @@ export async function registerUser(data: RegisterUserData): Promise<User> {
     writeSession(mapped)
     return mapped
   }
-
-  const users = getUsers()
-  const existing = users.find(user => user.email.toLowerCase() === email)
-  if (existing) throw new Error('An account with this email already exists.')
-
-  const salt = randomSalt()
-  const newUser: User = {
-    id: `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    firstName,
-    lastName,
-    email,
-    role: isAdminEmail(email) ? 'admin' : undefined,
-    adminLevel: isAdminEmail(email) ? 'super-admin' : undefined,
-    country,
-    phone,
-    passwordHash: await createPasswordHash(email, password, salt),
-    passwordSalt: salt,
-    passwordVersion: 2,
-    createdAt: new Date().toISOString(),
-    avatar: data.avatar,
-    addresses: [],
-  }
-
-  saveUsers([...users, newUser])
-  writeSession(newUser)
-  return newUser
+  throw new Error('Registration service is temporarily unavailable. Please try again in a moment.')
 }
 
 export async function loginUser(emailInput: string, password: string): Promise<User> {
@@ -306,17 +281,7 @@ export async function loginUser(emailInput: string, password: string): Promise<U
     writeSession(mapped)
     return mapped
   }
-
-  const users = getUsers()
-  const found = users.find(user => user.email.toLowerCase() === email)
-  if (!found) throw new Error('No account found with that email address.')
-
-  const verified = await verifyPassword(found, password)
-  if (!verified) throw new Error('Incorrect password. Please try again.')
-
-  const user = found.passwordVersion === 2 ? found : await upgradeLegacyPassword(found, password)
-  writeSession(user)
-  return user
+  throw new Error('Login service is temporarily unavailable. Please try again in a moment.')
 }
 
 export function logoutUser(): void {

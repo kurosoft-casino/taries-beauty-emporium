@@ -15,10 +15,8 @@ import { getWishlist, toggleWishlist } from '@/lib/wishlist'
 import { products, formatPrice } from '@/lib/products'
 import { useCartStore } from '@/lib/store'
 import { getRecentlyViewed } from '@/lib/recentlyViewed'
-import { getVendorProducts } from '@/lib/productStore'
-import { findVendorProfileByEmail, type VendorProfile } from '@/lib/vendorProfile'
-import { getViews } from '@/lib/views'
 import { withApiBase } from '@/lib/site'
+import { apiRequest } from '@/lib/remoteApi'
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -47,6 +45,29 @@ interface RemoteOrderRow {
   shipping_json?: string | null
   notes?: string | null
   gift_message?: string | null
+}
+
+interface VendorProfile {
+  id: string
+  businessName: string
+  category: string
+  description: string
+  status: 'pending' | 'approved' | 'rejected'
+  phone: string
+  whatsapp?: string
+}
+
+interface VendorProduct {
+  id: string
+  name: string
+  category: string
+  price: number
+  active: boolean
+}
+
+interface VendorConversation {
+  id: string
+  unread_vendor?: number
 }
 
 function parseObject(value: string | null | undefined): Record<string, unknown> {
@@ -111,6 +132,8 @@ export default function AccountPage() {
   const { currency, addItem } = useCartStore()
   const [user, setUser] = useState<User | null>(null)
   const [linkedVendor, setLinkedVendor] = useState<VendorProfile | null>(null)
+  const [vendorProducts, setVendorProducts] = useState<VendorProduct[]>([])
+  const [vendorUnreadMessages, setVendorUnreadMessages] = useState(0)
   const [authChecked, setAuthChecked] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [userOrders, setUserOrders] = useState<Order[]>([])
@@ -148,9 +171,6 @@ export default function AccountPage() {
       setEditFirstName(u.firstName)
       setEditLastName(u.lastName)
       setEditPhone(u.phone)
-      setLinkedVendor(findVendorProfileByEmail(u.email))
-    } else {
-      setLinkedVendor(null)
     }
     return u
   }, [])
@@ -186,28 +206,77 @@ export default function AccountPage() {
     void loadOrders()
   }, [user])
 
+  useEffect(() => {
+    if (!user) {
+      setLinkedVendor(null)
+      setVendorProducts([])
+      setVendorUnreadMessages(0)
+      return
+    }
+    const loadVendor = async () => {
+      const profileResponse = await apiRequest<{ vendor?: { id: string; brand_name?: string | null; business_name?: string | null; display_name?: string | null; bio?: string | null; status?: string | null } | null }>('/vendors/me')
+      if (!profileResponse.ok || !profileResponse.data?.vendor) {
+        setLinkedVendor(null)
+        setVendorProducts([])
+        setVendorUnreadMessages(0)
+        return
+      }
+      const vendor = profileResponse.data.vendor
+      const mappedVendor: VendorProfile = {
+        id: vendor.id,
+        businessName: vendor.business_name || vendor.brand_name || vendor.display_name || 'Vendor Business',
+        category: vendor.brand_name || 'General',
+        description: vendor.bio || '',
+        status: vendor.status === 'approved' || vendor.status === 'featured' ? 'approved' : vendor.status === 'pending' ? 'pending' : 'rejected',
+        phone: user.phone,
+        whatsapp: user.phone,
+      }
+      setLinkedVendor(mappedVendor)
+
+      if (mappedVendor.status !== 'approved') {
+        setVendorProducts([])
+        setVendorUnreadMessages(0)
+        return
+      }
+
+      const [productsResponse, conversationsResponse] = await Promise.all([
+        apiRequest<{ products?: Array<{ id: string; name?: string; category?: string; price?: number; active?: number | boolean | null }> }>('/vendors/me/products'),
+        apiRequest<{ conversations?: VendorConversation[] }>('/vendors/me/conversations'),
+      ])
+
+      if (productsResponse.ok) {
+        setVendorProducts(
+          (productsResponse.data?.products || []).map(product => ({
+            id: product.id,
+            name: product.name || 'Untitled Product',
+            category: product.category || 'Other',
+            price: Number(product.price || 0),
+            active: product.active === 0 ? false : Boolean(product.active ?? true),
+          })),
+        )
+      } else {
+        setVendorProducts([])
+      }
+
+      if (conversationsResponse.ok) {
+        const unread = (conversationsResponse.data?.conversations || []).reduce(
+          (sum, conversation) => sum + Number(conversation.unread_vendor || 0),
+          0,
+        )
+        setVendorUnreadMessages(unread)
+      } else {
+        setVendorUnreadMessages(0)
+      }
+    }
+    void loadVendor()
+  }, [user])
+
   const recentlyViewedCount = typeof window !== 'undefined'
     ? getRecentlyViewed().length
     : 0
 
   const wishlistProducts = products.filter(p => wishlistSlugs.includes(p.slug))
-  const vendorProducts = linkedVendor?.status === 'approved' ? getVendorProducts(linkedVendor.email) : []
-  const vendorViews = getViews()
-  const vendorTotalViews = vendorProducts.reduce((total, product) => {
-    const slug = product.name.toLowerCase().replace(/\s+/g, '-')
-    return total + (vendorViews[slug] ?? vendorViews[product.id] ?? 0)
-  }, 0)
-  const vendorUnreadMessages = (() => {
-    if (!linkedVendor) return 0
-    try {
-      const raw = localStorage.getItem(`taries-vendor-${linkedVendor.email}-messages`)
-      if (!raw) return 0
-      const messages = JSON.parse(raw) as Array<{ isOwn?: boolean; read?: boolean }>
-      return messages.filter(message => !message.isOwn && !message.read).length
-    } catch {
-      return 0
-    }
-  })()
+  const vendorTotalViews = 0
 
   function handleRemoveWishlist(slug: string) {
     toggleWishlist(slug)
@@ -554,26 +623,21 @@ export default function AccountPage() {
                           </div>
                         ) : (
                           <div className="space-y-3">
-                            {vendorProducts.slice(0, 4).map(product => {
-                              const slug = product.name.toLowerCase().replace(/\s+/g, '-')
-                              const viewCount = vendorViews[slug] ?? vendorViews[product.id] ?? 0
-                              return (
-                                <div key={product.id} className="flex items-center justify-between gap-4 rounded-xl border border-brand-gold/10 bg-brand-black/30 p-4">
-                                  <div className="min-w-0">
-                                    <p className="font-body text-sm text-brand-cream truncate">{product.name}</p>
-                                    <p className="font-body text-xs text-brand-cream/45 mt-1">
-                                      {product.category} · ${product.price.toFixed(2)}
-                                    </p>
-                                  </div>
-                                  <div className="text-right shrink-0">
-                                    <p className="font-body text-xs text-brand-gold">{viewCount} views</p>
-                                    <p className={`font-body text-xs mt-1 ${product.active !== false ? 'text-green-400' : 'text-brand-cream/35'}`}>
-                                      {product.active !== false ? 'Active' : 'Inactive'}
-                                    </p>
-                                  </div>
+                            {vendorProducts.slice(0, 4).map(product => (
+                              <div key={product.id} className="flex items-center justify-between gap-4 rounded-xl border border-brand-gold/10 bg-brand-black/30 p-4">
+                                <div className="min-w-0">
+                                  <p className="font-body text-sm text-brand-cream truncate">{product.name}</p>
+                                  <p className="font-body text-xs text-brand-cream/45 mt-1">
+                                    {product.category} · ${product.price.toFixed(2)}
+                                  </p>
                                 </div>
-                              )
-                            })}
+                                <div className="text-right shrink-0">
+                                  <p className={`font-body text-xs mt-1 ${product.active ? 'text-green-400' : 'text-brand-cream/35'}`}>
+                                    {product.active ? 'Active' : 'Inactive'}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         )}
                       </div>

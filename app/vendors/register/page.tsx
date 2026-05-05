@@ -6,8 +6,9 @@ import {
   MessageCircle, User, Building2, CreditCard, AlertCircle,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { readJSON, writeJSON, writeText } from '@/lib/storage'
-import { isValidEmail, normalizeEmail, sanitizeDigits, sanitizeInlineText, sanitizeMultilineText, sanitizePhone } from '@/lib/validation'
+import { getCurrentUser } from '@/lib/auth'
+import { apiJson } from '@/lib/remoteApi'
+import { isValidEmail, normalizeEmail, sanitizeInlineText, sanitizeMultilineText, sanitizePhone } from '@/lib/validation'
 
 interface VendorForm {
   firstName:    string
@@ -26,10 +27,6 @@ const CATEGORIES = [
   'Accessories',
   'Other',
 ]
-
-function generateId() {
-  return 'vendor-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)
-}
 
 // ── Step Indicator ────────────────────────────────────────────────────────────
 function StepIndicator({ step, total }: { step: number; total: number }) {
@@ -116,8 +113,7 @@ export default function VendorRegisterPage() {
   const [agreed, setAgreed]       = useState(false)
   const [errors, setErrors]       = useState<Record<string, string>>({})
   const [submitted, setSubmitted] = useState(false)
-  const [pin, setPin] = useState('')
-  const [confirmPin, setConfirmPin] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   function update(k: keyof VendorForm, v: string) {
     setForm(f => ({ ...f, [k]: v }))
@@ -150,44 +146,43 @@ export default function VendorRegisterPage() {
     setStep(s => s + 1)
   }
 
-  function handleSubmit() {
-    const sanitizedPin = sanitizeDigits(pin)
-    if (!/^\d{6}$/.test(sanitizedPin)) {
-      setErrors({ pin: 'Create a secure 6-digit vendor PIN' })
-      return
-    }
-    if (sanitizedPin !== sanitizeDigits(confirmPin)) {
-      setErrors({ confirmPin: 'PINs do not match' })
-      return
-    }
+  async function handleSubmit() {
     if (!agreed) {
       setErrors({ agreed: 'You must agree to the terms before submitting' })
       return
     }
+
+    const user = getCurrentUser()
+    if (!user) {
+      toast.error('Please sign in first, then submit your vendor application.')
+      return
+    }
+
     const email = normalizeEmail(form.email)
-    const existing = readJSON<Array<{ email: string }>>('taries-vendors', [])
-    if (existing.some(vendor => vendor.email.toLowerCase() === email)) {
-      setErrors({ email: 'A vendor account with this email already exists' })
+    if (normalizeEmail(user.email) !== email) {
+      setErrors({ email: `Use your signed-in email (${user.email}) for this application.` })
       return
     }
-    const vendor = {
-      id:           generateId(),
-      businessName: sanitizeInlineText(form.businessName),
-      ownerName:    `${sanitizeInlineText(form.firstName)} ${sanitizeInlineText(form.lastName)}`,
-      email,
-      phone:        sanitizePhone(form.phone),
-      category:     form.category,
-      description:  sanitizeMultilineText(form.description),
-      status:       'pending' as const,
-      appliedAt:    new Date().toISOString(),
-      feeStatus:    'unpaid' as const,
+
+    setSubmitting(true)
+    try {
+      await apiJson('/vendors/apply', {
+        method: 'POST',
+        body: JSON.stringify({
+          brandName: sanitizeInlineText(form.category || form.businessName),
+          businessName: sanitizeInlineText(form.businessName),
+          displayName: sanitizeInlineText(form.businessName),
+          bio: sanitizeMultilineText(form.description),
+          phone: sanitizePhone(form.phone),
+          ownerName: `${sanitizeInlineText(form.firstName)} ${sanitizeInlineText(form.lastName)}`,
+        }),
+      })
+      setSubmitted(true)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not submit vendor application.')
+    } finally {
+      setSubmitting(false)
     }
-    const ok = writeJSON('taries-vendors', [...existing, vendor]) && writeText(`taries-vendor-pin-${email}`, sanitizedPin)
-    if (!ok) {
-      toast.error('Could not save your vendor application on this device.')
-      return
-    }
-    setSubmitted(true)
   }
 
   // ── Success screen ─────────────────────────────────────────────────────────
@@ -395,36 +390,6 @@ export default function VendorRegisterPage() {
                   </a>
                 </div>
 
-                {/* Agreement */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Create 6-Digit Vendor PIN" error={errors.pin}>
-                    <Input
-                      type="password"
-                      maxLength={6}
-                      value={pin}
-                      onChange={e => {
-                        setPin(sanitizeDigits(e.target.value).slice(0, 6))
-                        if (errors.pin) setErrors(er => { const next = { ...er }; delete next.pin; return next })
-                      }}
-                      placeholder="123456"
-                      hasError={!!errors.pin}
-                    />
-                  </Field>
-                  <Field label="Confirm Vendor PIN" error={errors.confirmPin}>
-                    <Input
-                      type="password"
-                      maxLength={6}
-                      value={confirmPin}
-                      onChange={e => {
-                        setConfirmPin(sanitizeDigits(e.target.value).slice(0, 6))
-                        if (errors.confirmPin) setErrors(er => { const next = { ...er }; delete next.confirmPin; return next })
-                      }}
-                      placeholder="123456"
-                      hasError={!!errors.confirmPin}
-                    />
-                  </Field>
-                </div>
-
                 <label className="flex items-start gap-3 cursor-pointer">
                   <input
                     type="checkbox"
@@ -467,8 +432,8 @@ export default function VendorRegisterPage() {
                 Continue <ArrowRight className="w-4 h-4" />
               </button>
             ) : (
-              <button onClick={handleSubmit} className="btn-gold flex items-center gap-2">
-                Submit Application <CheckCircle2 className="w-4 h-4" />
+              <button onClick={() => { void handleSubmit() }} disabled={submitting} className="btn-gold flex items-center gap-2 disabled:opacity-70">
+                {submitting ? 'Submitting...' : 'Submit Application'} <CheckCircle2 className="w-4 h-4" />
               </button>
             )}
           </div>

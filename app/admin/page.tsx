@@ -19,13 +19,12 @@ import { getInventory, setInventoryItem } from '@/lib/inventory'
 import type { InventoryItem } from '@/lib/inventory'
 import { ADMIN_EMAILS, getAdminLevel, getCurrentUser, isAdminUser, type AdminLevel, type User } from '@/lib/auth'
 import { logoSrc } from '@/lib/assets'
-import { withApiBase } from '@/lib/site'
+import { apiRequest } from '@/lib/remoteApi'
 import { useLang } from '@/lib/lang'
 import { DEFAULT_STORE_SETTINGS, getMaintenanceMode, getStoreSettings, saveMaintenanceMode, saveStoreSettings } from '@/lib/storeSettings'
 import { appendAuditEvent, getAdminRoleLabel, readSupportThreads } from '@/lib/adminConsole'
 import { AuditLogTab, MarketingTab, SupportInboxTab } from '@/components/admin/OperationsTabs'
 import ProductForm, { emptyFormData, type ProductFormData } from '@/components/ui/ProductForm'
-import { addVendorProduct } from '@/lib/productStore'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type TabId = 'dashboard' | 'orders' | 'users' | 'products' | 'vendors' | 'analytics' | 'inventory' | 'support' | 'marketing' | 'audit' | 'settings'
@@ -79,6 +78,29 @@ interface RemoteVendorRow {
   last_name?: string | null
   phone?: string | null
 }
+interface RemoteAdminProductRow {
+  id: string
+  vendor_id?: string | null
+  brand_name?: string | null
+  display_name?: string | null
+  name?: string | null
+  category?: string | null
+  price?: number | null
+  status?: string | null
+  added_at?: string | null
+  original_price?: number | null
+  description?: string | null
+  short_desc?: string | null
+  images_json?: string | null
+  video?: string | null
+  in_stock?: number | boolean | null
+  stock_count?: number | null
+  badge?: string | null
+  whatsapp?: string | null
+  features_json?: string | null
+  variants_json?: string | null
+  active?: number | boolean | null
+}
 
 const adminTranslations = {
   EN: {
@@ -96,8 +118,8 @@ const adminTranslations = {
     adminPanel: 'Admin Panel',
     adminShort: 'Admin',
     logout: 'Log Out',
-    localDataNotice: 'If the Cloudflare backend is available, user accounts are synced across devices. If not, this static build falls back to browser-local storage on this device.',
-    usersNotice: 'When backend sync is available this list is global; otherwise it only shows accounts saved in this browser.',
+    localDataNotice: 'This panel is configured for Cloudflare backend sync (D1). Business-critical updates are written to the shared backend.',
+    usersNotice: 'This list is sourced from shared backend user records.',
     totalRevenue: 'Total Revenue',
     totalOrders: 'Total Orders',
     totalUsers: 'Total Users',
@@ -136,8 +158,8 @@ const adminTranslations = {
     adminPanel: '管理后台',
     adminShort: '管理',
     logout: '退出登录',
-    localDataNotice: '如果 Cloudflare 后端可用，用户账户会跨设备同步；否则此静态版本会回退为当前浏览器本地存储。',
-    usersNotice: '后端可用时此列表为全站用户；否则仅显示当前浏览器保存的账户。',
+    localDataNotice: '该后台已配置为 Cloudflare 后端同步（D1），关键业务更新会写入共享后端。',
+    usersNotice: '该列表来自共享后端用户记录。',
     totalRevenue: '总收入',
     totalOrders: '总订单数',
     totalUsers: '总用户数',
@@ -220,21 +242,11 @@ function normalizeRemoteAdminUser(user: Partial<AdminUser> & { id: string; email
 }
 async function fetchRemoteAdminUsers(): Promise<AdminUser[] | null> {
   if (typeof window === 'undefined') return null
-  try {
-    const response = await fetch(withApiBase('/admin/users'), {
-      method: 'GET',
-      credentials: 'include',
-      cache: 'no-store',
-    })
-    if (!response.ok) return null
-    const payload = await response.json().catch(() => null) as { users?: Array<Partial<AdminUser> & { id: string; email: string }> } | null
-    if (!payload?.users) return null
-    const users = payload.users.map(normalizeRemoteAdminUser)
-    saveAdminUsers(users)
-    return users
-  } catch {
-    return null
-  }
+  const response = await apiRequest<{ users?: Array<Partial<AdminUser> & { id: string; email: string }> }>('/admin/users')
+  if (!response.ok || !response.data?.users) return null
+  const users = response.data.users.map(normalizeRemoteAdminUser)
+  saveAdminUsers(users)
+  return users
 }
 function safeParseObject(value: string | null | undefined): Record<string, unknown> {
   if (!value) return {}
@@ -291,33 +303,17 @@ function mapRemoteOrderRow(row: RemoteOrderRow): Order {
 }
 async function fetchRemoteAdminOrders(): Promise<Order[] | null> {
   if (typeof window === 'undefined') return null
-  try {
-    const response = await fetch(withApiBase('/admin/orders'), {
-      method: 'GET',
-      credentials: 'include',
-      cache: 'no-store',
-    })
-    if (!response.ok) return null
-    const payload = await response.json().catch(() => null) as { orders?: RemoteOrderRow[] } | null
-    if (!payload?.orders) return null
-    return payload.orders.map(mapRemoteOrderRow)
-  } catch {
-    return null
-  }
+  const response = await apiRequest<{ orders?: RemoteOrderRow[] }>('/admin/orders')
+  if (!response.ok || !response.data?.orders) return null
+  return response.data.orders.map(mapRemoteOrderRow)
 }
 async function updateRemoteOrder(orderId: string, status: Order['status']): Promise<boolean> {
   if (typeof window === 'undefined') return false
-  try {
-    const response = await fetch(withApiBase(`/admin/orders/${encodeURIComponent(orderId)}`), {
-      method: 'PATCH',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    })
-    return response.ok
-  } catch {
-    return false
-  }
+  const response = await apiRequest(`/admin/orders/${encodeURIComponent(orderId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  })
+  return response.ok
 }
 function mapRemoteVendorStatus(status: string | null | undefined): Vendor['status'] {
   if (status === 'approved' || status === 'featured') return 'approved'
@@ -341,36 +337,20 @@ function mapRemoteVendor(vendor: RemoteVendorRow): Vendor {
 }
 async function fetchRemoteVendors(): Promise<Vendor[] | null> {
   if (typeof window === 'undefined') return null
-  try {
-    const response = await fetch(withApiBase('/admin/vendors'), {
-      method: 'GET',
-      credentials: 'include',
-      cache: 'no-store',
-    })
-    if (!response.ok) return null
-    const payload = await response.json().catch(() => null) as { vendors?: RemoteVendorRow[] } | null
-    if (!payload?.vendors) return null
-    const vendors = payload.vendors.map(mapRemoteVendor)
-    saveVendors(vendors)
-    return vendors
-  } catch {
-    return null
-  }
+  const response = await apiRequest<{ vendors?: RemoteVendorRow[] }>('/admin/vendors')
+  if (!response.ok || !response.data?.vendors) return null
+  const vendors = response.data.vendors.map(mapRemoteVendor)
+  saveVendors(vendors)
+  return vendors
 }
 async function updateRemoteVendorStatus(vendorId: string, status: Vendor['status']): Promise<boolean> {
   if (typeof window === 'undefined') return false
   const remoteStatus = status === 'rejected' ? 'removed' : status
-  try {
-    const response = await fetch(withApiBase(`/admin/vendors/${encodeURIComponent(vendorId)}`), {
-      method: 'PATCH',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: remoteStatus }),
-    })
-    return response.ok
-  } catch {
-    return false
-  }
+  const response = await apiRequest(`/admin/vendors/${encodeURIComponent(vendorId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: remoteStatus }),
+  })
+  return response.ok
 }
 function readVendors(): Vendor[] {
   if (typeof window === 'undefined') return []
@@ -438,6 +418,64 @@ function saveVendorProductStatus(vendorId: string, productId: string, status: Ve
     const items = JSON.parse(raw) as VendorProduct[]
     localStorage.setItem(key, JSON.stringify(items.map(p => p.id === productId ? { ...p, status } : p)))
   } catch { /* ignore */ }
+}
+
+function mapRemoteAdminProduct(row: RemoteAdminProductRow): VendorProduct {
+  const parseList = (value: string | null | undefined): string[] => {
+    if (!value) return []
+    try {
+      const parsed = JSON.parse(value)
+      return Array.isArray(parsed) ? parsed.map(item => String(item)) : []
+    } catch {
+      return []
+    }
+  }
+  const parseVariants = (value: string | null | undefined): { label: string; options: string[] }[] => {
+    if (!value) return []
+    try {
+      const parsed = JSON.parse(value)
+      if (!Array.isArray(parsed)) return []
+      return parsed
+        .filter((entry): entry is { label?: unknown; options?: unknown } => typeof entry === 'object' && entry !== null)
+        .map(entry => ({
+          label: typeof entry.label === 'string' ? entry.label : '',
+          options: Array.isArray(entry.options) ? entry.options.map(option => String(option)).filter(Boolean) : [],
+        }))
+        .filter(entry => entry.label)
+    } catch {
+      return []
+    }
+  }
+
+  return {
+    id: row.id,
+    name: row.name || 'Untitled Product',
+    vendorId: row.vendor_id || 'unknown-vendor',
+    vendorName: row.display_name || row.brand_name || row.vendor_id || 'Vendor',
+    category: row.category || 'Other',
+    price: Number(row.price || 0),
+    status: row.status === 'approved' || row.status === 'featured' || row.status === 'removed' ? row.status : 'pending',
+    createdAt: row.added_at || new Date().toISOString(),
+    originalPrice: row.original_price || undefined,
+    description: row.description || '',
+    shortDesc: row.short_desc || '',
+    images: parseList(row.images_json),
+    video: row.video || undefined,
+    inStock: row.in_stock === 0 ? false : Boolean(row.in_stock ?? true),
+    stockCount: row.stock_count || undefined,
+    badge: (row.badge as VendorProduct['badge']) || '',
+    whatsapp: row.whatsapp || undefined,
+    features: parseList(row.features_json),
+    variants: parseVariants(row.variants_json),
+    active: row.active === 0 ? false : Boolean(row.active ?? true),
+  }
+}
+
+async function fetchRemoteAdminProducts(): Promise<VendorProduct[] | null> {
+  if (typeof window === 'undefined') return null
+  const response = await apiRequest<{ products?: RemoteAdminProductRow[] }>('/admin/products')
+  if (!response.ok || !response.data?.products) return null
+  return response.data.products.map(mapRemoteAdminProduct)
 }
 
 function recordAdminAction(action: string, target: string, detail?: string) {
@@ -857,7 +895,6 @@ function OrdersTab() {
   function handleDelete(orderId: string) {
     const updated = orders.filter(o => o.orderId !== orderId)
     setOrders(updated)
-    localStorage.setItem('taries-orders', JSON.stringify(updated))
     setSelected(prev => { const s = new Set(prev); s.delete(orderId); return s })
     toast.success('Order deleted')
   }
@@ -866,7 +903,6 @@ function OrdersTab() {
     await Promise.all(ids.map(id => updateRemoteOrder(id, bulkStatus)))
     const updated = orders.map(o => ids.includes(o.orderId) ? { ...o, status: bulkStatus } : o)
     setOrders(updated)
-    localStorage.setItem('taries-orders', JSON.stringify(updated))
     toast.success(`${ids.length} orders updated`)
     setSelected(new Set())
   }
@@ -1314,10 +1350,11 @@ function ProductsManagementTab() {
   const [vendorDraftEmail, setVendorDraftEmail] = useState('')
   const [showVendorCreate, setShowVendorCreate] = useState(false)
 
-  const refreshProductData = useCallback(() => {
+  const refreshProductData = useCallback(async () => {
     setInventoryState(getInventory())
     try { const r = localStorage.getItem('taries-product-overrides'); if (r) setOverrides(JSON.parse(r) as Record<string, ProductOverride>) } catch { /* ignore */ }
-    setVendorProds(getVendorProducts())
+    const remoteProducts = await fetchRemoteAdminProducts()
+    setVendorProds(remoteProducts ?? getVendorProducts())
     setVendors(readVendors())
     const vm: Record<string, number> = {}
     getAllViewsSorted().forEach(v => { vm[v.slug] = v.views })
@@ -1325,12 +1362,13 @@ function ProductsManagementTab() {
   }, [])
 
   useEffect(() => {
-    refreshProductData()
-    window.addEventListener('storage', refreshProductData)
-    window.addEventListener('focus', refreshProductData)
+    void refreshProductData()
+    const onRefresh = () => { void refreshProductData() }
+    window.addEventListener('storage', onRefresh)
+    window.addEventListener('focus', onRefresh)
     return () => {
-      window.removeEventListener('storage', refreshProductData)
-      window.removeEventListener('focus', refreshProductData)
+      window.removeEventListener('storage', onRefresh)
+      window.removeEventListener('focus', onRefresh)
     }
   }, [refreshProductData])
 
@@ -1372,14 +1410,23 @@ function ProductsManagementTab() {
     recordAdminAction('Catalogue product updated', slug)
     toast.success('Product updated')
   }
-  function handleVendorAction(vendorId: string, productId: string, status: VendorProduct['status']) {
-    saveVendorProductStatus(vendorId, productId, status)
-    setVendorProds(prev => prev.map(p => (p.id === productId && p.vendorId === vendorId) ? { ...p, status } : p))
+  async function handleVendorAction(vendorId: string, productId: string, status: VendorProduct['status']) {
+    const response = await apiRequest(`/admin/products/${encodeURIComponent(productId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    })
+    if (!response.ok) {
+      saveVendorProductStatus(vendorId, productId, status)
+      setVendorProds(prev => prev.map(p => (p.id === productId && p.vendorId === vendorId) ? { ...p, status } : p))
+      toast.error('Backend update failed; local fallback was applied.')
+      return
+    }
+    await refreshProductData()
     recordAdminAction('Vendor product status changed', productId, `${vendorId} → ${status}`)
     toast.success(`Product ${status}`)
   }
 
-  function handleCreateVendorProduct(formData: ProductFormData) {
+  async function handleCreateVendorProduct(formData: ProductFormData) {
     const vendor = approvedVendors.find(entry => entry.email === vendorDraftEmail)
     if (!vendor) {
       toast.error('Select an approved vendor before creating a product')
@@ -1393,29 +1440,35 @@ function ProductsManagementTab() {
         options: v.options.split(',').map(option => option.trim()).filter(Boolean),
       }))
 
-    addVendorProduct(vendor.email, {
-      name: formData.name.trim(),
-      category: formData.category,
-      price: Number(formData.price),
-      originalPrice: formData.originalPrice ? Number(formData.originalPrice) : undefined,
-      description: formData.description.trim(),
-      shortDesc: formData.shortDesc.trim(),
-      images: formData.images,
-      video: formData.video.trim(),
-      inStock: formData.inStock,
-      stockCount: formData.stockCount ? Number(formData.stockCount) : undefined,
-      badge: (formData.badge || '') as VendorProduct['badge'],
-      whatsapp: formData.whatsapp.trim() || vendor.phone,
-      features: formData.features.filter(Boolean),
-      variants,
-      active: true,
-      status: 'approved',
+    const response = await apiRequest('/admin/products', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: formData.name.trim(),
+        category: formData.category,
+        price: Number(formData.price),
+        originalPrice: formData.originalPrice ? Number(formData.originalPrice) : null,
+        description: formData.description.trim(),
+        shortDesc: formData.shortDesc.trim(),
+        images: formData.images,
+        video: formData.video.trim() || null,
+        inStock: formData.inStock,
+        stockCount: formData.stockCount ? Number(formData.stockCount) : null,
+        badge: formData.badge || null,
+        whatsapp: formData.whatsapp.trim() || vendor.phone,
+        features: formData.features.filter(Boolean),
+        variants,
+        weightKg: 0.5,
+      }),
     })
+    if (!response.ok) {
+      toast.error(response.error ?? 'Could not create vendor product on backend.')
+      return
+    }
 
     recordAdminAction('Vendor product created', formData.name, vendor.email)
-    setVendorProds(getVendorProducts())
+    await refreshProductData()
     setShowVendorCreate(false)
-    toast.success('Vendor product created and approved')
+    toast.success('Vendor product created on backend')
   }
 
   const catColors: Record<string, string> = {
@@ -1614,9 +1667,9 @@ function ProductsManagementTab() {
                     <td className="p-3 text-white/40 text-xs">{new Date(vp.createdAt).toLocaleDateString()}</td>
                     <td className="p-3">
                       <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => handleVendorAction(vp.vendorId, vp.id, 'approved')} className="px-2 py-1 text-xs rounded bg-green-500/20 text-green-400 hover:bg-green-500/40 transition-all">Approve</button>
-                        <button onClick={() => handleVendorAction(vp.vendorId, vp.id, 'featured')} className="px-2 py-1 text-xs rounded bg-brand-gold/20 text-brand-gold hover:bg-brand-gold/40 transition-all">Feature</button>
-                        <button onClick={() => handleVendorAction(vp.vendorId, vp.id, 'removed')} className="px-2 py-1 text-xs rounded bg-red-500/20 text-red-400 hover:bg-red-500/40 transition-all">Remove</button>
+                        <button onClick={() => { void handleVendorAction(vp.vendorId, vp.id, 'approved') }} className="px-2 py-1 text-xs rounded bg-green-500/20 text-green-400 hover:bg-green-500/40 transition-all">Approve</button>
+                        <button onClick={() => { void handleVendorAction(vp.vendorId, vp.id, 'featured') }} className="px-2 py-1 text-xs rounded bg-brand-gold/20 text-brand-gold hover:bg-brand-gold/40 transition-all">Feature</button>
+                        <button onClick={() => { void handleVendorAction(vp.vendorId, vp.id, 'removed') }} className="px-2 py-1 text-xs rounded bg-red-500/20 text-red-400 hover:bg-red-500/40 transition-all">Remove</button>
                       </div>
                     </td>
                   </motion.tr>
@@ -1663,7 +1716,7 @@ function ProductsManagementTab() {
                     </div>
                     <ProductForm
                       initial={{ ...emptyFormData(), whatsapp: approvedVendors.find(v => v.email === vendorDraftEmail)?.phone ?? '' }}
-                      onSubmit={handleCreateVendorProduct}
+                      onSubmit={data => { void handleCreateVendorProduct(data) }}
                       onCancel={() => setShowVendorCreate(false)}
                       submitLabel="Create Product"
                     />
