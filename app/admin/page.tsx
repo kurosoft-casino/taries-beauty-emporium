@@ -1428,10 +1428,6 @@ function ProductsManagementTab() {
 
   async function handleCreateVendorProduct(formData: ProductFormData) {
     const vendor = approvedVendors.find(entry => entry.email === vendorDraftEmail)
-    if (!vendor) {
-      toast.error('Select an approved vendor before creating a product')
-      return
-    }
 
     const variants = formData.variants
       .filter(v => v.label.trim())
@@ -1454,7 +1450,7 @@ function ProductsManagementTab() {
         inStock: formData.inStock,
         stockCount: formData.stockCount ? Number(formData.stockCount) : null,
         badge: formData.badge || null,
-        whatsapp: formData.whatsapp.trim() || vendor.phone,
+        whatsapp: formData.whatsapp.trim() || vendor?.phone || null,
         features: formData.features.filter(Boolean),
         variants,
         weightKg: 0.5,
@@ -1465,7 +1461,7 @@ function ProductsManagementTab() {
       return
     }
 
-    recordAdminAction('Vendor product created', formData.name, vendor.email)
+    recordAdminAction('Vendor product created', formData.name, vendor?.email ?? 'admin-default')
     await refreshProductData()
     setShowVendorCreate(false)
     toast.success('Vendor product created on backend')
@@ -1481,7 +1477,13 @@ function ProductsManagementTab() {
     <div className="p-4 md:p-6 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="font-display text-2xl gold-text">Products</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <button
+            onClick={() => setShowVendorCreate(true)}
+            className="btn-gold text-xs !py-2 !px-4"
+          >
+            <Plus className="inline w-3 h-3 mr-1" /> Create Product
+          </button>
           {(['catalogue','vendor'] as const).map(t => (
             <button key={t} onClick={() => setSubTab(t)}
               className={`px-4 py-2 rounded-lg text-sm transition-all ${subTab === t ? 'bg-brand-gold text-black font-semibold' : 'bg-brand-black-3 text-white/60 hover:text-white'}`}>
@@ -1618,8 +1620,7 @@ function ProductsManagementTab() {
               <h3 className="text-sm font-semibold text-white">Create Vendor Product (Admin)</h3>
               <button
                 onClick={() => setShowVendorCreate(true)}
-                disabled={!approvedVendors.length}
-                className="btn-gold text-xs !py-2 !px-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-gold text-xs !py-2 !px-4"
               >
                 <Plus className="inline w-3 h-3 mr-1" /> Add Product
               </button>
@@ -1629,13 +1630,14 @@ function ProductsManagementTab() {
                 value={vendorDraftEmail}
                 onChange={e => setVendorDraftEmail(e.target.value)}
                 className="px-3 py-2 bg-brand-black-3 border border-brand-gold/20 rounded-lg text-sm text-white focus:outline-none"
+                disabled={approvedVendors.length === 0}
               >
-                {approvedVendors.length === 0 && <option value="">No approved vendors yet</option>}
+                {approvedVendors.length === 0 && <option value="">No approved vendors (uses admin default)</option>}
                 {approvedVendors.map(v => (
                   <option key={v.email} value={v.email}>{v.businessName} ({v.email})</option>
                 ))}
               </select>
-              <p className="text-xs text-brand-cream/45 self-center">Admin-created listings are auto-approved.</p>
+              <p className="text-xs text-brand-cream/45 self-center">Admin-created listings are backend-synced and auto-approved.</p>
             </div>
           </div>
 
@@ -1708,7 +1710,9 @@ function ProductsManagementTab() {
                         value={vendorDraftEmail}
                         onChange={e => setVendorDraftEmail(e.target.value)}
                         className="w-full px-3 py-2 bg-brand-black-3 border border-brand-gold/20 rounded-lg text-sm text-white focus:outline-none"
+                        disabled={approvedVendors.length === 0}
                       >
+                        {approvedVendors.length === 0 && <option value="">Admin default vendor</option>}
                         {approvedVendors.map(v => (
                           <option key={v.email} value={v.email}>{v.businessName} ({v.email})</option>
                         ))}
