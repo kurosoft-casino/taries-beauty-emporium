@@ -295,9 +295,12 @@ route('POST', '/auth/logout', async (req, env) => {
     const tokenHash = await sha256Hex(tok);
     await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(tokenHash).run();
   }
+  const headers = new Headers({ 'content-type': 'application/json' });
+  headers.append('set-cookie', clearCookieHeader());
+  headers.append('set-cookie', clearCsrfCookieHeader());
   return new Response(JSON.stringify({ ok: true }), {
     status: 200,
-    headers: { 'content-type': 'application/json', 'set-cookie': clearCookieHeader() },
+    headers,
   });
 });
 
@@ -311,7 +314,11 @@ route('GET', '/auth/me', async (req, env) => {
   if (u && role !== u.role) {
     await env.DB.prepare('UPDATE users SET role = ?, updated_at = ? WHERE id = ?').bind(role, nowIso(), u.id).run();
   }
-  return ok({
+  const headers = new Headers({ 'content-type': 'application/json' });
+  const csrf = await ensureCsrfCookie(req, headers);
+  return new Response(JSON.stringify({
+    ok: true,
+    csrfToken: csrf,
     user: u
       ? {
           id: u.id,
@@ -325,7 +332,15 @@ route('GET', '/auth/me', async (req, env) => {
           createdAt: u.created_at,
         }
       : null,
-  });
+  }), { status: 200, headers });
+});
+
+route('GET', '/auth/csrf', async (req, env) => {
+  const s = await getSession(req, env);
+  if (!s) return err(401, 'not authenticated');
+  const headers = new Headers({ 'content-type': 'application/json' });
+  const csrf = await ensureCsrfCookie(req, headers);
+  return new Response(JSON.stringify({ ok: true, csrfToken: csrf }), { status: 200, headers });
 });
 
 // ----- users (admin) -----
@@ -1047,6 +1062,9 @@ route('GET', '/admin/stats', async (req, env) => {
 const CSRF_COOKIE = 'tbe_csrf';
 function setCsrfCookieHeader(value) {
   return `${CSRF_COOKIE}=${value}; Path=/; Max-Age=${SESSION_TTL_DAYS * 86400}; Secure; SameSite=None`;
+}
+function clearCsrfCookieHeader() {
+  return `${CSRF_COOKIE}=; Path=/; Max-Age=0; Secure; SameSite=None`;
 }
 async function ensureCsrfCookie(req, headers) {
   const existing = getCookie(req, CSRF_COOKIE);

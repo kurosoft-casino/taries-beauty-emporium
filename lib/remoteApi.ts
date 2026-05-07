@@ -43,16 +43,43 @@ function mergeHeaders(initHeaders: HeadersInit | undefined, path: string, method
   return headers
 }
 
+async function bootstrapCsrfIfMissing(path: string, method: string): Promise<void> {
+  if (typeof window === 'undefined') return
+  if (!shouldAttachCsrf(path, method)) return
+  if (readCookie('tbe_csrf')) return
+  await fetch(withApiBase('/auth/csrf'), { method: 'GET', credentials: 'include', cache: 'no-store' }).catch(() => undefined)
+}
+
 export async function apiRequest<T = unknown>(path: string, init?: RequestInit): Promise<ApiResult<T>> {
   const method = (init?.method ?? 'GET').toUpperCase()
   try {
-    const response = await fetch(withApiBase(path), {
+    await bootstrapCsrfIfMissing(path, method)
+    let response = await fetch(withApiBase(path), {
       credentials: 'include',
       cache: 'no-store',
       ...init,
       method,
       headers: mergeHeaders(init?.headers, path, method),
     })
+    if (response.status === 403 && shouldAttachCsrf(path, method)) {
+      const firstPayload = await response.json().catch(() => null) as ApiErrorPayload | null
+      if (firstPayload?.error === 'csrf token mismatch') {
+        await fetch(withApiBase('/auth/csrf'), { method: 'GET', credentials: 'include', cache: 'no-store' }).catch(() => undefined)
+        response = await fetch(withApiBase(path), {
+          credentials: 'include',
+          cache: 'no-store',
+          ...init,
+          method,
+          headers: mergeHeaders(init?.headers, path, method),
+        })
+      } else {
+        const err =
+          firstPayload && typeof firstPayload.error === 'string'
+            ? firstPayload.error
+            : `Request failed (${response.status})`
+        return { ok: false, status: response.status, data: null, error: err }
+      }
+    }
     const payload = await response.json().catch(() => null) as T | ApiErrorPayload | null
     if (!response.ok) {
       const err =
