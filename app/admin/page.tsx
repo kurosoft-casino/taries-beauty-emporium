@@ -17,7 +17,7 @@ import type { Product } from '@/lib/products'
 import { getAllViewsSorted } from '@/lib/views'
 import { getInventory, setInventoryItem } from '@/lib/inventory'
 import type { InventoryItem } from '@/lib/inventory'
-import { ADMIN_EMAILS, getAdminLevel, getCurrentUser, isAdminUser, type AdminLevel, type User } from '@/lib/auth'
+import { getAdminLevel, getCurrentUser, isAdminUser, type AdminLevel, type User } from '@/lib/auth'
 import { logoSrc } from '@/lib/assets'
 import { apiRequest } from '@/lib/remoteApi'
 import { useLang } from '@/lib/lang'
@@ -643,8 +643,6 @@ function PinEntry({ onSuccess }: { onSuccess: () => void }) {
 }
 
 function AdminAccountGate({ user }: { user: User | null }) {
-  const allowedEmails = ADMIN_EMAILS.join(' • ')
-
   return (
     <div className="min-h-screen bg-brand-black flex items-center justify-center px-4">
       <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-lg">
@@ -662,24 +660,21 @@ function AdminAccountGate({ user }: { user: User | null }) {
           {user ? (
             <>
               <p className="text-sm text-white/70 mb-2">
-                <span className="text-brand-gold">{user.email}</span> is signed in, but it is not on the admin allowlist.
+                Your current account is authenticated, but it does not have admin access.
               </p>
-              <p className="text-xs text-white/45">Allowed admins: {allowedEmails}</p>
+              <p className="text-xs text-white/45">Contact the site owner if you need elevated permissions.</p>
             </>
           ) : (
             <>
               <p className="text-sm text-white/70 mb-2">
-                Sign in with one of the approved admin accounts to continue.
+                Sign in with your admin account to continue.
               </p>
-              <p className="text-xs text-white/45">Allowed admins: {allowedEmails}</p>
+              <p className="text-xs text-white/45">Admin access is restricted and monitored.</p>
             </>
           )}
           <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
             <Link href="/login" className="btn-gold">
               Sign in
-            </Link>
-            <Link href="/account" className="btn-outline-gold">
-              Open account
             </Link>
           </div>
         </div>
