@@ -1467,6 +1467,10 @@ function ProductsManagementTab() {
     'custom-wigs': 'bg-pink-500/20 text-pink-400', maintenance: 'bg-yellow-500/20 text-yellow-400',
     beauty: 'bg-red-500/20 text-red-400', coats: 'bg-green-500/20 text-green-400',
   }
+  function openCreateProductDrawer() {
+    setSubTab('vendor')
+    setShowVendorCreate(true)
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -1474,7 +1478,7 @@ function ProductsManagementTab() {
         <h1 className="font-display text-2xl gold-text">Products</h1>
         <div className="flex gap-2 items-center">
           <button
-            onClick={() => setShowVendorCreate(true)}
+            onClick={openCreateProductDrawer}
             className="btn-gold text-xs !py-2 !px-4"
           >
             <Plus className="inline w-3 h-3 mr-1" /> Create Product
@@ -1614,7 +1618,7 @@ function ProductsManagementTab() {
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <h3 className="text-sm font-semibold text-white">Create Vendor Product (Admin)</h3>
               <button
-                onClick={() => setShowVendorCreate(true)}
+                onClick={openCreateProductDrawer}
                 className="btn-gold text-xs !py-2 !px-4"
               >
                 <Plus className="inline w-3 h-3 mr-1" /> Add Product
