@@ -53,6 +53,7 @@ interface RegisterUserData {
 const USERS_KEY = 'taries-users'
 const SESSION_KEY = 'taries-session'
 const SESSION_META_KEY = 'taries-session-meta'
+const API_SESSION_TOKEN_KEY = 'taries-api-session-token'
 const AUTH_STATE_EVENT = 'taries-auth-state-changed'
 export const SESSION_TIMEOUT_MS = 30 * 60 * 1000
 export const ADMIN_EMAILS = ['tarimoboere18@gmail.com', 'kurosoft01@gmail.com'] as const
@@ -124,6 +125,26 @@ function readSessionMeta(): SessionMeta | null {
   return readJSON<SessionMeta | null>(SESSION_META_KEY, null)
 }
 
+function readApiSessionToken(): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const token = localStorage.getItem(API_SESSION_TOKEN_KEY)
+    return token && token.trim() ? token.trim() : null
+  } catch {
+    return null
+  }
+}
+
+function writeApiSessionToken(token: string | null | undefined): void {
+  if (typeof window === 'undefined') return
+  try {
+    if (token && token.trim()) localStorage.setItem(API_SESSION_TOKEN_KEY, token.trim())
+    else localStorage.removeItem(API_SESSION_TOKEN_KEY)
+  } catch {
+    // ignore storage write errors
+  }
+}
+
 function notifyAuthStateChanged(): void {
   if (typeof window === 'undefined') return
   window.dispatchEvent(new Event(AUTH_STATE_EVENT))
@@ -149,6 +170,12 @@ interface RemoteAuthUser {
   createdAt?: string
   avatar?: string
   role?: 'admin'
+}
+
+interface RemoteAuthPayload {
+  ok: boolean
+  user: RemoteAuthUser | null
+  sessionToken?: string
 }
 
 function asSupportedCountry(value: string | undefined): SupportedCountry {
@@ -189,15 +216,18 @@ async function requestRemoteAuth<T>(path: string, init?: RequestInit): Promise<T
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), REMOTE_AUTH_TIMEOUT_MS)
   try {
+    const headers = new Headers(init?.headers ?? {})
+    if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+    const apiSessionToken = readApiSessionToken()
+    if (apiSessionToken && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${apiSessionToken}`)
+    }
     const response = await fetch(withApiBase(path), {
       credentials: 'include',
       cache: 'no-store',
       ...init,
       signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(init?.headers ?? {}),
-      },
+      headers,
     })
     const payload = await response.json().catch(() => null) as T | { error?: string } | null
     if (!response.ok) {
@@ -252,7 +282,8 @@ export function touchSession(): void {
 export async function syncSessionFromServer(): Promise<User | null> {
   if (typeof window === 'undefined') return null
   try {
-    const payload = await requestRemoteAuth<{ ok: boolean; user: RemoteAuthUser | null }>('/auth/me')
+    const payload = await requestRemoteAuth<RemoteAuthPayload>('/auth/me')
+    writeApiSessionToken(payload.sessionToken)
     if (!payload.user) return null
     const mapped = mapRemoteUserToLocal(payload.user)
     upsertLocalUser(mapped)
@@ -284,11 +315,12 @@ export async function registerUser(data: RegisterUserData): Promise<User> {
   if (!phone) throw new Error('Phone number is required.')
   if (password.length < 8) throw new Error('Password must be at least 8 characters.')
 
-  const remote = await requestRemoteAuth<{ ok: boolean; user: RemoteAuthUser }>('/auth/register', {
+  const remote = await requestRemoteAuth<RemoteAuthPayload>('/auth/register', {
     method: 'POST',
     body: JSON.stringify({ firstName, lastName, email, country, phone, password, avatar: data.avatar }),
   })
   if (!remote.user) throw new Error('Registration service returned an invalid response.')
+  writeApiSessionToken(remote.sessionToken)
   const mapped = mapRemoteUserToLocal(remote.user)
   upsertLocalUser(mapped)
   writeSession(mapped)
@@ -300,11 +332,12 @@ export async function loginUser(emailInput: string, password: string): Promise<U
   const email = normalizeEmail(emailInput)
   if (!isValidEmail(email)) throw new Error('Please enter a valid email address.')
 
-  const remote = await requestRemoteAuth<{ ok: boolean; user: RemoteAuthUser }>('/auth/login', {
+  const remote = await requestRemoteAuth<RemoteAuthPayload>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   })
   if (!remote.user) throw new Error('Login service returned an invalid response.')
+  writeApiSessionToken(remote.sessionToken)
   const mapped = mapRemoteUserToLocal(remote.user)
   upsertLocalUser(mapped)
   writeSession(mapped)
@@ -313,9 +346,12 @@ export async function loginUser(emailInput: string, password: string): Promise<U
 
 export function logoutUser(): void {
   if (typeof window === 'undefined') return
-  void fetch(withApiBase('/auth/logout'), { method: 'POST', credentials: 'include' }).catch(() => undefined)
+  const apiSessionToken = readApiSessionToken()
+  const headers = apiSessionToken ? { Authorization: `Bearer ${apiSessionToken}` } : undefined
+  void fetch(withApiBase('/auth/logout'), { method: 'POST', credentials: 'include', headers }).catch(() => undefined)
   removeKey(SESSION_KEY)
   removeKey(SESSION_META_KEY)
+  writeApiSessionToken(null)
   notifyAuthStateChanged()
 }
 

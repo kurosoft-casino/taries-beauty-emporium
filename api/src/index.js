@@ -72,6 +72,19 @@ function getCookie(req, name) {
   return m ? decodeURIComponent(m[1]) : null;
 }
 
+function getBearerToken(req) {
+  const auth = (req.headers.get('authorization') || '').trim();
+  if (!auth) return null;
+  const [scheme, ...rest] = auth.split(' ');
+  if (!scheme || scheme.toLowerCase() !== 'bearer') return null;
+  const token = rest.join(' ').trim();
+  return token || null;
+}
+
+function getRequestSessionToken(req) {
+  return getBearerToken(req) || getCookie(req, SESSION_COOKIE);
+}
+
 function setCookieHeader(value, maxAgeSec) {
   return `${SESSION_COOKIE}=${value}; Path=/; Max-Age=${maxAgeSec}; HttpOnly; Secure; SameSite=None`;
 }
@@ -115,7 +128,7 @@ function constantTimeEqual(a, b) {
 
 // ---------- auth ----------
 async function getSession(req, env) {
-  const tok = getCookie(req, SESSION_COOKIE);
+  const tok = getRequestSessionToken(req);
   if (!tok) return null;
   const tokenHash = await sha256Hex(tok);
   const row = await env.DB.prepare(
@@ -236,7 +249,7 @@ route('POST', '/auth/register', async (req, env) => {
   const headers = new Headers({ 'content-type': 'application/json' });
   headers.append('set-cookie', setCookieHeader(tok, SESSION_TTL_DAYS * 86400));
   headers.append('set-cookie', `tbe_csrf=${csrf}; Path=/; Max-Age=${SESSION_TTL_DAYS * 86400}; Secure; SameSite=None`);
-  return new Response(JSON.stringify({ ok: true, csrfToken: csrf, user: { id, email, role, firstName: body.firstName, lastName: body.lastName } }), {
+  return new Response(JSON.stringify({ ok: true, csrfToken: csrf, sessionToken: tok, user: { id, email, role, firstName: body.firstName, lastName: body.lastName } }), {
     status: 200,
     headers,
   });
@@ -274,6 +287,7 @@ route('POST', '/auth/login', async (req, env) => {
     JSON.stringify({
       ok: true,
       csrfToken: csrf,
+      sessionToken: tok,
       user: {
         id: u.id,
         email: u.email,
@@ -290,7 +304,7 @@ route('POST', '/auth/login', async (req, env) => {
 });
 
 route('POST', '/auth/logout', async (req, env) => {
-  const tok = getCookie(req, SESSION_COOKIE);
+  const tok = getRequestSessionToken(req);
   if (tok) {
     const tokenHash = await sha256Hex(tok);
     await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(tokenHash).run();
@@ -1075,6 +1089,7 @@ async function ensureCsrfCookie(req, headers) {
 }
 function csrfGuard(req, method) {
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return null;
+  if (getBearerToken(req)) return null;
   // Allow auth bootstrap routes (login/register/logout) to set the cookie.
   const url = new URL(req.url);
   const path = url.pathname.replace(/^\/api/, '') || '/';

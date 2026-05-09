@@ -11,6 +11,8 @@ export interface ApiResult<T> {
   error: string | null
 }
 
+const API_SESSION_TOKEN_KEY = 'taries-api-session-token'
+
 function readCookie(name: string): string | null {
   if (typeof document === 'undefined') return null
   const cookie = document.cookie
@@ -21,7 +23,18 @@ function readCookie(name: string): string | null {
   return decodeURIComponent(cookie.slice(name.length + 1))
 }
 
-function shouldAttachCsrf(path: string, method: string): boolean {
+function readApiSessionToken(): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const token = localStorage.getItem(API_SESSION_TOKEN_KEY)
+    return token && token.trim() ? token.trim() : null
+  } catch {
+    return null
+  }
+}
+
+function shouldAttachCsrf(path: string, method: string, hasBearerToken: boolean): boolean {
+  if (hasBearerToken) return false
   const upper = method.toUpperCase()
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(upper)) return false
   return !(
@@ -31,37 +44,46 @@ function shouldAttachCsrf(path: string, method: string): boolean {
   )
 }
 
-function mergeHeaders(initHeaders: HeadersInit | undefined, path: string, method: string): Headers {
+function mergeHeaders(
+  initHeaders: HeadersInit | undefined,
+  csrfEnabled: boolean,
+  apiSessionToken: string | null,
+): Headers {
   const headers = new Headers(initHeaders ?? {})
   if (!headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
-  if (shouldAttachCsrf(path, method)) {
+  if (apiSessionToken && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${apiSessionToken}`)
+  }
+  if (csrfEnabled) {
     const csrf = readCookie('tbe_csrf')
     if (csrf) headers.set('x-csrf-token', csrf)
   }
   return headers
 }
 
-async function bootstrapCsrfIfMissing(path: string, method: string): Promise<void> {
+async function bootstrapCsrfIfMissing(csrfEnabled: boolean): Promise<void> {
   if (typeof window === 'undefined') return
-  if (!shouldAttachCsrf(path, method)) return
+  if (!csrfEnabled) return
   if (readCookie('tbe_csrf')) return
   await fetch(withApiBase('/auth/csrf'), { method: 'GET', credentials: 'include', cache: 'no-store' }).catch(() => undefined)
 }
 
 export async function apiRequest<T = unknown>(path: string, init?: RequestInit): Promise<ApiResult<T>> {
   const method = (init?.method ?? 'GET').toUpperCase()
+  const apiSessionToken = readApiSessionToken()
+  const csrfEnabled = shouldAttachCsrf(path, method, Boolean(apiSessionToken))
   try {
-    await bootstrapCsrfIfMissing(path, method)
+    await bootstrapCsrfIfMissing(csrfEnabled)
     let response = await fetch(withApiBase(path), {
       credentials: 'include',
       cache: 'no-store',
       ...init,
       method,
-      headers: mergeHeaders(init?.headers, path, method),
+      headers: mergeHeaders(init?.headers, csrfEnabled, apiSessionToken),
     })
-    if (response.status === 403 && shouldAttachCsrf(path, method)) {
+    if (response.status === 403 && csrfEnabled) {
       const firstPayload = await response.json().catch(() => null) as ApiErrorPayload | null
       if (firstPayload?.error === 'csrf token mismatch') {
         await fetch(withApiBase('/auth/csrf'), { method: 'GET', credentials: 'include', cache: 'no-store' }).catch(() => undefined)
@@ -70,7 +92,7 @@ export async function apiRequest<T = unknown>(path: string, init?: RequestInit):
           cache: 'no-store',
           ...init,
           method,
-          headers: mergeHeaders(init?.headers, path, method),
+          headers: mergeHeaders(init?.headers, csrfEnabled, apiSessionToken),
         })
       } else {
         const err =
