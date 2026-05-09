@@ -10,6 +10,13 @@ interface Props {
   label?: string
 }
 
+const LARGE_IMAGE_THRESHOLD_BYTES = 600 * 1024
+const TARGET_IMAGE_BYTES = 350 * 1024
+const WARNING_IMAGE_BYTES = 400 * 1024
+const MAX_IMAGE_DIMENSION = 1600
+const MIN_IMAGE_DIMENSION = 800
+const MIN_JPEG_QUALITY = 0.5
+
 function base64Size(dataUri: string): number {
   // approximate decoded byte size from base64 string
   const base64 = dataUri.split(',')[1] ?? ''
@@ -18,6 +25,96 @@ function base64Size(dataUri: string): number {
 
 function isBase64(src: string): boolean {
   return src.startsWith('data:')
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = event => resolve((event.target?.result as string) || '')
+    reader.onerror = () => reject(new Error('Could not read image file.'))
+    reader.readAsDataURL(file)
+  })
+}
+
+function loadImageElement(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file)
+    const image = new Image()
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl)
+      resolve(image)
+    }
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl)
+      reject(new Error('Could not decode image file.'))
+    }
+    image.src = objectUrl
+  })
+}
+
+function renderCompressedImage(
+  image: HTMLImageElement,
+  width: number,
+  height: number,
+  quality: number,
+): string {
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return ''
+  ctx.fillStyle = '#111111'
+  ctx.fillRect(0, 0, width, height)
+  ctx.drawImage(image, 0, 0, width, height)
+  return canvas.toDataURL('image/jpeg', quality)
+}
+
+async function optimizeImage(file: File): Promise<string> {
+  const fallback = await readFileAsDataUrl(file)
+  if (typeof window === 'undefined') return fallback
+  if (!file.type.startsWith('image/')) return fallback
+  if (file.size <= LARGE_IMAGE_THRESHOLD_BYTES) return fallback
+
+  try {
+    const image = await loadImageElement(file)
+    const longestSide = Math.max(image.naturalWidth, image.naturalHeight)
+    const initialScale = longestSide > MAX_IMAGE_DIMENSION ? MAX_IMAGE_DIMENSION / longestSide : 1
+    let width = Math.max(1, Math.round(image.naturalWidth * initialScale))
+    let height = Math.max(1, Math.round(image.naturalHeight * initialScale))
+    let quality = 0.85
+    let result = renderCompressedImage(image, width, height, quality)
+    if (!result) return fallback
+
+    while (base64Size(result) > TARGET_IMAGE_BYTES && quality > MIN_JPEG_QUALITY) {
+      quality = Math.max(MIN_JPEG_QUALITY, quality - 0.08)
+      const next = renderCompressedImage(image, width, height, quality)
+      if (!next) break
+      result = next
+    }
+
+    while (
+      base64Size(result) > TARGET_IMAGE_BYTES &&
+      Math.max(width, height) > MIN_IMAGE_DIMENSION
+    ) {
+      width = Math.max(1, Math.round(width * 0.85))
+      height = Math.max(1, Math.round(height * 0.85))
+      quality = 0.82
+      let next = renderCompressedImage(image, width, height, quality)
+      if (!next) break
+      result = next
+
+      while (base64Size(result) > TARGET_IMAGE_BYTES && quality > MIN_JPEG_QUALITY) {
+        quality = Math.max(MIN_JPEG_QUALITY, quality - 0.08)
+        next = renderCompressedImage(image, width, height, quality)
+        if (!next) break
+        result = next
+      }
+    }
+
+    return result
+  } catch {
+    return fallback
+  }
 }
 
 export default function ImageUploader({
@@ -35,16 +132,7 @@ export default function ImageUploader({
 
   function readFilesAsBase64(files: FileList | File[]): Promise<string[]> {
     const arr = Array.from(files).slice(0, maxImages - images.length)
-    return Promise.all(
-      arr.map(
-        file =>
-          new Promise<string>(resolve => {
-            const reader = new FileReader()
-            reader.onload = e => resolve(e.target?.result as string)
-            reader.readAsDataURL(file)
-          }),
-      ),
-    )
+    return Promise.all(arr.map(file => optimizeImage(file)))
   }
 
   async function handleFiles(files: FileList | File[]) {
@@ -102,7 +190,7 @@ export default function ImageUploader({
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
           {images.map((src, idx) => {
             const sizeBytes = isBase64(src) ? base64Size(src) : 0
-            const oversized = sizeBytes > 200 * 1024
+            const oversized = sizeBytes > WARNING_IMAGE_BYTES
             return (
               <div key={idx} className="relative group aspect-square rounded-xl overflow-hidden border border-brand-gold/20 bg-brand-black-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -204,6 +292,7 @@ export default function ImageUploader({
               {dragging ? 'Drop to add images' : 'Drag & drop images here'}
             </p>
             <p className="text-brand-cream/30 text-xs">or click to browse · JPG, PNG, WEBP, GIF</p>
+            <p className="text-brand-cream/25 text-xs">Large photos are auto-compressed for faster upload</p>
             <p className="text-brand-cream/25 text-xs">
               {images.length}/{maxImages} images
             </p>
