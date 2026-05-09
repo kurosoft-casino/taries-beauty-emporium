@@ -6,7 +6,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   "vars": {
-    "ALLOWED_ORIGINS": "https://tariesbeauty.com,https://www.tariesbeauty.com,https://kurosoft1.github.io,http://localhost:3000",
+    "ALLOWED_ORIGINS": "https://tariesbeauty.com,https://www.tariesbeauty.com,http://tariesbeauty.com,http://www.tariesbeauty.com,https://kurosoft1.github.io,http://localhost:3000",
     "PUBLIC_SITE_URL": "https://www.tariesbeauty.com"
   },
   "d1_databases": [

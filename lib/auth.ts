@@ -53,6 +53,7 @@ interface RegisterUserData {
 const USERS_KEY = 'taries-users'
 const SESSION_KEY = 'taries-session'
 const SESSION_META_KEY = 'taries-session-meta'
+const AUTH_STATE_EVENT = 'taries-auth-state-changed'
 export const SESSION_TIMEOUT_MS = 30 * 60 * 1000
 export const ADMIN_EMAILS = ['tarimoboere18@gmail.com', 'kurosoft01@gmail.com'] as const
 const REMOTE_AUTH_TIMEOUT_MS = 8000
@@ -116,10 +117,26 @@ function writeSession(user: User): void {
   if (!writeJSON(SESSION_KEY, sessionUser) || !writeJSON(SESSION_META_KEY, sessionMeta)) {
     throw new Error('Could not start your session on this device. Please allow browser storage and try again.')
   }
+  notifyAuthStateChanged()
 }
 
 function readSessionMeta(): SessionMeta | null {
   return readJSON<SessionMeta | null>(SESSION_META_KEY, null)
+}
+
+function notifyAuthStateChanged(): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new Event(AUTH_STATE_EVENT))
+}
+
+export function subscribeAuthStateChange(listener: () => void): () => void {
+  if (typeof window === 'undefined') return () => undefined
+  window.addEventListener(AUTH_STATE_EVENT, listener)
+  window.addEventListener('storage', listener)
+  return () => {
+    window.removeEventListener(AUTH_STATE_EVENT, listener)
+    window.removeEventListener('storage', listener)
+  }
 }
 
 interface RemoteAuthUser {
@@ -167,8 +184,8 @@ function upsertLocalUser(user: User): void {
   saveUsers(next)
 }
 
-async function requestRemoteAuth<T>(path: string, init?: RequestInit): Promise<T | null> {
-  if (typeof window === 'undefined') return null
+async function requestRemoteAuth<T>(path: string, init?: RequestInit): Promise<T> {
+  if (typeof window === 'undefined') throw new Error('Not available on server')
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), REMOTE_AUTH_TIMEOUT_MS)
   try {
@@ -187,11 +204,16 @@ async function requestRemoteAuth<T>(path: string, init?: RequestInit): Promise<T
       if (payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string') {
         throw new Error(payload.error)
       }
-      return null
+      throw new Error('Request failed. Please try again.')
     }
+    if (!payload) throw new Error('Invalid response from server. Please try again.')
     return payload as T
-  } catch {
-    return null
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Request timed out. Please check your connection and try again.')
+    }
+    if (error instanceof Error) throw error
+    throw new Error('Network error. Please try again.')
   } finally {
     window.clearTimeout(timeout)
   }
@@ -229,12 +251,21 @@ export function touchSession(): void {
 
 export async function syncSessionFromServer(): Promise<User | null> {
   if (typeof window === 'undefined') return null
-  const payload = await requestRemoteAuth<{ ok: boolean; user: RemoteAuthUser | null }>('/auth/me')
-  if (!payload?.user) return null
-  const mapped = mapRemoteUserToLocal(payload.user)
-  upsertLocalUser(mapped)
-  writeSession(mapped)
-  return mapped
+  try {
+    const payload = await requestRemoteAuth<{ ok: boolean; user: RemoteAuthUser | null }>('/auth/me')
+    if (!payload.user) return null
+    const mapped = mapRemoteUserToLocal(payload.user)
+    upsertLocalUser(mapped)
+    writeSession(mapped)
+    return mapped
+  } catch (error) {
+    if (error instanceof Error) {
+      console.warn(`Failed to sync session from server: ${error.message}`)
+    } else {
+      console.warn('Failed to sync session from server.')
+    }
+    return null
+  }
 }
 
 export async function registerUser(data: RegisterUserData): Promise<User> {
@@ -257,13 +288,11 @@ export async function registerUser(data: RegisterUserData): Promise<User> {
     method: 'POST',
     body: JSON.stringify({ firstName, lastName, email, country, phone, password, avatar: data.avatar }),
   })
-  if (remote?.user) {
-    const mapped = mapRemoteUserToLocal(remote.user)
-    upsertLocalUser(mapped)
-    writeSession(mapped)
-    return mapped
-  }
-  throw new Error('Registration service is temporarily unavailable. Please try again in a moment.')
+  if (!remote.user) throw new Error('Registration service returned an invalid response.')
+  const mapped = mapRemoteUserToLocal(remote.user)
+  upsertLocalUser(mapped)
+  writeSession(mapped)
+  return mapped
 }
 
 export async function loginUser(emailInput: string, password: string): Promise<User> {
@@ -275,13 +304,11 @@ export async function loginUser(emailInput: string, password: string): Promise<U
     method: 'POST',
     body: JSON.stringify({ email, password }),
   })
-  if (remote?.user) {
-    const mapped = mapRemoteUserToLocal(remote.user)
-    upsertLocalUser(mapped)
-    writeSession(mapped)
-    return mapped
-  }
-  throw new Error('Login service is temporarily unavailable. Please try again in a moment.')
+  if (!remote.user) throw new Error('Login service returned an invalid response.')
+  const mapped = mapRemoteUserToLocal(remote.user)
+  upsertLocalUser(mapped)
+  writeSession(mapped)
+  return mapped
 }
 
 export function logoutUser(): void {
@@ -289,6 +316,7 @@ export function logoutUser(): void {
   void fetch(withApiBase('/auth/logout'), { method: 'POST', credentials: 'include' }).catch(() => undefined)
   removeKey(SESSION_KEY)
   removeKey(SESSION_META_KEY)
+  notifyAuthStateChanged()
 }
 
 export function getCurrentUser(): User | null {

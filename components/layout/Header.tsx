@@ -9,7 +9,7 @@ import { formatPrice } from '@/lib/products'
 import { logoSrc } from '@/lib/assets'
 import { getCategoryCopy, useLang } from '@/lib/lang'
 import { getWishlist } from '@/lib/wishlist'
-import { getCurrentUser, isAdminUser } from '@/lib/auth'
+import { getCurrentUser, isAdminUser, subscribeAuthStateChange } from '@/lib/auth'
 import type { User as AuthUser } from '@/lib/auth'
 import { getProductHref, getStorefrontProducts, type StorefrontProduct } from '@/lib/catalog'
 import { DEFAULT_STORE_SETTINGS, getStoreSettings, subscribeStoreSettings } from '@/lib/storeSettings'
@@ -103,10 +103,14 @@ export default function Header() {
   }, [])
 
   useEffect(() => {
-    setCurrentUser(getCurrentUser())
-    const handleStorage = () => setCurrentUser(getCurrentUser())
-    window.addEventListener('storage', handleStorage)
-    return () => window.removeEventListener('storage', handleStorage)
+    const refreshUser = () => setCurrentUser(getCurrentUser())
+    refreshUser()
+    const unsubscribe = subscribeAuthStateChange(refreshUser)
+    window.addEventListener('focus', refreshUser)
+    return () => {
+      unsubscribe()
+      window.removeEventListener('focus', refreshUser)
+    }
   }, [])
 
   useEffect(() => {
@@ -341,9 +345,9 @@ export default function Header() {
                 </Link>
               </div>
             ) : (
-              <Link href="/login" className="hidden md:flex items-center gap-1 text-brand-cream hover:text-brand-gold-3 transition-colors" aria-label={t('signIn')}>
+              <Link href="/login" className="flex items-center gap-1 text-brand-cream hover:text-brand-gold-3 transition-colors" aria-label={t('signIn')}>
                 <User size={20} />
-                <span className="font-body text-xs font-medium">{t('signIn')}</span>
+                <span className="hidden md:block font-body text-xs font-medium">{t('signIn')}</span>
               </Link>
             )}
 
@@ -481,23 +485,23 @@ export default function Header() {
       <AnimatePresence>
         {mobileOpen && (
           <>
-            <motion.button
-              type="button"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-[55] bg-brand-black/70 backdrop-blur-[1px]"
-              onClick={() => setMobileOpen(false)}
-              aria-label={lang === 'ZH' ? '关闭移动菜单' : 'Close mobile menu'}
-            />
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'tween', duration: 0.3 }}
-              className="fixed inset-y-0 right-0 z-[60] w-[min(360px,_calc(100vw-24px))] rounded-l-2xl border-l border-brand-gold/25 bg-brand-black/95 backdrop-blur-xl flex flex-col pt-24 px-6 pb-8 overflow-y-auto shadow-gold-lg"
-            >
+              <motion.button
+                type="button"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="fixed inset-0 z-[120] bg-brand-black/70 backdrop-blur-[1px]"
+                onClick={() => setMobileOpen(false)}
+                aria-label={lang === 'ZH' ? '关闭移动菜单' : 'Close mobile menu'}
+              />
+              <motion.div
+                initial={{ x: '100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '100%' }}
+                transition={{ type: 'tween', duration: 0.3 }}
+                className="fixed inset-y-0 right-0 z-[130] w-[min(360px,_calc(100vw-24px))] rounded-l-2xl border-l border-brand-gold/25 bg-brand-black/95 backdrop-blur-xl flex flex-col pt-24 px-6 pb-[calc(env(safe-area-inset-bottom)+2rem)] overflow-y-auto shadow-gold-lg"
+              >
             <div className="flex flex-col gap-2">
               {navLinks.map((link, i) => (
                 <div key={link.label}>
@@ -542,6 +546,21 @@ export default function Header() {
                   {currentUser ? `${currentUser.avatar || '👑'} ${currentUser.firstName}` : `👤 ${t('signIn')}`}
                 </Link>
               </motion.div>
+              {!currentUser && (
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.32 }}>
+                  <Link
+                    href="/register"
+                    className={`block py-4 font-heading text-xl transition-colors border-b border-brand-gold/20 ${
+                      isActiveRoute('/register')
+                        ? 'text-brand-gold-3'
+                        : 'text-brand-cream hover:text-brand-gold-3'
+                    }`}
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    {lang === 'ZH' ? '✨ 注册' : '✨ Sign Up'}
+                  </Link>
+                </motion.div>
+              )}
               {currentUser && isAdminUser(currentUser) && (
                 <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.34 }}>
                   <Link

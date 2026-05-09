@@ -31,28 +31,33 @@ export default function SiteRuntime() {
   const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
-    const canonicalHost = (() => {
+    const canonical = (() => {
       try {
-        return new URL(SITE_URL).hostname
+        const parsed = new URL(SITE_URL)
+        return { host: parsed.hostname, origin: parsed.origin }
       } catch {
-        return ''
+        return { host: '', origin: '' }
       }
     })()
 
     const currentHost = window.location.hostname
+    const currentOrigin = window.location.origin
     const isLocalHost =
       currentHost === 'localhost' ||
       currentHost === '127.0.0.1' ||
       currentHost.endsWith('.local')
-
-    if (
-      canonicalHost &&
+    const isAliasHost =
+      currentHost === 'tariesbeauty.com' ||
+      currentHost === `www.${canonical.host}` ||
+      canonical.host === `www.${currentHost}`
+    const shouldRedirectToCanonical =
+      canonical.host &&
+      canonical.origin &&
       !isLocalHost &&
-      currentHost !== canonicalHost &&
-      (currentHost === 'tariesbeauty.com' || currentHost === `www.${canonicalHost}` || canonicalHost === `www.${currentHost}`)
-    ) {
-      const canonicalOrigin = `${window.location.protocol}//${canonicalHost}`
-      const destination = `${canonicalOrigin}${window.location.pathname}${window.location.search}${window.location.hash}`
+      ((currentHost !== canonical.host && isAliasHost) || (currentHost === canonical.host && currentOrigin !== canonical.origin))
+
+    if (shouldRedirectToCanonical) {
+      const destination = `${canonical.origin}${window.location.pathname}${window.location.search}${window.location.hash}`
       window.location.replace(destination)
       return
     }
