@@ -149,6 +149,18 @@ CREATE TABLE IF NOT EXISTS stock_alert_requests (
   UNIQUE (slug, email)
 );
 
+CREATE TABLE IF NOT EXISTS media_assets (
+  id TEXT PRIMARY KEY,
+  owner_user_id TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('image', 'video')),
+  url TEXT NOT NULL UNIQUE,
+  data_b64 TEXT,
+  size_bytes INTEGER NOT NULL,
+  mime TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS store_settings (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   store_name TEXT NOT NULL,
@@ -194,6 +206,7 @@ CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status, payment_status);
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_vendor_products_status ON vendor_products(status, active);
 CREATE INDEX IF NOT EXISTS idx_stock_alert_slug ON stock_alert_requests(slug);
+CREATE INDEX IF NOT EXISTS idx_media_assets_owner ON media_assets(owner_user_id, created_at);
 
 INSERT OR IGNORE INTO store_settings (
   id,
