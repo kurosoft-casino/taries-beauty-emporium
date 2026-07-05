@@ -58,6 +58,8 @@ const AUTH_STATE_EVENT = 'taries-auth-state-changed'
 export const SESSION_TIMEOUT_MS = 30 * 60 * 1000
 export const ADMIN_EMAILS = ['tarimoboere18@gmail.com'] as const
 const REMOTE_AUTH_TIMEOUT_MS = 20000
+const REMOTE_AUTH_RETRY_DELAY_MS = 750
+const REMOTE_AUTH_MAX_ATTEMPTS = 2
 
 export function isAdminEmail(email: string): boolean {
   const normalized = normalizeEmail(email)
@@ -211,42 +213,67 @@ function upsertLocalUser(user: User): void {
   saveUsers(next)
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => window.setTimeout(resolve, ms))
+}
+
 async function requestRemoteAuth<T>(path: string, init?: RequestInit): Promise<T> {
   if (typeof window === 'undefined') throw new Error('Not available on server')
-  const controller = new AbortController()
-  const timeout = window.setTimeout(() => controller.abort(), REMOTE_AUTH_TIMEOUT_MS)
-  try {
-    const headers = new Headers(init?.headers ?? {})
-    if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
-    const apiSessionToken = readApiSessionToken()
-    if (apiSessionToken && !headers.has('Authorization')) {
-      headers.set('Authorization', `Bearer ${apiSessionToken}`)
-    }
-    const response = await fetch(withApiBase(path), {
-      credentials: 'include',
-      cache: 'no-store',
-      ...init,
-      signal: controller.signal,
-      headers,
-    })
-    const payload = await response.json().catch(() => null) as T | { error?: string } | null
-    if (!response.ok) {
-      if (payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string') {
-        throw new Error(payload.error)
+  let timedOut = false
+  let lastError: unknown
+
+  for (let attempt = 1; attempt <= REMOTE_AUTH_MAX_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, REMOTE_AUTH_TIMEOUT_MS)
+
+    try {
+      timedOut = false
+      const headers = new Headers(init?.headers ?? {})
+      if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+      const apiSessionToken = readApiSessionToken()
+      if (apiSessionToken && !headers.has('Authorization')) {
+        headers.set('Authorization', `Bearer ${apiSessionToken}`)
       }
-      throw new Error('Request failed. Please try again.')
+      const response = await fetch(withApiBase(path), {
+        credentials: 'include',
+        cache: 'no-store',
+        ...init,
+        signal: controller.signal,
+        headers,
+      })
+      const payload = await response.json().catch(() => null) as T | { error?: string } | null
+      if (!response.ok) {
+        if (payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string') {
+          throw new Error(payload.error)
+        }
+        throw new Error('Request failed. Please try again.')
+      }
+      if (!payload) throw new Error('Invalid response from server. Please try again.')
+      return payload as T
+    } catch (error) {
+      lastError = error
+      const isTimeout = error instanceof Error && error.name === 'AbortError'
+      const isTransientNetworkError = error instanceof TypeError
+      const shouldRetry = attempt < REMOTE_AUTH_MAX_ATTEMPTS && (isTimeout || isTransientNetworkError)
+      if (!shouldRetry) break
+      await delay(REMOTE_AUTH_RETRY_DELAY_MS)
+    } finally {
+      window.clearTimeout(timeout)
     }
-    if (!payload) throw new Error('Invalid response from server. Please try again.')
-    return payload as T
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('Request timed out. Please check your connection and try again.')
-    }
-    if (error instanceof Error) throw error
-    throw new Error('Network error. Please try again.')
-  } finally {
-    window.clearTimeout(timeout)
   }
+
+  if (lastError instanceof Error && lastError.name === 'AbortError') {
+    throw new Error('Request timed out. Please check your connection and try again.')
+  }
+  if (lastError instanceof TypeError) {
+    throw new Error('Network error. Please check your connection and try again.')
+  }
+  if (lastError instanceof Error) throw lastError
+  if (timedOut) throw new Error('Request timed out. Please check your connection and try again.')
+  throw new Error('Network error. Please try again.')
 }
 
 async function verifyPassword(user: User, password: string): Promise<boolean> {
