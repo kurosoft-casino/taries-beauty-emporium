@@ -13,6 +13,12 @@ interface Props {
   label?: string
 }
 
+const SUPPORTED_UPLOAD_MIMES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/avif',
+])
 const LARGE_IMAGE_THRESHOLD_BYTES = 600 * 1024
 const TARGET_IMAGE_BYTES = 350 * 1024
 const WARNING_IMAGE_BYTES = 400 * 1024
@@ -76,15 +82,18 @@ async function optimizeImage(file: File): Promise<string> {
   const fallback = await readFileAsDataUrl(file)
   if (typeof window === 'undefined') return fallback
   if (!file.type.startsWith('image/')) return fallback
-  if (file.size <= LARGE_IMAGE_THRESHOLD_BYTES) return fallback
+
+  const needsNormalization = !SUPPORTED_UPLOAD_MIMES.has(file.type)
+  if (!needsNormalization && file.size <= LARGE_IMAGE_THRESHOLD_BYTES) return fallback
 
   try {
     const image = await loadImageElement(file)
     const longestSide = Math.max(image.naturalWidth, image.naturalHeight)
-    const initialScale = longestSide > MAX_IMAGE_DIMENSION ? MAX_IMAGE_DIMENSION / longestSide : 1
+    const targetMaxDimension = needsNormalization ? longestSide : MAX_IMAGE_DIMENSION
+    const initialScale = longestSide > targetMaxDimension ? targetMaxDimension / longestSide : 1
     let width = Math.max(1, Math.round(image.naturalWidth * initialScale))
     let height = Math.max(1, Math.round(image.naturalHeight * initialScale))
-    let quality = 0.85
+    let quality = needsNormalization ? 0.92 : 0.85
     let result = renderCompressedImage(image, width, height, quality)
     if (!result) return fallback
 
@@ -116,6 +125,9 @@ async function optimizeImage(file: File): Promise<string> {
 
     return result
   } catch {
+    if (needsNormalization) {
+      throw new Error('This photo format could not be processed. Please use JPG, PNG, WEBP, or AVIF.')
+    }
     return fallback
   }
 }
@@ -142,7 +154,11 @@ export default function ImageUploader({
 
   function readFilesAsMediaUrls(files: FileList | File[]): Promise<string[]> {
     const arr = Array.from(files).slice(0, maxImages - images.length)
-    return Promise.all(arr.map(file => uploadMediaFile(file)))
+    return arr.reduce<Promise<string[]>>(async (promise, file) => {
+      const uploaded = await promise
+      const url = await uploadMediaFile(file)
+      return [...uploaded, url]
+    }, Promise.resolve([]))
   }
 
   async function handleFiles(files: FileList | File[]) {
@@ -310,7 +326,7 @@ export default function ImageUploader({
             <p className="text-brand-cream/60 text-sm">
               {dragging ? 'Drop to add images' : 'Drag & drop images here'}
             </p>
-            <p className="text-brand-cream/30 text-xs">or click to browse · JPG, PNG, WEBP, GIF</p>
+            <p className="text-brand-cream/30 text-xs">or click to browse · JPG, PNG, WEBP, AVIF, HEIC</p>
             <p className="text-brand-cream/25 text-xs">
               {uploading ? 'Uploading images…' : 'Large photos are auto-compressed and uploaded safely'}
             </p>
