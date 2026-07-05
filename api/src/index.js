@@ -35,6 +35,9 @@ const getEffectiveRole = (email, role) => (isAdminEmail(email) ? 'admin' : (role
 const FX_RATES = { NGN: 1620, GHS: 16.2, USD: 1, CNY: 7.25 };
 const FLW_SETTLE_CURRENCY = new Set(['NGN', 'GHS', 'USD']);
 const MAX_PRODUCT_MEDIA_JSON_BYTES = 24 * 1024;
+const MAX_INLINE_PRODUCT_MEDIA_JSON_BYTES = 2 * 1024 * 1024;
+const IMAGE_UPLOAD_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'];
+const VIDEO_UPLOAD_MIMES = ['video/mp4', 'video/webm'];
 
 function round2(n) {
   return Math.round(Number(n || 0) * 100) / 100;
@@ -44,19 +47,78 @@ function estimateJsonBytes(value) {
   return new TextEncoder().encode(JSON.stringify(value ?? null)).length;
 }
 
+function isInlineDataUrl(value) {
+  return typeof value === 'string' && value.startsWith('data:');
+}
+
+function parseDataUrl(value) {
+  if (!isInlineDataUrl(value)) return null;
+  const match = value.match(/^data:([^;]+);base64,(.+)$/s);
+  if (!match) return null;
+  const [, mime, base64] = match;
+  try {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return { mime, bytes };
+  } catch {
+    return null;
+  }
+}
+
 function validateProductMediaPayload(body) {
   const images = Array.isArray(body?.images) ? body.images : [];
   const videos = Array.isArray(body?.videos) ? body.videos : [];
-  if (images.some((src) => typeof src === 'string' && src.startsWith('data:'))) {
-    return 'Images must finish uploading before you create the product. Please wait for the upload to complete and try again.';
+  const hasInlineImages = images.some((src) => isInlineDataUrl(src));
+  if (hasInlineImages && estimateJsonBytes(images) > MAX_INLINE_PRODUCT_MEDIA_JSON_BYTES) {
+    return 'Product images are too large. Please use fewer images or smaller photos.';
   }
-  if (estimateJsonBytes(images) > MAX_PRODUCT_MEDIA_JSON_BYTES) {
+  if (!hasInlineImages && estimateJsonBytes(images) > MAX_PRODUCT_MEDIA_JSON_BYTES) {
     return 'Product images are too large. Please use fewer images or smaller photos.';
   }
   if (estimateJsonBytes(videos) > 8 * 1024) {
     return 'Video data is too large. Please shorten the video links and try again.';
   }
   return null;
+}
+
+async function storeInlineMediaAsset(env, ownerUserId, source) {
+  const parsed = parseDataUrl(source);
+  if (!parsed) throw new Error('Invalid image data. Please choose the photo again.');
+  if (!IMAGE_UPLOAD_MIMES.includes(parsed.mime)) {
+    throw new Error('Unsupported image format. Please use JPG, PNG, WEBP, or AVIF.');
+  }
+  if (parsed.bytes.byteLength > 5 * 1024 * 1024) {
+    throw new Error('Product image is too large. Please use a smaller photo.');
+  }
+
+  let binary = '';
+  for (let index = 0; index < parsed.bytes.length; index += 0x8000) {
+    binary += String.fromCharCode.apply(null, parsed.bytes.subarray(index, index + 0x8000));
+  }
+
+  const id = uid('med_');
+  const url = `/api/media/${id}`;
+  await env.DB.prepare(
+    `INSERT INTO media_assets (id, owner_user_id, kind, url, data_b64, size_bytes, mime, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(id, ownerUserId, 'image', url, btoa(binary), parsed.bytes.byteLength, parsed.mime, nowIso()).run();
+  return url;
+}
+
+async function normalizeProductImagesForStorage(env, ownerUserId, images) {
+  const list = Array.isArray(images) ? images : [];
+  const normalized = [];
+  for (const image of list) {
+    if (typeof image !== 'string') continue;
+    const trimmed = image.trim();
+    if (!trimmed) continue;
+    normalized.push(
+      isInlineDataUrl(trimmed)
+        ? await storeInlineMediaAsset(env, ownerUserId, trimmed)
+        : trimmed
+    );
+  }
+  return normalized;
 }
 
 function toChargeCurrency(orderCurrency) {
@@ -593,6 +655,12 @@ route('POST', '/admin/products', async (req, env) => {
   if (!b.weightKg || Number(b.weightKg) <= 0) return err(400, 'weightKg required (must be > 0)');
   const mediaError = validateProductMediaPayload(b);
   if (mediaError) return err(413, mediaError);
+  let normalizedImages;
+  try {
+    normalizedImages = await normalizeProductImagesForStorage(env, a.session.user_id, b.images);
+  } catch (error) {
+    return err(400, error instanceof Error ? error.message : 'Could not process product images.');
+  }
   const vendorId = await ensureAdminVendor(env, a.session.user_id);
   const id = uid('prd_');
   const slug = (b.slug || b.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + id.slice(-6);
@@ -616,7 +684,7 @@ route('POST', '/admin/products', async (req, env) => {
       b.shortDesc || '',
       JSON.stringify(b.features || []),
       JSON.stringify(b.variants || []),
-      JSON.stringify(b.images || []),
+      JSON.stringify(normalizedImages),
       b.video || null,
       b.badge || null,
       b.whatsapp || null,
@@ -656,6 +724,12 @@ route('POST', '/vendors/me/products', async (req, env) => {
   if (!b.weightKg || Number(b.weightKg) <= 0) return err(400, 'weightKg required (must be > 0)');
   const mediaError = validateProductMediaPayload(b);
   if (mediaError) return err(413, mediaError);
+  let normalizedImages;
+  try {
+    normalizedImages = await normalizeProductImagesForStorage(env, a.session.user_id, b.images);
+  } catch (error) {
+    return err(400, error instanceof Error ? error.message : 'Could not process product images.');
+  }
   const id = uid('prd_');
   const slug = (b.slug || b.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + id.slice(-6);
   const now = nowIso();
@@ -678,7 +752,7 @@ route('POST', '/vendors/me/products', async (req, env) => {
       b.shortDesc || '',
       JSON.stringify(b.features || []),
       JSON.stringify(b.variants || []),
-      JSON.stringify(b.images || []),
+      JSON.stringify(normalizedImages),
       b.video || null,
       b.badge || null,
       b.whatsapp || null,
@@ -706,6 +780,14 @@ route('PATCH', '/vendors/me/products/:id', async (req, env, params) => {
   const b = await req.json().catch(() => ({}));
   const mediaError = validateProductMediaPayload(b);
   if (mediaError) return err(413, mediaError);
+  let normalizedImages = null;
+  if (Object.prototype.hasOwnProperty.call(b, 'images')) {
+    try {
+      normalizedImages = await normalizeProductImagesForStorage(env, a.session.user_id, b.images);
+    } catch (error) {
+      return err(400, error instanceof Error ? error.message : 'Could not process product images.');
+    }
+  }
   const map = {
     name: 'name',
     category: 'category',
@@ -733,7 +815,8 @@ route('PATCH', '/vendors/me/products/:id', async (req, env, params) => {
     if (!(k in map)) continue;
     fields.push(`${map[k]} = ?`);
     let v = b[k];
-    if (k === 'features' || k === 'variants' || k === 'images' || k === 'videos') v = JSON.stringify(v || []);
+    if (k === 'features' || k === 'variants' || k === 'videos') v = JSON.stringify(v || []);
+    if (k === 'images') v = JSON.stringify(normalizedImages || []);
     if (k === 'inStock' || k === 'sensitive' || k === 'active') v = v ? 1 : 0;
     vals.push(v);
   }
@@ -1245,8 +1328,8 @@ function strField(v, max, opts = {}) {
 // ============================================================
 
 const MEDIA_LIMITS = {
-  image: { max: 5 * 1024 * 1024, mimes: ['image/jpeg', 'image/png', 'image/webp', 'image/avif'] },
-  video: { max: 5 * 1024 * 1024, mimes: ['video/mp4', 'video/webm'] }, // 5MB cap until R2
+  image: { max: 5 * 1024 * 1024, mimes: IMAGE_UPLOAD_MIMES },
+  video: { max: 5 * 1024 * 1024, mimes: VIDEO_UPLOAD_MIMES }, // 5MB cap until R2
 };
 
 route('POST', '/media/upload', async (req, env) => {

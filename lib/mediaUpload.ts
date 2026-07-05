@@ -47,10 +47,15 @@ export async function uploadImageSource(source: string, filename?: string): Prom
       continue
     }
 
+    if (isTransientNetworkError) {
+      // Keep the inline image so the product-save API can persist it server-side.
+      return source
+    }
+
     throw new Error(response.error || 'Could not upload image. Please try a smaller photo.')
   }
 
-  throw new Error('Could not upload image. Please try again.')
+  return source
 }
 
 export async function normalizeProductImageSources(images: string[]): Promise<string[]> {
