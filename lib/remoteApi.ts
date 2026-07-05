@@ -48,9 +48,10 @@ function mergeHeaders(
   initHeaders: HeadersInit | undefined,
   csrfEnabled: boolean,
   apiSessionToken: string | null,
+  body: BodyInit | null | undefined,
 ): Headers {
   const headers = new Headers(initHeaders ?? {})
-  if (!headers.has('Content-Type')) {
+  if (!(body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
   if (apiSessionToken && !headers.has('Authorization')) {
@@ -79,10 +80,10 @@ export async function apiRequest<T = unknown>(path: string, init?: RequestInit):
     let response = await fetch(withApiBase(path), {
       credentials: 'include',
       cache: 'no-store',
-      ...init,
-      method,
-      headers: mergeHeaders(init?.headers, csrfEnabled, apiSessionToken),
-    })
+        ...init,
+        method,
+        headers: mergeHeaders(init?.headers, csrfEnabled, apiSessionToken, init?.body),
+      })
     if (response.status === 403 && csrfEnabled) {
       const firstPayload = await response.json().catch(() => null) as ApiErrorPayload | null
       if (firstPayload?.error === 'csrf token mismatch') {
@@ -92,7 +93,7 @@ export async function apiRequest<T = unknown>(path: string, init?: RequestInit):
           cache: 'no-store',
           ...init,
           method,
-          headers: mergeHeaders(init?.headers, csrfEnabled, apiSessionToken),
+          headers: mergeHeaders(init?.headers, csrfEnabled, apiSessionToken, init?.body),
         })
       } else {
         const err =

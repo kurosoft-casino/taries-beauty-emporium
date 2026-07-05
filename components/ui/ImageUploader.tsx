@@ -2,6 +2,8 @@
 import { useRef, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, ChevronLeft, ChevronRight, ImageIcon, Link } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { uploadImageSource } from '@/lib/mediaUpload'
 
 interface Props {
   images: string[]
@@ -127,17 +129,30 @@ export default function ImageUploader({
   const [dragging, setDragging] = useState(false)
   const [showUrlInput, setShowUrlInput] = useState(false)
   const [urlValue, setUrlValue] = useState('')
+  const [uploading, setUploading] = useState(false)
 
   const canAdd = images.length < maxImages
 
-  function readFilesAsBase64(files: FileList | File[]): Promise<string[]> {
+  async function uploadMediaFile(file: File): Promise<string> {
+    const optimized = await optimizeImage(file)
+    return uploadImageSource(optimized, file.name)
+  }
+
+  function readFilesAsMediaUrls(files: FileList | File[]): Promise<string[]> {
     const arr = Array.from(files).slice(0, maxImages - images.length)
-    return Promise.all(arr.map(file => optimizeImage(file)))
+    return Promise.all(arr.map(file => uploadMediaFile(file)))
   }
 
   async function handleFiles(files: FileList | File[]) {
-    const results = await readFilesAsBase64(files)
-    onChange([...images, ...results])
+    setUploading(true)
+    try {
+      const results = await readFilesAsMediaUrls(files)
+      onChange([...images, ...results])
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not upload image.')
+    } finally {
+      setUploading(false)
+    }
   }
 
   const handleDrop = useCallback(
@@ -292,7 +307,9 @@ export default function ImageUploader({
               {dragging ? 'Drop to add images' : 'Drag & drop images here'}
             </p>
             <p className="text-brand-cream/30 text-xs">or click to browse · JPG, PNG, WEBP, GIF</p>
-            <p className="text-brand-cream/25 text-xs">Large photos are auto-compressed for faster upload</p>
+            <p className="text-brand-cream/25 text-xs">
+              {uploading ? 'Uploading images…' : 'Large photos are auto-compressed and uploaded safely'}
+            </p>
             <p className="text-brand-cream/25 text-xs">
               {images.length}/{maxImages} images
             </p>

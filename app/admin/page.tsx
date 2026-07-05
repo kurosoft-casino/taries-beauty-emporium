@@ -19,6 +19,7 @@ import { getInventory, setInventoryItem } from '@/lib/inventory'
 import type { InventoryItem } from '@/lib/inventory'
 import { getAdminLevel, getCurrentUser, isAdminUser, logoutUser, type AdminLevel, type User } from '@/lib/auth'
 import { logoSrc } from '@/lib/assets'
+import { normalizeProductImageSources } from '@/lib/mediaUpload'
 import { apiRequest } from '@/lib/remoteApi'
 import { useLang } from '@/lib/lang'
 import { DEFAULT_STORE_SETTINGS, getMaintenanceMode, getStoreSettings, saveMaintenanceMode, saveStoreSettings } from '@/lib/storeSettings'
@@ -1410,6 +1411,7 @@ function ProductsManagementTab() {
 
   async function handleCreateVendorProduct(formData: ProductFormData) {
     const vendor = approvedVendors.find(entry => entry.email === vendorDraftEmail)
+    const normalizedImages = await normalizeProductImageSources(formData.images)
 
     const variants = formData.variants
       .filter(v => v.label.trim())
@@ -1437,7 +1439,7 @@ function ProductsManagementTab() {
         originalPrice: formData.originalPrice ? Number(formData.originalPrice) : null,
         description: formData.description.trim(),
         shortDesc: formData.shortDesc.trim(),
-        images: formData.images,
+        images: normalizedImages,
         video: formData.video.trim() || null,
         inStock: formData.inStock,
         stockCount: formData.stockCount ? Number(formData.stockCount) : null,

@@ -34,9 +34,29 @@ const isAdminEmail = (email) => ADMIN_EMAILS.has(lower(email));
 const getEffectiveRole = (email, role) => (isAdminEmail(email) ? 'admin' : (role || 'customer'));
 const FX_RATES = { NGN: 1620, GHS: 16.2, USD: 1, CNY: 7.25 };
 const FLW_SETTLE_CURRENCY = new Set(['NGN', 'GHS', 'USD']);
+const MAX_PRODUCT_MEDIA_JSON_BYTES = 24 * 1024;
 
 function round2(n) {
   return Math.round(Number(n || 0) * 100) / 100;
+}
+
+function estimateJsonBytes(value) {
+  return new TextEncoder().encode(JSON.stringify(value ?? null)).length;
+}
+
+function validateProductMediaPayload(body) {
+  const images = Array.isArray(body?.images) ? body.images : [];
+  const videos = Array.isArray(body?.videos) ? body.videos : [];
+  if (images.some((src) => typeof src === 'string' && src.startsWith('data:'))) {
+    return 'Images must finish uploading before you create the product. Please wait for the upload to complete and try again.';
+  }
+  if (estimateJsonBytes(images) > MAX_PRODUCT_MEDIA_JSON_BYTES) {
+    return 'Product images are too large. Please use fewer images or smaller photos.';
+  }
+  if (estimateJsonBytes(videos) > 8 * 1024) {
+    return 'Video data is too large. Please shorten the video links and try again.';
+  }
+  return null;
 }
 
 function toChargeCurrency(orderCurrency) {
@@ -571,6 +591,8 @@ route('POST', '/admin/products', async (req, env) => {
   const b = await req.json().catch(() => ({}));
   if (!b.name || !b.price) return err(400, 'name and price required');
   if (!b.weightKg || Number(b.weightKg) <= 0) return err(400, 'weightKg required (must be > 0)');
+  const mediaError = validateProductMediaPayload(b);
+  if (mediaError) return err(413, mediaError);
   const vendorId = await ensureAdminVendor(env, a.session.user_id);
   const id = uid('prd_');
   const slug = (b.slug || b.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + id.slice(-6);
@@ -632,6 +654,8 @@ route('POST', '/vendors/me/products', async (req, env) => {
   const b = await req.json().catch(() => ({}));
   if (!b.name || !b.price) return err(400, 'name and price required');
   if (!b.weightKg || Number(b.weightKg) <= 0) return err(400, 'weightKg required (must be > 0)');
+  const mediaError = validateProductMediaPayload(b);
+  if (mediaError) return err(413, mediaError);
   const id = uid('prd_');
   const slug = (b.slug || b.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + id.slice(-6);
   const now = nowIso();
@@ -680,6 +704,8 @@ route('PATCH', '/vendors/me/products/:id', async (req, env, params) => {
   const v = await env.DB.prepare('SELECT id FROM vendors WHERE user_id = ?').bind(a.session.user_id).first();
   if (!v) return err(403, 'not a vendor');
   const b = await req.json().catch(() => ({}));
+  const mediaError = validateProductMediaPayload(b);
+  if (mediaError) return err(413, mediaError);
   const map = {
     name: 'name',
     category: 'category',
@@ -1247,7 +1273,7 @@ route('POST', '/media/upload', async (req, env) => {
   }
   const b64 = btoa(bin);
   const id = uid('med_');
-  const url = `/media/${id}`;
+  const url = `/api/media/${id}`;
   await env.DB.prepare(
     `INSERT INTO media_assets (id, owner_user_id, kind, url, data_b64, size_bytes, mime, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(id, a.session.user_id, kind, url, b64, buf.byteLength, mime, nowIso()).run();
@@ -1923,7 +1949,11 @@ export default {
         const res = await r.handler(request, env, params);
         return withCors(res, env, origin);
       } catch (e) {
-        return withCors(err(500, e.message || 'internal error'), env, origin);
+        const message = String(e?.message || 'internal error');
+        if (message.includes('SQLITE_TOOBIG') || message.includes('string or blob too big')) {
+          return withCors(err(413, 'Uploaded product data is too large. Please use smaller images and try again.'), env, origin);
+        }
+        return withCors(err(500, message), env, origin);
       }
     }
     return withCors(err(404, 'route not found', { path }), env, origin);

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { AlertCircle, Eye, LogOut, MessageCircle, Package, Pencil, Plus, Save, Send, Store, Trash2, X } from 'lucide-react'
 import { getCurrentUser } from '@/lib/auth'
+import { normalizeProductImageSources } from '@/lib/mediaUpload'
 import { apiJson, apiRequest } from '@/lib/remoteApi'
 import {
   getVariantOptionLabel,
@@ -334,6 +335,7 @@ export default function VendorDashboardPage() {
   }, [activeConversationId])
 
   async function handleSaveProduct(form: ProductFormData) {
+    const normalizedImages = await normalizeProductImageSources(form.images)
     const payload = {
       name: form.name.trim(),
       category: form.category,
@@ -341,7 +343,7 @@ export default function VendorDashboardPage() {
       originalPrice: form.originalPrice ? Number(form.originalPrice) : null,
       description: form.description.trim(),
       shortDesc: form.shortDesc.trim(),
-      images: form.images,
+      images: normalizedImages,
       video: form.video.trim() || null,
       inStock: form.inStock,
       stockCount: form.stockCount ? Number(form.stockCount) : null,
