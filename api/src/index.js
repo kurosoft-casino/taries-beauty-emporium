@@ -23,6 +23,12 @@ const uid = (prefix = '') => prefix + crypto.randomUUID();
 const nowIso = () => new Date().toISOString();
 
 const lower = (s) => (s || '').toString().trim().toLowerCase();
+const digitsOnly = (s) => (s || '').toString().replace(/\D/g, '');
+const normalizeCountry = (value) => {
+  const country = (value || '').toString().trim();
+  if (country === 'Nigeria' || country === 'Ghana' || country === 'China') return country;
+  return 'Other';
+};
 const ADMIN_EMAILS = new Set(['tarimoboere18@gmail.com']);
 const isAdminEmail = (email) => ADMIN_EMAILS.has(lower(email));
 const getEffectiveRole = (email, role) => (isAdminEmail(email) ? 'admin' : (role || 'customer'));
@@ -213,10 +219,11 @@ route('POST', '/auth/register', async (req, env) => {
   const id = uid('usr_');
   const now = nowIso();
   const role = getEffectiveRole(email, 'customer');
+  const metadata = JSON.stringify({ country: normalizeCountry(body.country) });
 
   await env.DB.prepare(
     `INSERT INTO users (id, role, first_name, last_name, email, phone, password_hash, password_salt, password_version, avatar, whatsapp, created_at, updated_at, metadata_json)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 3, ?, ?, ?, ?, '{}')`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 3, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
@@ -230,7 +237,8 @@ route('POST', '/auth/register', async (req, env) => {
       body.avatar || null,
       body.whatsapp || null,
       now,
-      now
+      now,
+      metadata
     )
     .run();
 
@@ -249,7 +257,21 @@ route('POST', '/auth/register', async (req, env) => {
   const headers = new Headers({ 'content-type': 'application/json' });
   headers.append('set-cookie', setCookieHeader(tok, SESSION_TTL_DAYS * 86400));
   headers.append('set-cookie', `tbe_csrf=${csrf}; Path=/; Max-Age=${SESSION_TTL_DAYS * 86400}; Secure; SameSite=None`);
-  return new Response(JSON.stringify({ ok: true, csrfToken: csrf, sessionToken: tok, user: { id, email, role, firstName: body.firstName, lastName: body.lastName } }), {
+  return new Response(JSON.stringify({
+    ok: true,
+    csrfToken: csrf,
+    sessionToken: tok,
+    user: {
+      id,
+      email,
+      role,
+      firstName: body.firstName || body.first_name || 'Friend',
+      lastName: body.lastName || body.last_name || '',
+      country: normalizeCountry(body.country),
+      phone: body.phone || null,
+      whatsapp: body.whatsapp || null,
+    },
+  }), {
     status: 200,
     headers,
   });
@@ -294,6 +316,9 @@ route('POST', '/auth/login', async (req, env) => {
         role,
         firstName: u.first_name,
         lastName: u.last_name,
+        country: normalizeCountry((() => {
+          try { return JSON.parse(u.metadata_json || '{}').country; } catch { return 'Other'; }
+        })()),
         avatar: u.avatar,
         phone: u.phone,
         whatsapp: u.whatsapp,
@@ -321,13 +346,16 @@ route('POST', '/auth/logout', async (req, env) => {
 route('GET', '/auth/me', async (req, env) => {
   const s = await getSession(req, env);
   if (!s) return ok({ user: null });
-  const u = await env.DB.prepare('SELECT id, email, role, first_name, last_name, avatar, phone, whatsapp, created_at FROM users WHERE id = ?')
+  const u = await env.DB.prepare('SELECT id, email, role, first_name, last_name, avatar, phone, whatsapp, created_at, metadata_json FROM users WHERE id = ?')
     .bind(s.user_id)
     .first();
   const role = u ? getEffectiveRole(u.email, u.role) : null;
   if (u && role !== u.role) {
     await env.DB.prepare('UPDATE users SET role = ?, updated_at = ? WHERE id = ?').bind(role, nowIso(), u.id).run();
   }
+  const country = normalizeCountry((() => {
+    try { return JSON.parse(u?.metadata_json || '{}').country; } catch { return 'Other'; }
+  })());
   const headers = new Headers({ 'content-type': 'application/json' });
   const csrf = await ensureCsrfCookie(req, headers);
   return new Response(JSON.stringify({
@@ -340,6 +368,7 @@ route('GET', '/auth/me', async (req, env) => {
           role,
           firstName: u.first_name,
           lastName: u.last_name,
+          country,
           avatar: u.avatar,
           phone: u.phone,
           whatsapp: u.whatsapp,
@@ -347,6 +376,46 @@ route('GET', '/auth/me', async (req, env) => {
         }
       : null,
   }), { status: 200, headers });
+});
+
+route('PATCH', '/auth/profile', async (req, env) => {
+  const a = await requireAuth(req, env);
+  if (a.error) return a.error;
+  const body = await req.json().catch(() => ({}));
+  const existing = await env.DB.prepare('SELECT id, email, role, first_name, last_name, avatar, phone, whatsapp, created_at, metadata_json FROM users WHERE id = ?')
+    .bind(a.session.user_id)
+    .first();
+  if (!existing) return err(404, 'not found');
+
+  const firstName = (body.firstName ?? existing.first_name ?? '').toString().trim();
+  const lastName = (body.lastName ?? existing.last_name ?? '').toString().trim();
+  const phone = body.phone == null ? existing.phone : (body.phone || '').toString().trim();
+  const avatar = body.avatar == null ? existing.avatar : (body.avatar || null);
+  let metadata = {};
+  try { metadata = JSON.parse(existing.metadata_json || '{}') || {}; } catch {}
+  metadata = { ...metadata, country: normalizeCountry(body.country ?? metadata.country) };
+
+  if (!firstName) return err(400, 'firstName required');
+  if (!lastName) return err(400, 'lastName required');
+
+  await env.DB.prepare(
+    'UPDATE users SET first_name = ?, last_name = ?, phone = ?, avatar = ?, metadata_json = ?, updated_at = ? WHERE id = ?'
+  ).bind(firstName, lastName, phone || null, avatar, JSON.stringify(metadata), nowIso(), a.session.user_id).run();
+
+  return ok({
+    user: {
+      id: existing.id,
+      email: existing.email,
+      role: getEffectiveRole(existing.email, existing.role),
+      firstName,
+      lastName,
+      country: normalizeCountry(metadata.country),
+      avatar: avatar || undefined,
+      phone: phone || '',
+      whatsapp: existing.whatsapp,
+      createdAt: existing.created_at,
+    },
+  });
 });
 
 route('GET', '/auth/csrf', async (req, env) => {
@@ -1517,6 +1586,26 @@ route('POST', '/auth/change-password', async (req, env) => {
   await env.DB.prepare('UPDATE users SET password_hash = ?, password_salt = ?, updated_at = ? WHERE id = ?')
     .bind(newHash, newSalt, nowIso(), a.session.user_id).run();
   await audit(env, req, a.session.user_id, 'auth.password_changed');
+  return ok();
+});
+
+route('POST', '/auth/reset-password', async (req, env) => {
+  const b = await req.json().catch(() => ({}));
+  const email = lower(b.email);
+  const phone = String(b.phone || '').trim();
+  const newPassword = String(b.newPassword || '');
+  if (!email || !email.includes('@')) return err(400, 'invalid email');
+  if (!phone) return err(400, 'phone required');
+  if (newPassword.length < 6) return err(400, 'password too short');
+
+  const u = await env.DB.prepare('SELECT id, email, phone FROM users WHERE email = ?').bind(email).first();
+  if (!u) return err(404, 'No account found with that email address.');
+  if (digitsOnly(u.phone) !== digitsOnly(phone)) return err(401, 'Phone number does not match this account.');
+
+  const newSalt = randomToken(16);
+  const newHash = await pbkdf2(newPassword, newSalt);
+  await env.DB.prepare('UPDATE users SET password_hash = ?, password_salt = ?, updated_at = ? WHERE id = ?')
+    .bind(newHash, newSalt, nowIso(), u.id).run();
   return ok();
 });
 

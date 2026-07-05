@@ -288,7 +288,7 @@ export default function AccountPage() {
   async function handleSaveProfile() {
     setSavingProfile(true)
     try {
-      updateUser({ firstName: editFirstName, lastName: editLastName, phone: editPhone })
+      await updateUser({ firstName: editFirstName, lastName: editLastName, phone: editPhone })
       refreshUser()
       toast.success('Profile updated!')
     } catch (err: unknown) {

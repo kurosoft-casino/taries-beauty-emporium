@@ -382,25 +382,27 @@ export function getCurrentUser(): User | null {
   return current
 }
 
-export function updateUser(
+export async function updateUser(
   fields: Partial<Pick<User, 'firstName' | 'lastName' | 'phone' | 'avatar'>>,
-): User {
+): Promise<User> {
   if (typeof window === 'undefined') throw new Error('Not available on server')
   const current = getCurrentUser()
   if (!current) throw new Error('Not logged in.')
 
-  const updated: User = {
-    ...current,
-    ...(fields.firstName !== undefined ? { firstName: sanitizeInlineText(fields.firstName) } : {}),
-    ...(fields.lastName !== undefined ? { lastName: sanitizeInlineText(fields.lastName) } : {}),
-    ...(fields.phone !== undefined ? { phone: sanitizePhone(fields.phone) } : {}),
-    ...(fields.avatar !== undefined ? { avatar: fields.avatar } : {}),
-  }
-
-  const users = getUsers().map(user => (user.id === updated.id ? updated : user))
-  saveUsers(users)
-  writeSession(updated)
-  return updated
+  const payload = await requestRemoteAuth<RemoteAuthPayload>('/auth/profile', {
+    method: 'PATCH',
+    body: JSON.stringify({
+      ...(fields.firstName !== undefined ? { firstName: sanitizeInlineText(fields.firstName) } : {}),
+      ...(fields.lastName !== undefined ? { lastName: sanitizeInlineText(fields.lastName) } : {}),
+      ...(fields.phone !== undefined ? { phone: sanitizePhone(fields.phone) } : {}),
+      ...(fields.avatar !== undefined ? { avatar: fields.avatar } : {}),
+    }),
+  })
+  if (!payload.user) throw new Error('Profile service returned an invalid response.')
+  const mapped = mapRemoteUserToLocal(payload.user)
+  upsertLocalUser(mapped)
+  writeSession(mapped)
+  return mapped
 }
 
 export function addAddress(addr: Omit<SavedAddress, 'id'>): User {
@@ -452,23 +454,11 @@ export function setDefaultAddress(id: string): User {
 
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   if (typeof window === 'undefined') throw new Error('Not available on server')
-  const current = getCurrentUser()
-  if (!current) throw new Error('Not logged in.')
   if (newPassword.length < 8) throw new Error('Password must be at least 8 characters.')
-
-  const verified = await verifyPassword(current, currentPassword)
-  if (!verified) throw new Error('Current password is incorrect.')
-
-  const salt = randomSalt()
-  const updated: User = {
-    ...current,
-    passwordHash: await createPasswordHash(current.email, newPassword, salt),
-    passwordSalt: salt,
-    passwordVersion: 2,
-  }
-
-  saveUsers(getUsers().map(user => (user.id === updated.id ? updated : user)))
-  writeSession(updated)
+  await requestRemoteAuth('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ currentPassword, newPassword }),
+  })
 }
 
 export async function resetPasswordWithEmail(emailInput: string, phoneInput: string, newPassword: string): Promise<void> {
@@ -478,24 +468,10 @@ export async function resetPasswordWithEmail(emailInput: string, phoneInput: str
   if (!isValidEmail(email)) throw new Error('Please enter a valid email address.')
   if (!phone) throw new Error('Phone number is required.')
   if (newPassword.length < 8) throw new Error('Password must be at least 8 characters.')
-
-  const users = getUsers()
-  const found = users.find(user => user.email.toLowerCase() === email)
-  if (!found) throw new Error('No account found with that email address.')
-
-  if (sanitizeDigits(found.phone) !== sanitizeDigits(phone)) {
-    throw new Error('Phone number does not match this account.')
-  }
-
-  const salt = randomSalt()
-  const updated: User = {
-    ...found,
-    passwordHash: await createPasswordHash(found.email, newPassword, salt),
-    passwordSalt: salt,
-    passwordVersion: 2,
-  }
-
-  saveUsers(users.map(user => (user.id === updated.id ? updated : user)))
+  await requestRemoteAuth('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ email, phone, newPassword }),
+  })
 }
 
 export function deleteAccount(): void {
