@@ -57,7 +57,7 @@ const API_SESSION_TOKEN_KEY = 'taries-api-session-token'
 const AUTH_STATE_EVENT = 'taries-auth-state-changed'
 export const SESSION_TIMEOUT_MS = 30 * 60 * 1000
 export const ADMIN_EMAILS = ['tarimoboere18@gmail.com'] as const
-const REMOTE_AUTH_TIMEOUT_MS = 8000
+const REMOTE_AUTH_TIMEOUT_MS = 20000
 
 export function isAdminEmail(email: string): boolean {
   const normalized = normalizeEmail(email)

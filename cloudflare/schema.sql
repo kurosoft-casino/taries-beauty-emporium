@@ -76,10 +76,14 @@ CREATE TABLE IF NOT EXISTS vendor_products (
   whatsapp TEXT,
   in_stock INTEGER NOT NULL DEFAULT 1,
   stock_count INTEGER,
+  weight_kg REAL,
+  sensitive INTEGER NOT NULL DEFAULT 0,
+  model_3d TEXT,
   active INTEGER NOT NULL DEFAULT 1,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'featured', 'removed')),
   added_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
+  videos_json TEXT DEFAULT '[]',
   FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE
 );
 
