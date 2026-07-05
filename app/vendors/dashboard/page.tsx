@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { AlertCircle, Eye, LogOut, MessageCircle, Package, Pencil, Plus, Save, Send, Store, Trash2, X } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { getCurrentUser } from '@/lib/auth'
 import { normalizeProductImageSources } from '@/lib/mediaUpload'
 import { apiJson, apiRequest } from '@/lib/remoteApi'
@@ -202,23 +203,25 @@ function ProductPanel({
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onClick={() => { if (!saving) onClose() }} />
       <div className="fixed right-0 top-0 bottom-0 w-full sm:w-[560px] bg-brand-black-2 border-l border-brand-gold/20 z-50 flex flex-col">
         <div className="px-5 py-4 border-b border-brand-gold/20 flex items-center justify-between">
           <h3 className="text-brand-cream font-display font-semibold">{product ? 'Edit Product' : 'Add Product'}</h3>
-          <button onClick={onClose} className="text-brand-cream/40 hover:text-brand-cream"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} disabled={saving} className="text-brand-cream/40 hover:text-brand-cream disabled:opacity-40"><X className="w-5 h-5" /></button>
         </div>
         <div className="flex-1 overflow-y-auto p-5">
           <ProductForm
             initial={initial}
             loading={saving}
             submitLabel={saving ? 'Saving...' : product ? 'Save Changes' : 'Create Product'}
-            onCancel={onClose}
+            onCancel={() => { if (!saving) onClose() }}
             onSubmit={async form => {
               setSaving(true)
               try {
                 await onSubmit(form)
                 onClose()
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : 'Could not save product.')
               } finally {
                 setSaving(false)
               }

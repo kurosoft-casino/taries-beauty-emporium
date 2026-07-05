@@ -42,7 +42,7 @@ export function emptyFormData(): ProductFormData {
 
 interface Props {
   initial?: Partial<ProductFormData>
-  onSubmit: (data: ProductFormData) => void
+  onSubmit: (data: ProductFormData) => void | Promise<void>
   onCancel: () => void
   submitLabel?: string
   loading?: boolean
@@ -105,6 +105,7 @@ export default function ProductForm({
   const [errors, setErrors] = useState<Partial<Record<keyof ProductFormData, string>>>({})
   const [featureInput, setFeatureInput] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [imagesUploading, setImagesUploading] = useState(false)
 
   function set<K extends keyof ProductFormData>(key: K, value: ProductFormData[K]) {
     setForm(f => ({ ...f, [key]: value }))
@@ -113,6 +114,8 @@ export default function ProductForm({
 
   function validate(): boolean {
     const err: Partial<Record<keyof ProductFormData, string>> = {}
+    if (imagesUploading) err.images = 'Please wait for image uploads to finish'
+    else if (form.images.length === 0) err.images = 'At least one product image is required'
     if (!form.name.trim()) err.name = 'Product name is required'
     if (!form.category) err.category = 'Please select a category'
     if (!form.price || isNaN(Number(form.price)) || Number(form.price) <= 0)
@@ -142,10 +145,10 @@ export default function ProductForm({
     return Object.keys(err).length === 0
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!validate()) return
-    onSubmit(form)
+    await Promise.resolve(onSubmit(form))
   }
 
   function addFeature() {
@@ -180,9 +183,12 @@ export default function ProductForm({
         <ImageUploader
           images={form.images}
           onChange={imgs => set('images', imgs)}
+          onUploadingChange={setImagesUploading}
           maxImages={5}
         />
         <p className="text-brand-cream/30 text-xs mt-2">First photo is your main product image</p>
+        {errors.images && <p className="text-red-400 text-xs mt-1">{errors.images}</p>}
+        {imagesUploading && <p className="text-brand-gold/70 text-xs mt-1">Uploading images before product save…</p>}
       </div>
 
       {/* ── Section 2: Basic Info ── */}
@@ -496,10 +502,10 @@ export default function ProductForm({
         </button>
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || imagesUploading}
           className="flex-1 sm:flex-none btn-gold !py-3 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? 'Saving…' : submitLabel}
+          {imagesUploading ? 'Uploading images…' : loading ? 'Saving…' : submitLabel}
         </button>
       </div>
     </form>

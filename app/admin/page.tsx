@@ -1337,6 +1337,7 @@ function ProductsManagementTab() {
   const [vendors, setVendors] = useState<Vendor[]>([])
   const [vendorDraftEmail, setVendorDraftEmail] = useState('')
   const [showVendorCreate, setShowVendorCreate] = useState(false)
+  const [creatingVendorProduct, setCreatingVendorProduct] = useState(false)
 
   const refreshProductData = useCallback(async () => {
     setInventoryState(getInventory())
@@ -1409,56 +1410,62 @@ function ProductsManagementTab() {
     toast.success(`Product ${status}`)
   }
 
-  async function handleCreateVendorProduct(formData: ProductFormData) {
-    const vendor = approvedVendors.find(entry => entry.email === vendorDraftEmail)
-    const normalizedImages = await normalizeProductImageSources(formData.images)
+  async function handleCreateVendorProduct(formData: ProductFormData): Promise<boolean> {
+    try {
+      const vendor = approvedVendors.find(entry => entry.email === vendorDraftEmail)
+      const normalizedImages = await normalizeProductImageSources(formData.images)
 
-    const variants = formData.variants
-      .filter(v => v.label.trim())
-      .map(v => ({
-        label: v.label.trim(),
-        options: v.options
-          .split(',')
-          .map(option => option.trim())
-          .filter(Boolean)
-          .map((option, index) => {
-            const price = v.prices.split(',').map(entry => entry.trim())[index]
-            const numericPrice = Number(price)
-            return price && Number.isFinite(numericPrice) && numericPrice > 0
-              ? { value: option, price: numericPrice }
-              : { value: option }
-          }),
-      }))
+      const variants = formData.variants
+        .filter(v => v.label.trim())
+        .map(v => ({
+          label: v.label.trim(),
+          options: v.options
+            .split(',')
+            .map(option => option.trim())
+            .filter(Boolean)
+            .map((option, index) => {
+              const price = v.prices.split(',').map(entry => entry.trim())[index]
+              const numericPrice = Number(price)
+              return price && Number.isFinite(numericPrice) && numericPrice > 0
+                ? { value: option, price: numericPrice }
+                : { value: option }
+            }),
+        }))
 
-    const response = await apiRequest('/admin/products', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: formData.name.trim(),
-        category: formData.category,
-        price: Number(formData.price),
-        originalPrice: formData.originalPrice ? Number(formData.originalPrice) : null,
-        description: formData.description.trim(),
-        shortDesc: formData.shortDesc.trim(),
-        images: normalizedImages,
-        video: formData.video.trim() || null,
-        inStock: formData.inStock,
-        stockCount: formData.stockCount ? Number(formData.stockCount) : null,
-        badge: formData.badge || null,
-        whatsapp: formData.whatsapp.trim() || vendor?.phone || null,
-        features: formData.features.filter(Boolean),
-        variants,
-        weightKg: 0.5,
-      }),
-    })
-    if (!response.ok) {
-      toast.error(response.error ?? 'Could not create vendor product on backend.')
-      return
+      const response = await apiRequest('/admin/products', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: formData.name.trim(),
+          category: formData.category,
+          price: Number(formData.price),
+          originalPrice: formData.originalPrice ? Number(formData.originalPrice) : null,
+          description: formData.description.trim(),
+          shortDesc: formData.shortDesc.trim(),
+          images: normalizedImages,
+          video: formData.video.trim() || null,
+          inStock: formData.inStock,
+          stockCount: formData.stockCount ? Number(formData.stockCount) : null,
+          badge: formData.badge || null,
+          whatsapp: formData.whatsapp.trim() || vendor?.phone || null,
+          features: formData.features.filter(Boolean),
+          variants,
+          weightKg: 0.5,
+        }),
+      })
+      if (!response.ok) {
+        toast.error(response.error ?? 'Could not create vendor product on backend.')
+        return false
+      }
+
+      recordAdminAction('Vendor product created', formData.name, vendor?.email ?? 'admin-default')
+      await refreshProductData()
+      setShowVendorCreate(false)
+      toast.success('Vendor product created on backend')
+      return true
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not create vendor product.')
+      return false
     }
-
-    recordAdminAction('Vendor product created', formData.name, vendor?.email ?? 'admin-default')
-    await refreshProductData()
-    setShowVendorCreate(false)
-    toast.success('Vendor product created on backend')
   }
 
   const catColors: Record<string, string> = {
@@ -1686,7 +1693,7 @@ function ProductsManagementTab() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
-                  onClick={() => setShowVendorCreate(false)}
+                  onClick={() => { if (!creatingVendorProduct) setShowVendorCreate(false) }}
                 />
                 <motion.div
                   initial={{ x: '100%' }}
@@ -1697,7 +1704,7 @@ function ProductsManagementTab() {
                 >
                   <div className="sticky top-0 bg-brand-black-2 border-b border-brand-gold/20 px-5 py-4 flex items-center justify-between flex-shrink-0">
                     <h3 className="text-brand-cream font-display font-semibold">Add Vendor Product</h3>
-                    <button onClick={() => setShowVendorCreate(false)} className="text-brand-cream/35 hover:text-brand-cream transition-colors">
+                    <button onClick={() => setShowVendorCreate(false)} disabled={creatingVendorProduct} className="text-brand-cream/35 hover:text-brand-cream transition-colors disabled:opacity-40">
                       <X className="w-5 h-5" />
                     </button>
                   </div>
@@ -1718,8 +1725,16 @@ function ProductsManagementTab() {
                     </div>
                     <ProductForm
                       initial={{ ...emptyFormData(), whatsapp: approvedVendors.find(v => v.email === vendorDraftEmail)?.phone ?? '' }}
-                      onSubmit={data => { void handleCreateVendorProduct(data) }}
-                      onCancel={() => setShowVendorCreate(false)}
+                      loading={creatingVendorProduct}
+                      onSubmit={async data => {
+                        setCreatingVendorProduct(true)
+                        try {
+                          await handleCreateVendorProduct(data)
+                        } finally {
+                          setCreatingVendorProduct(false)
+                        }
+                      }}
+                      onCancel={() => { if (!creatingVendorProduct) setShowVendorCreate(false) }}
                       submitLabel="Create Product"
                     />
                   </div>

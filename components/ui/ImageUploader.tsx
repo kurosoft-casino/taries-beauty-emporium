@@ -8,6 +8,7 @@ import { uploadImageSource } from '@/lib/mediaUpload'
 interface Props {
   images: string[]
   onChange: (images: string[]) => void
+  onUploadingChange?: (uploading: boolean) => void
   maxImages?: number
   label?: string
 }
@@ -122,6 +123,7 @@ async function optimizeImage(file: File): Promise<string> {
 export default function ImageUploader({
   images,
   onChange,
+  onUploadingChange,
   maxImages = 5,
   label,
 }: Props) {
@@ -131,7 +133,7 @@ export default function ImageUploader({
   const [urlValue, setUrlValue] = useState('')
   const [uploading, setUploading] = useState(false)
 
-  const canAdd = images.length < maxImages
+  const canAdd = !uploading && images.length < maxImages
 
   async function uploadMediaFile(file: File): Promise<string> {
     const optimized = await optimizeImage(file)
@@ -145,6 +147,7 @@ export default function ImageUploader({
 
   async function handleFiles(files: FileList | File[]) {
     setUploading(true)
+    onUploadingChange?.(true)
     try {
       const results = await readFilesAsMediaUrls(files)
       onChange([...images, ...results])
@@ -152,6 +155,7 @@ export default function ImageUploader({
       toast.error(error instanceof Error ? error.message : 'Could not upload image.')
     } finally {
       setUploading(false)
+      onUploadingChange?.(false)
     }
   }
 
