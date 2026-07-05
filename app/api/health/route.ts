@@ -2,7 +2,7 @@ import { requireDatabase } from '@/lib/server/cloudflare'
 
 export async function GET() {
   try {
-    const db = requireDatabase()
+    const db = await requireDatabase()
     await db.prepare('SELECT 1 as ok').first<{ ok: number }>()
     return Response.json({ ok: true, services: { d1: true } })
   } catch (error) {

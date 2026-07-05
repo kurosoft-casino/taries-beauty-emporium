@@ -23,7 +23,7 @@ const uid = (prefix = '') => prefix + crypto.randomUUID();
 const nowIso = () => new Date().toISOString();
 
 const lower = (s) => (s || '').toString().trim().toLowerCase();
-const ADMIN_EMAILS = new Set(['kurosoft01@gmail.com', 'tarimoboere18@gmail.com']);
+const ADMIN_EMAILS = new Set(['tarimoboere18@gmail.com']);
 const isAdminEmail = (email) => ADMIN_EMAILS.has(lower(email));
 const getEffectiveRole = (email, role) => (isAdminEmail(email) ? 'admin' : (role || 'customer'));
 const FX_RATES = { NGN: 1620, GHS: 16.2, USD: 1, CNY: 7.25 };

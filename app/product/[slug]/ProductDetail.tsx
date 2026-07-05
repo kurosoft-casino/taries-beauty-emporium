@@ -18,8 +18,8 @@ import FlashSaleTimer from '@/components/shop/FlashSaleTimer'
 import RecentlyViewedBar from '@/components/shop/RecentlyViewedBar'
 import toast from 'react-hot-toast'
 import { getCatalogProductBySlug, getStorefrontProducts } from '@/lib/catalog'
+import { withApiBase } from '@/lib/site'
 import { isValidEmail, normalizeEmail } from '@/lib/validation'
-import { readJSON, writeJSON } from '@/lib/storage'
 
 export default function ProductDetail({ slug }: { slug: string }) {
   const productData = getCatalogProductBySlug(slug)
@@ -401,7 +401,7 @@ export default function ProductDetail({ slug }: { slug: string }) {
                         setNotifyPending(true)
 
                         try {
-                          const response = await fetch('/api/stock-alerts', {
+                          const response = await fetch(withApiBase('/stock-alerts'), {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ slug, email }),
@@ -411,13 +411,10 @@ export default function ProductDetail({ slug }: { slug: string }) {
                             throw new Error((await response.json().catch(() => null))?.error ?? 'Stock alert service is unavailable right now.')
                           }
                         } catch (error) {
-                          const key = 'taries-notify-me'
-                          const list = readJSON<Array<{ slug: string; email: string; addedAt: string }>>(key, [])
-                          const nextList = list.some(item => item.slug === slug && item.email === email)
-                            ? list
-                            : [...list, { slug, email, addedAt: new Date().toISOString() }]
-                          writeJSON(key, nextList)
                           console.error(error)
+                          setNotifyPending(false)
+                          toast.error(error instanceof Error ? error.message : 'Stock alert service is unavailable right now.')
+                          return
                         }
 
                         setNotifyPending(false)

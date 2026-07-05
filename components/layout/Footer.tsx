@@ -6,7 +6,7 @@ import { motion } from 'framer-motion'
 import { MapPin, Phone, Mail, Heart } from 'lucide-react'
 import { logoSrc } from '@/lib/assets'
 import toast from 'react-hot-toast'
-import { readJSON, writeJSON } from '@/lib/storage'
+import { withApiBase } from '@/lib/site'
 import { DEFAULT_STORE_SETTINGS, getStoreSettings, subscribeStoreSettings } from '@/lib/storeSettings'
 import { isValidEmail, normalizeEmail } from '@/lib/validation'
 import { categories } from '@/lib/products'
@@ -86,7 +86,7 @@ export default function Footer() {
     setSubscribing(true)
 
     try {
-      const response = await fetch('/api/newsletter', {
+      const response = await fetch(withApiBase('/newsletter'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -95,17 +95,16 @@ export default function Footer() {
       if (!response.ok) {
         throw new Error((await response.json().catch(() => null))?.error ?? (lang === 'ZH' ? '订阅服务暂时不可用。' : 'Subscription service is unavailable right now.'))
       }
-    } catch (error) {
-      const subscribers = readJSON<string[]>('taries-newsletter-subscribers', [])
-      if (!subscribers.includes(email)) {
-        writeJSON('taries-newsletter-subscribers', [...subscribers, email])
-      }
-      console.error(error)
-    }
 
-    setNewsletterEmail('')
-    setSubscribing(false)
-    toast.success(lang === 'ZH' ? '您已成功订阅店铺更新' : 'You are subscribed for store updates')
+      setNewsletterEmail('')
+      toast.success(lang === 'ZH' ? '您已成功订阅店铺更新' : 'You are subscribed for store updates')
+    } catch (error) {
+      console.error(error)
+      toast.error(error instanceof Error ? error.message : (lang === 'ZH' ? '订阅失败，请稍后再试。' : 'Subscription failed. Please try again.'))
+      return
+    } finally {
+      setSubscribing(false)
+    }
   }
 
   return (

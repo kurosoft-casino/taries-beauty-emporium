@@ -71,7 +71,7 @@ interface OrderItemRow {
 }
 
 export async function saveRemoteOrder(order: PersistedOrder): Promise<void> {
-  const db = requireDatabase()
+  const db = await requireDatabase()
   const now = new Date().toISOString()
 
   const statements = [
@@ -127,7 +127,7 @@ export async function saveRemoteOrder(order: PersistedOrder): Promise<void> {
 }
 
 export async function getRemoteOrder(orderId: string, email?: string): Promise<PersistedOrder | null> {
-  const db = requireDatabase()
+  const db = await requireDatabase()
   const query = email
     ? `
         SELECT * FROM orders

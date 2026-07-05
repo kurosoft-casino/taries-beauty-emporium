@@ -10,7 +10,7 @@ import {
   setDefaultAddress, changePassword, deleteAccount, getAdminLevel, isAdminUser,
   type User, type SavedAddress,
 } from '@/lib/auth'
-import { getAllOrders, formatOrderDate, type Order } from '@/lib/orders'
+import { formatOrderDate, type Order } from '@/lib/orders'
 import { getWishlist, toggleWishlist } from '@/lib/wishlist'
 import { products, formatPrice } from '@/lib/products'
 import { useCartStore } from '@/lib/store'
@@ -200,7 +200,8 @@ export default function AccountPage() {
         if (!payload?.orders) throw new Error('invalid payload')
         setUserOrders(payload.orders.map(mapRemoteOrder))
       } catch {
-        setUserOrders(getAllOrders().filter(o => o.customer.email.toLowerCase() === user.email.toLowerCase()))
+        setUserOrders([])
+        toast.error('We could not load your order history right now. Please refresh and try again.')
       }
     }
     void loadOrders()

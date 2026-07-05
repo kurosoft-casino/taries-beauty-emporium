@@ -30,14 +30,14 @@ export async function POST(request: Request) {
   if (password.length < 8) return Response.json({ error: 'Password must be at least 8 characters.' }, { status: 400 })
 
   try {
-    const db = requireDatabase()
+    const db = await requireDatabase()
     const existing = await db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1').bind(email).first<{ id: string }>()
     if (existing) return Response.json({ error: 'An account with this email already exists.' }, { status: 409 })
 
     const now = new Date().toISOString()
     const userId = `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     const passwordData = await createRemotePassword(email, password)
-    const role = email === 'kurosoft01@gmail.com' || email === 'tarimoboere18@gmail.com' ? 'admin' : 'customer'
+    const role = email === 'tarimoboere18@gmail.com' ? 'admin' : 'customer'
 
     await db.prepare(`
       INSERT INTO users (

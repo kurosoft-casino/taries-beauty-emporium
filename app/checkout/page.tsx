@@ -131,7 +131,7 @@ export default function CheckoutPage() {
 
       if (isHostedPayment) {
         if (remotePaymentInitPath === '/payments/flutterwave/initialize') {
-          throw new Error('Payment backend is not configured. Set NEXT_PUBLIC_API_URL and redeploy.')
+          throw new Error('Payment backend is not configured. Set NEXT_PUBLIC_API_BASE_URL to a live backend or use the default /api route and redeploy.')
         }
         const paymentResponse = await fetch(remotePaymentInitPath, {
           method: 'POST',
@@ -163,20 +163,7 @@ export default function CheckoutPage() {
       clearCart()
     } catch (error) {
       console.error(error)
-      if (isHostedPayment) {
-        toast.error(error instanceof Error ? error.message : 'Payment initialization failed. Please try again.')
-      } else {
-        try {
-          saveOrder(orderPayload)
-          clearAppliedCoupon()
-          setOrdered(true)
-          clearCart()
-          toast.error('Live order backup is unavailable right now, but your order was saved on this device.')
-        } catch (localError) {
-          console.error(localError)
-          toast.error('We could not save your order right now. Please try again.')
-        }
-      }
+      toast.error(error instanceof Error ? error.message : isHostedPayment ? 'Payment initialization failed. Please try again.' : 'We could not place your order right now. Please try again.')
     } finally {
       setPlacingOrder(false)
     }

@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const db = requireDatabase()
+    const db = await requireDatabase()
     await db.prepare(`
       INSERT OR IGNORE INTO stock_alert_requests (id, slug, email, created_at)
       VALUES (?, ?, ?, ?)

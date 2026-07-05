@@ -7,7 +7,7 @@ import { requireDatabase } from './cloudflare'
 
 const SESSION_COOKIE = 'tbe_session'
 const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60
-const ADMIN_EMAILS = new Set(['kurosoft01@gmail.com', 'tarimoboere18@gmail.com'])
+const ADMIN_EMAILS = new Set(['tarimoboere18@gmail.com'])
 
 export interface RemoteUser {
   id: string
@@ -102,7 +102,7 @@ function buildSessionClearCookie(request: Request): string {
 }
 
 export async function createRemoteSession(userId: string, role: string, request: Request): Promise<string> {
-  const db = requireDatabase()
+  const db = await requireDatabase()
   const token = randomSalt(32)
   const tokenHash = await sha256Hex(token)
   const now = new Date().toISOString()
@@ -126,7 +126,7 @@ export async function createRemoteSession(userId: string, role: string, request:
 }
 
 export async function clearRemoteSession(request: Request): Promise<string> {
-  const db = requireDatabase()
+  const db = await requireDatabase()
   const token = getCookie(request, SESSION_COOKIE)
   if (!token) return buildSessionClearCookie(request)
   const tokenHash = await sha256Hex(token)
@@ -135,7 +135,7 @@ export async function clearRemoteSession(request: Request): Promise<string> {
 }
 
 export async function getRemoteSessionUser(request: Request): Promise<RemoteUser | null> {
-  const db = requireDatabase()
+  const db = await requireDatabase()
   const token = getCookie(request, SESSION_COOKIE)
   if (!token) return null
 

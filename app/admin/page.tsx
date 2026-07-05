@@ -10,14 +10,14 @@ import {
   LogOut, Lock, Search, Eye, Pencil, Trash2, Check, X, ChevronUp, ChevronDown,
   ExternalLink, Phone, Download, AlertTriangle, Plus, MessageCircle,
 } from 'lucide-react'
-import { getAllOrders, updateOrderStatus, formatOrderDate } from '@/lib/orders'
+import { formatOrderDate } from '@/lib/orders'
 import type { Order } from '@/lib/orders'
 import { products } from '@/lib/products'
 import type { Product } from '@/lib/products'
 import { getAllViewsSorted } from '@/lib/views'
 import { getInventory, setInventoryItem } from '@/lib/inventory'
 import type { InventoryItem } from '@/lib/inventory'
-import { getAdminLevel, getCurrentUser, isAdminUser, type AdminLevel, type User } from '@/lib/auth'
+import { getAdminLevel, getCurrentUser, isAdminUser, logoutUser, type AdminLevel, type User } from '@/lib/auth'
 import { logoSrc } from '@/lib/assets'
 import { apiRequest } from '@/lib/remoteApi'
 import { useLang } from '@/lib/lang'
@@ -695,11 +695,11 @@ function DashboardTab({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
     const refresh = async () => {
       localStorage.setItem('taries-presence-admin', Date.now().toString())
       const remoteOrders = await fetchRemoteAdminOrders()
-      setOrders(remoteOrders ?? getAllOrders())
+      setOrders(remoteOrders ?? [])
       const remoteUsers = await fetchRemoteAdminUsers()
       setUsers(remoteUsers ?? readUsers())
       const remoteVendors = await fetchRemoteVendors()
-      setVendors(remoteVendors ?? readVendors())
+      setVendors(remoteVendors ?? [])
       setTopViews(getAllViewsSorted().slice(0, 5))
     }
 
@@ -845,7 +845,7 @@ function OrdersTab() {
   useEffect(() => {
     const refresh = async () => {
       const remoteOrders = await fetchRemoteAdminOrders()
-      setOrders(remoteOrders ?? getAllOrders())
+      setOrders(remoteOrders ?? [])
     }
     void refresh()
   }, [])
@@ -882,7 +882,8 @@ function OrdersTab() {
   async function handleStatusChange(orderId: string, status: Order['status']) {
     const remoteOk = await updateRemoteOrder(orderId, status)
     if (!remoteOk) {
-      updateOrderStatus(orderId, status)
+      toast.error('Order update failed. Please try again.')
+      return
     }
     setOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, status } : o))
     toast.success(`Order updated to ${status}`)
@@ -895,7 +896,11 @@ function OrdersTab() {
   }
   async function handleBulkApply() {
     const ids = Array.from(selected)
-    await Promise.all(ids.map(id => updateRemoteOrder(id, bulkStatus)))
+    const results = await Promise.all(ids.map(id => updateRemoteOrder(id, bulkStatus)))
+    if (results.some(result => !result)) {
+      toast.error('Some order updates failed. Please try again.')
+      return
+    }
     const updated = orders.map(o => ids.includes(o.orderId) ? { ...o, status: bulkStatus } : o)
     setOrders(updated)
     toast.success(`${ids.length} orders updated`)
@@ -1086,7 +1091,7 @@ function UsersTab() {
       const remoteUsers = await fetchRemoteAdminUsers()
       setUsers(remoteUsers ?? readUsers())
       const remoteOrders = await fetchRemoteAdminOrders()
-      setAllOrders(remoteOrders ?? getAllOrders())
+      setAllOrders(remoteOrders ?? [])
     }
 
     void refresh()
@@ -1347,10 +1352,11 @@ function ProductsManagementTab() {
 
   const refreshProductData = useCallback(async () => {
     setInventoryState(getInventory())
-    try { const r = localStorage.getItem('taries-product-overrides'); if (r) setOverrides(JSON.parse(r) as Record<string, ProductOverride>) } catch { /* ignore */ }
+    setOverrides({})
     const remoteProducts = await fetchRemoteAdminProducts()
-    setVendorProds(remoteProducts ?? getVendorProducts())
-    setVendors(readVendors())
+    setVendorProds(remoteProducts ?? [])
+    const remoteVendors = await fetchRemoteVendors()
+    setVendors(remoteVendors ?? [])
     const vm: Record<string, number> = {}
     getAllViewsSorted().forEach(v => { vm[v.slug] = v.views })
     setViewsMap(vm)
@@ -1398,12 +1404,8 @@ function ProductsManagementTab() {
     setEditForm({ name: ov.name ?? p.name, shortDesc: ov.shortDesc ?? p.shortDesc, price: ov.price ?? p.price, originalPrice: ov.originalPrice ?? p.originalPrice, badge: ov.badge ?? p.badge })
   }
   function saveEdit(slug: string) {
-    const updated = { ...overrides, [slug]: editForm }
-    setOverrides(updated)
-    localStorage.setItem('taries-product-overrides', JSON.stringify(updated))
     setEditingId(null)
-    recordAdminAction('Catalogue product updated', slug)
-    toast.success('Product updated')
+    toast.error('Catalogue products are code-managed. Update the codebase and redeploy to change storefront defaults.')
   }
   async function handleVendorAction(vendorId: string, productId: string, status: VendorProduct['status']) {
     const response = await apiRequest(`/admin/products/${encodeURIComponent(productId)}`, {
@@ -1411,9 +1413,7 @@ function ProductsManagementTab() {
       body: JSON.stringify({ status }),
     })
     if (!response.ok) {
-      saveVendorProductStatus(vendorId, productId, status)
-      setVendorProds(prev => prev.map(p => (p.id === productId && p.vendorId === vendorId) ? { ...p, status } : p))
-      toast.error('Backend update failed; local fallback was applied.')
+      toast.error(response.error ?? 'Backend update failed. Please try again.')
       return
     }
     await refreshProductData()
@@ -1744,7 +1744,7 @@ function VendorsTab() {
   useEffect(() => {
     const refresh = async () => {
       const remoteVendors = await fetchRemoteVendors()
-      setVendors(remoteVendors ?? readVendors())
+      setVendors(remoteVendors ?? [])
     }
     void refresh()
   }, [])
@@ -1765,7 +1765,11 @@ function VendorsTab() {
   }), [vendors])
 
   async function updateStatus(id: string, status: Vendor['status']) {
-    await updateRemoteVendorStatus(id, status)
+    const ok = await updateRemoteVendorStatus(id, status)
+    if (!ok) {
+      toast.error('Vendor update failed. Please try again.')
+      return
+    }
     const updated = vendors.map(v => v.id === id ? { ...v, status } : v)
     setVendors(updated); saveVendors(updated)
     toast.success(`Vendor ${status}`)
@@ -1849,7 +1853,7 @@ function AnalyticsTab() {
   useEffect(() => {
     const refresh = async () => {
       const remoteOrders = await fetchRemoteAdminOrders()
-      setOrders(remoteOrders ?? getAllOrders())
+      setOrders(remoteOrders ?? [])
       setTopViews(getAllViewsSorted())
     }
     void refresh()
@@ -2098,8 +2102,6 @@ function InventoryTab() {
 
 // ── SettingsTab ───────────────────────────────────────────────────────────────
 function SettingsTab() {
-  const [pinForm, setPinForm] = useState({ current: '', next: '', confirm: '' })
-  const [pinError, setPinError] = useState('')
   const [settings, setSettings] = useState<StoreSettings>(DEFAULT_STORE_SETTINGS)
   const [maintenance, setMaintenance] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -2109,14 +2111,6 @@ function SettingsTab() {
     setMaintenance(getMaintenanceMode())
   }, [])
 
-  function handlePinChange() {
-    if (pinForm.current !== getAdminPin()) { setPinError('Current PIN is incorrect'); return }
-    if (!/^\d{6}$/.test(pinForm.next)) { setPinError('New PIN must be 6 digits'); return }
-    if (pinForm.next !== pinForm.confirm) { setPinError('PINs do not match'); return }
-    localStorage.setItem('taries-admin-pin', pinForm.next)
-    setPinForm({ current: '', next: '', confirm: '' }); setPinError('')
-    toast.success('PIN changed successfully')
-  }
   function handleSaveSettings() {
     saveStoreSettings(settings)
     setSaved(true); setTimeout(() => setSaved(false), 2000)
@@ -2155,17 +2149,10 @@ function SettingsTab() {
       <h1 className="font-display text-2xl gold-text">Settings</h1>
 
       <div className="bg-brand-black-2 border border-brand-gold/20 rounded-xl p-5 space-y-4">
-        <h2 className="font-heading text-white flex items-center gap-2"><Lock className="w-4 h-4 text-brand-gold" /> Change PIN</h2>
-        <div className="grid grid-cols-3 gap-3">
-          {([['current','Current PIN'],['next','New 6-digit PIN'],['confirm','Confirm PIN']] as const).map(([field, label]) => (
-            <div key={field}>
-              <label className="text-xs text-brand-gold/70 mb-1 block">{label}</label>
-              <input type="password" maxLength={6} value={pinForm[field]} onChange={e => setPinForm(f => ({...f, [field]: e.target.value.replace(/\D/g, '').slice(0, 6) }))} className={ic} placeholder="••••••" />
-            </div>
-          ))}
-        </div>
-        {pinError && <p className="text-red-400 text-xs">{pinError}</p>}
-        <button onClick={handlePinChange} className="btn-gold text-sm">Update PIN</button>
+        <h2 className="font-heading text-white flex items-center gap-2"><Lock className="w-4 h-4 text-brand-gold" /> Admin Access</h2>
+        <p className="text-sm text-white/60">
+          Admin access is account-based. Sign in with an approved admin account to manage the store.
+        </p>
       </div>
 
       <div className="bg-brand-black-2 border border-brand-gold/20 rounded-xl p-5 space-y-4">
@@ -2211,12 +2198,16 @@ function SettingsTab() {
 // ── AdminPage ─────────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const text = useAdminText()
-  const [authenticated, setAuthenticated] = useState(false)
   const [activeTab, setActiveTab] = useState<TabId>('dashboard')
   const [orderBadge, setOrderBadge] = useState(0)
   const [vendorBadge, setVendorBadge] = useState(0)
   const [adminUser, setAdminUser] = useState<User | null>(null)
   const [accessChecked, setAccessChecked] = useState(false)
+
+  const handleAdminSignOut = useCallback(() => {
+    logoutUser()
+    window.location.href = '/login'
+  }, [])
 
   useEffect(() => {
     const refresh = () => {
@@ -2230,19 +2221,18 @@ export default function AdminPage() {
   }, [])
 
   useEffect(() => {
-    if (!authenticated || !isAdminUser(adminUser)) return
+    if (!isAdminUser(adminUser)) return
     const refreshBadges = async () => {
       const remoteOrders = await fetchRemoteAdminOrders()
       const remoteVendors = await fetchRemoteVendors()
-      setOrderBadge((remoteOrders ?? getAllOrders()).filter(o => o.status === 'pending').length)
-      setVendorBadge((remoteVendors ?? readVendors()).filter(v => v.status === 'pending').length)
+      setOrderBadge((remoteOrders ?? []).filter(o => o.status === 'pending').length)
+      setVendorBadge((remoteVendors ?? []).filter(v => v.status === 'pending').length)
     }
     void refreshBadges()
-  }, [adminUser, authenticated])
+  }, [adminUser])
 
   if (!accessChecked) return null
   if (!isAdminUser(adminUser)) return <AdminAccountGate user={adminUser} />
-  if (!authenticated) return <PinEntry onSuccess={() => setAuthenticated(true)} />
 
   const tabs: { id: TabId; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: 'dashboard',  label: text.dashboard, icon: <LayoutDashboard className="w-4 h-4" /> },
@@ -2297,7 +2287,7 @@ export default function AdminPage() {
           ))}
         </nav>
         <div className="p-4 border-t border-brand-gold/20">
-          <button onClick={() => setAuthenticated(false)} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-white/50 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all">
+          <button onClick={handleAdminSignOut} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-white/50 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all">
             <LogOut className="w-4 h-4" /> Log Out
           </button>
         </div>
@@ -2309,7 +2299,7 @@ export default function AdminPage() {
             <Image src={logoSrc} alt="Taries" width={28} height={28} unoptimized className="rounded-full border border-brand-gold/40" />
             <span className="font-heading text-sm text-brand-gold font-bold">🔐 {text.adminShort}</span>
           </div>
-          <button aria-label={text.logout} onClick={() => setAuthenticated(false)} className="p-2 text-white/50 hover:text-red-400 transition-colors"><LogOut className="w-4 h-4" /></button>
+          <button aria-label={text.logout} onClick={handleAdminSignOut} className="p-2 text-white/50 hover:text-red-400 transition-colors"><LogOut className="w-4 h-4" /></button>
         </div>
         <div className="flex overflow-x-auto pb-2 px-3 gap-2" style={{ scrollbarWidth: 'none' }}>
           {tabs.map(tab => (
@@ -2327,7 +2317,7 @@ export default function AdminPage() {
       <main className="lg:ml-64 min-h-screen">
         <header className="hidden lg:flex items-center justify-between px-6 py-4 border-b border-brand-gold/10 bg-brand-black-2/50 backdrop-blur-sm sticky top-0 z-30">
           <p className="font-heading text-sm text-white/50">🔐 {text.adminPanel} — <span className="text-brand-gold">Taries Beauty Emporium</span></p>
-          <button onClick={() => setAuthenticated(false)} className="flex items-center gap-2 text-sm text-white/40 hover:text-red-400 transition-colors">
+          <button onClick={handleAdminSignOut} className="flex items-center gap-2 text-sm text-white/40 hover:text-red-400 transition-colors">
             <LogOut className="w-4 h-4" /> {text.logout}
           </button>
         </header>

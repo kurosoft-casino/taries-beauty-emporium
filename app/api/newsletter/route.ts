@@ -10,7 +10,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const db = requireDatabase()
+    const db = await requireDatabase()
     await db.prepare(`
       INSERT OR IGNORE INTO newsletter_subscribers (email, source, created_at)
       VALUES (?, 'footer', ?)

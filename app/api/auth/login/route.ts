@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   if (!password) return Response.json({ error: 'Password is required.' }, { status: 400 })
 
   try {
-    const db = requireDatabase()
+    const db = await requireDatabase()
     const row = await db.prepare(`
       SELECT id, first_name, last_name, email, phone, role, avatar, created_at, password_hash, password_salt, password_version, metadata_json
       FROM users

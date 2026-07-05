@@ -4,7 +4,18 @@
   "main": "src/index.js",
   "compatibility_date": "2026-04-24",
   "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
   "observability": { "enabled": true },
+  "routes": [
+    {
+      "pattern": "www.tariesbeauty.com/api/*",
+      "zone_name": "tariesbeauty.com"
+    },
+    {
+      "pattern": "tariesbeauty.com/api/*",
+      "zone_name": "tariesbeauty.com"
+    }
+  ],
   "vars": {
     "ALLOWED_ORIGINS": "https://tariesbeauty.com,https://www.tariesbeauty.com,http://tariesbeauty.com,http://www.tariesbeauty.com,https://kurosoft1.github.io,http://localhost:3000",
     "PUBLIC_SITE_URL": "https://www.tariesbeauty.com"
@@ -13,13 +24,13 @@
     {
       "binding": "DB",
       "database_name": "taries-beauty-emporium",
-      "database_id": "1cd7958e-cbe3-4ecc-b4ad-915a1bf5d902"
+      "database_id": "bb8506ed-174f-4db4-b8f2-981d66ad2ad6"
     }
   ],
   "kv_namespaces": [
     {
       "binding": "CACHE",
-      "id": "4684c12cfa184036aecc08e6cef17f47"
+      "id": "b03da41c33aa4b24918e4d9428fe1be5"
     }
   ],
   "ai": {

@@ -6,7 +6,7 @@ export async function GET(request: Request) {
     const admin = await requireRemoteAdmin(request)
     if (!admin) return Response.json({ error: 'Admin access required.' }, { status: 403 })
 
-    const db = requireDatabase()
+    const db = await requireDatabase()
     const rows = await db.prepare(`
       SELECT id, first_name, last_name, email, phone, role, avatar, created_at, password_hash, password_salt, password_version, metadata_json
       FROM users

@@ -8,6 +8,12 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  "routes": [
+    {
+      "pattern": "www.tariesbeauty.com/*",
+      "zone_name": "tariesbeauty.com"
+    }
+  ],
   "observability": {
     "enabled": true
   },
@@ -15,18 +21,13 @@
     {
       "binding": "DB",
       "database_name": "taries-beauty-emporium",
-      "database_id": "1cd7958e-cbe3-4ecc-b4ad-915a1bf5d902"
+      "database_id": "bb8506ed-174f-4db4-b8f2-981d66ad2ad6"
     }
   ],
   "kv_namespaces": [
     {
-      "binding": "CACHE"
-    }
-  ],
-  "r2_buckets": [
-    {
-      "binding": "MEDIA",
-      "bucket_name": "taries-beauty-emporium-media"
+      "binding": "CACHE",
+      "id": "b03da41c33aa4b24918e4d9428fe1be5"
     }
   ]
 }
