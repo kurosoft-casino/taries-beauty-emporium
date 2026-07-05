@@ -1285,11 +1285,16 @@ function csrfGuard(req, method) {
 // ----- rate limiting (KV) -----
 async function rateLimit(env, key, limit, windowSec) {
   if (!env.CACHE) return true;
-  const k = `rl:${key}:${Math.floor(Date.now() / 1000 / windowSec)}`;
-  const cur = parseInt((await env.CACHE.get(k)) || '0', 10);
-  if (cur >= limit) return false;
-  await env.CACHE.put(k, String(cur + 1), { expirationTtl: Math.max(windowSec * 2, 60) });
-  return true;
+  try {
+    const k = `rl:${key}:${Math.floor(Date.now() / 1000 / windowSec)}`;
+    const cur = parseInt((await env.CACHE.get(k)) || '0', 10);
+    if (cur >= limit) return false;
+    await env.CACHE.put(k, String(cur + 1), { expirationTtl: Math.max(windowSec * 2, 60) });
+    return true;
+  } catch (error) {
+    console.warn('rate limit cache unavailable, allowing request', error);
+    return true;
+  }
 }
 async function rateLimitGuard(req, env) {
   const ip = req.headers.get('cf-connecting-ip') || 'anon';
