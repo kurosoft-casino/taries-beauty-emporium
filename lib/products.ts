@@ -1,3 +1,5 @@
+import type { ProductVariant } from './productVariants'
+
 export type Category =
   | 'wigs'
   | 'bundles'
@@ -25,7 +27,7 @@ export interface Product {
   description: string
   shortDesc: string
   features: string[]
-  variants?: { label: string; options: string[] }[]
+  variants?: ProductVariant[]
   inStock: boolean
   stockCount?: number  // show "Only X left" when low
   weightKg: number

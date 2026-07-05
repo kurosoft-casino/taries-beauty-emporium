@@ -18,7 +18,7 @@ export interface ProductFormData {
   badge: string
   whatsapp: string
   features: string[]
-  variants: { label: string; options: string }[]
+  variants: { label: string; options: string; prices: string }[]
 }
 
 export function emptyFormData(): ProductFormData {
@@ -118,6 +118,26 @@ export default function ProductForm({
     if (!form.price || isNaN(Number(form.price)) || Number(form.price) <= 0)
       err.price = 'Valid price required'
     if (!form.description.trim()) err.description = 'Description is required'
+
+    const invalidVariant = form.variants.find(variant => {
+      if (!variant.label.trim() && !variant.options.trim() && !variant.prices.trim()) return false
+      if (!variant.label.trim() || !variant.options.trim()) return true
+
+      const optionCount = variant.options.split(',').map(option => option.trim()).filter(Boolean).length
+      if (!optionCount) return true
+
+      const priceEntries = variant.prices.split(',').map(price => price.trim())
+      const filledPrices = priceEntries.filter(Boolean)
+      if (!filledPrices.length) return false
+      if (priceEntries.length > optionCount) return true
+
+      return filledPrices.some(price => Number.isNaN(Number(price)) || Number(price) <= 0)
+    })
+
+    if (invalidVariant) {
+      err.variants = 'Each variant needs a name, choices, and valid optional prices that match the choices.'
+    }
+
     setErrors(err)
     return Object.keys(err).length === 0
   }
@@ -140,10 +160,10 @@ export default function ProductForm({
   }
 
   function addVariant() {
-    set('variants', [...form.variants, { label: '', options: '' }])
+    set('variants', [...form.variants, { label: '', options: '', prices: '' }])
   }
 
-  function updateVariant(idx: number, key: 'label' | 'options', value: string) {
+  function updateVariant(idx: number, key: 'label' | 'options' | 'prices', value: string) {
     const updated = form.variants.map((v, i) => (i === idx ? { ...v, [key]: value } : v))
     set('variants', updated)
   }
@@ -402,33 +422,54 @@ export default function ProductForm({
                 {/* Variants */}
                 <div>
                   <FieldLabel optional>Variants</FieldLabel>
+                  <p className="text-brand-cream/35 text-xs mb-3">
+                    Example: variant name <span className="text-brand-cream/60">Length</span>, choices <span className="text-brand-cream/60">18 inch, 20 inch, 22 inch</span>, prices <span className="text-brand-cream/60">180, 210, 240</span>.
+                  </p>
                   <div className="space-y-3">
                     {form.variants.map((v, i) => (
                       <div key={i} className="flex gap-2 items-start">
                         <div className="flex-1 space-y-2">
-                          <input
-                            value={v.label}
-                            onChange={e => updateVariant(i, 'label', e.target.value)}
-                            placeholder="Label (e.g. Length)"
-                            className={inputCls()}
-                          />
-                          <input
-                            value={v.options}
-                            onChange={e => updateVariant(i, 'options', e.target.value)}
-                            placeholder="Options, comma separated (e.g. 12 inch, 14 inch, 16 inch)"
-                            className={inputCls()}
-                          />
-                          <p className="text-brand-cream/25 text-xs">Comma separated, e.g. 12 inch, 14 inch, 16 inch</p>
+                          <div>
+                            <FieldLabel>Variant Name</FieldLabel>
+                            <input
+                              value={v.label}
+                              onChange={e => updateVariant(i, 'label', e.target.value)}
+                              placeholder="e.g. Length"
+                              className={inputCls(errors.variants)}
+                            />
+                          </div>
+                          <div>
+                            <FieldLabel>Choices</FieldLabel>
+                            <input
+                              value={v.options}
+                              onChange={e => updateVariant(i, 'options', e.target.value)}
+                              placeholder="18 inch, 20 inch, 22 inch"
+                              className={inputCls(errors.variants)}
+                            />
+                          </div>
+                          <div>
+                            <FieldLabel optional>Option Prices (USD)</FieldLabel>
+                            <input
+                              value={v.prices}
+                              onChange={e => updateVariant(i, 'prices', e.target.value)}
+                              placeholder="180, 210, 240"
+                              className={inputCls(errors.variants)}
+                            />
+                          </div>
+                          <p className="text-brand-cream/25 text-xs">
+                            Use the same order as the choices. Leave prices blank if the base product price already applies to every choice.
+                          </p>
                         </div>
                         <button
                           type="button"
                           onClick={() => removeVariant(i)}
-                          className="mt-2 text-red-400/50 hover:text-red-400 transition-colors flex-shrink-0"
+                          className="mt-8 text-red-400/50 hover:text-red-400 transition-colors flex-shrink-0"
                         >
                           <X className="w-4 h-4" />
                         </button>
                       </div>
                     ))}
+                    {errors.variants && <p className="text-red-400 text-xs">{errors.variants}</p>}
                     <button
                       type="button"
                       onClick={addVariant}

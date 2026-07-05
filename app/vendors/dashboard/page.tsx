@@ -5,6 +5,12 @@ import Link from 'next/link'
 import { AlertCircle, Eye, LogOut, MessageCircle, Package, Pencil, Plus, Save, Send, Store, Trash2, X } from 'lucide-react'
 import { getCurrentUser } from '@/lib/auth'
 import { apiJson, apiRequest } from '@/lib/remoteApi'
+import {
+  getVariantOptionLabel,
+  getVariantOptionPrice,
+  parseVariantList,
+  type ProductVariant,
+} from '@/lib/productVariants'
 import ProductForm, { type ProductFormData } from '@/components/ui/ProductForm'
 
 interface VendorProfile {
@@ -32,7 +38,7 @@ interface VendorProduct {
   badge?: 'new' | 'sale' | 'hot' | 'bestseller' | ''
   whatsapp?: string
   features: string[]
-  variants: { label: string; options: string[] }[]
+  variants: ProductVariant[]
   active: boolean
   status: 'pending' | 'approved' | 'featured' | 'removed'
   addedAt: string
@@ -90,23 +96,6 @@ function parseJsonList(value: string | null | undefined): string[] {
   try {
     const parsed = JSON.parse(value)
     return Array.isArray(parsed) ? parsed.map(item => String(item)) : []
-  } catch {
-    return []
-  }
-}
-
-function parseVariantList(value: string | null | undefined): { label: string; options: string[] }[] {
-  if (!value) return []
-  try {
-    const parsed = JSON.parse(value)
-    if (!Array.isArray(parsed)) return []
-    return parsed
-      .filter((entry): entry is { label?: unknown; options?: unknown } => typeof entry === 'object' && entry !== null)
-      .map(entry => ({
-        label: typeof entry.label === 'string' ? entry.label : '',
-        options: Array.isArray(entry.options) ? entry.options.map(option => String(option)).filter(Boolean) : [],
-      }))
-      .filter(entry => entry.label)
   } catch {
     return []
   }
@@ -201,7 +190,11 @@ function ProductPanel({
         features: product.features,
         variants: product.variants.map(variant => ({
           label: variant.label,
-          options: variant.options.join(', '),
+          options: variant.options.map(option => getVariantOptionLabel(option)).join(', '),
+          prices: variant.options.map(option => {
+            const price = getVariantOptionPrice(option)
+            return price ? String(price) : ''
+          }).join(', '),
         })),
       }
     : {}
@@ -359,7 +352,17 @@ export default function VendorDashboardPage() {
         .filter(variant => variant.label.trim())
         .map(variant => ({
           label: variant.label.trim(),
-          options: variant.options.split(',').map(option => option.trim()).filter(Boolean),
+          options: variant.options
+            .split(',')
+            .map(option => option.trim())
+            .filter(Boolean)
+            .map((option, index) => {
+              const price = variant.prices.split(',').map(entry => entry.trim())[index]
+              const numericPrice = Number(price)
+              return price && Number.isFinite(numericPrice) && numericPrice > 0
+                ? { value: option, price: numericPrice }
+                : { value: option }
+            }),
         })),
       weightKg: 0.5,
     }

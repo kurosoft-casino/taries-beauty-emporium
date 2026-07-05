@@ -9,12 +9,14 @@ import toast from 'react-hot-toast'
 import { useCartStore } from '@/lib/store'
 import { formatPrice } from '@/lib/products'
 import { getVendorProductById } from '@/lib/catalog'
+import { getSelectedVariantPrice, getVariantOptionLabel, getVariantOptionPrice } from '@/lib/productVariants'
 
 function ProductPreviewContent() {
   const searchParams = useSearchParams()
   const id = searchParams.get('id') ?? ''
   const product = useMemo(() => getVendorProductById(id), [id])
   const [activeImg, setActiveImg] = useState(0)
+  const [selectedVars, setSelectedVars] = useState<Record<string, string>>({})
   const [qty, setQty] = useState(1)
   const { addItem, openCart, currency } = useCartStore()
 
@@ -30,6 +32,11 @@ function ProductPreviewContent() {
       </div>
     )
   }
+
+  const allVarsSelected = !product.variants || product.variants.every(variant => selectedVars[variant.label])
+  const selectedVariantPrice = getSelectedVariantPrice(product.variants, selectedVars)
+  const displayPrice = selectedVariantPrice ?? product.price
+  const displayOriginalPrice = product.originalPrice && product.originalPrice > displayPrice ? product.originalPrice : undefined
 
   return (
     <div className="min-h-screen bg-brand-black pt-28 pb-20">
@@ -62,8 +69,8 @@ function ProductPreviewContent() {
             <p className="section-label mb-2">Vendor Marketplace</p>
             <h1 className="font-display text-3xl md:text-4xl text-brand-cream font-bold mb-4">{product.name}</h1>
             <div className="flex items-center gap-3 mb-5">
-              <span className="font-display text-3xl gold-text">{formatPrice(product.price, currency)}</span>
-              {product.originalPrice && <span className="text-brand-cream/30 line-through">{formatPrice(product.originalPrice, currency)}</span>}
+              <span className="font-display text-3xl gold-text">{formatPrice(displayPrice, currency)}</span>
+              {displayOriginalPrice && <span className="text-brand-cream/30 line-through">{formatPrice(displayOriginalPrice, currency)}</span>}
             </div>
             <p className="font-body text-brand-cream/60 leading-relaxed mb-5">{product.shortDesc}</p>
             <div className="flex flex-wrap gap-3 mb-6">
@@ -83,6 +90,33 @@ function ProductPreviewContent() {
                 </div>
               </div>
             )}
+            {product.variants?.map(variant => (
+              <div key={variant.label} className="mb-5">
+                <p className="font-body text-xs tracking-widest text-brand-gold-2 uppercase mb-3">
+                  {variant.label}: <span className="text-brand-cream">{selectedVars[variant.label] || 'Select'}</span>
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {variant.options.map(option => {
+                    const optionLabel = getVariantOptionLabel(option)
+                    const optionPrice = getVariantOptionPrice(option)
+                    return (
+                      <button
+                        key={`${variant.label}-${optionLabel}`}
+                        onClick={() => setSelectedVars(prev => ({ ...prev, [variant.label]: optionLabel }))}
+                        className={`px-3 py-1.5 text-xs font-body font-semibold border transition-all duration-200 ${
+                          selectedVars[variant.label] === optionLabel
+                            ? 'bg-gold-gradient text-brand-black border-transparent'
+                            : 'border-brand-gold/30 text-brand-cream/70 hover:border-brand-gold hover:text-brand-cream'
+                        }`}
+                      >
+                        <span>{optionLabel}</span>
+                        {optionPrice ? <span className="ml-1 opacity-80">· {formatPrice(optionPrice, currency)}</span> : null}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
             <div className="flex items-center gap-4 mb-6">
               <span className="text-xs uppercase tracking-widest text-brand-gold-2">Quantity</span>
               <div className="flex items-center border border-brand-gold/20">
@@ -98,14 +132,19 @@ function ProductPreviewContent() {
                     toast.error('This item is currently out of stock')
                     return
                   }
-                  for (let index = 0; index < qty; index += 1) addItem(product)
+                  if (!allVarsSelected) {
+                    toast.error('Please select every product option first')
+                    return
+                  }
+                  const cartProduct = displayPrice === product.price ? product : { ...product, price: displayPrice }
+                  for (let index = 0; index < qty; index += 1) addItem(cartProduct, selectedVars)
                   openCart()
                   toast.success('Added to cart')
                 }}
-                disabled={!product.inStock}
+                disabled={!product.inStock || !allVarsSelected}
                 className="flex-1 btn-gold disabled:opacity-50"
               >
-                <span className="inline-flex items-center gap-2"><ShoppingBag size={16} /> {product.inStock ? 'Add to Cart' : 'Sold Out'}</span>
+                <span className="inline-flex items-center gap-2"><ShoppingBag size={16} /> {!product.inStock ? 'Sold Out' : allVarsSelected ? 'Add to Cart' : 'Select Options'}</span>
               </button>
               <a
                 href={`https://wa.me/${(product.contactWhatsApp || '').replace(/\D/g, '')}?text=${encodeURIComponent(`Hi! I'd like to order ${product.name}`)}`}

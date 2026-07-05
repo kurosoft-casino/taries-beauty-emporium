@@ -25,6 +25,10 @@ import { DEFAULT_STORE_SETTINGS, getMaintenanceMode, getStoreSettings, saveMaint
 import { appendAuditEvent, getAdminRoleLabel, readSupportThreads } from '@/lib/adminConsole'
 import { AuditLogTab, MarketingTab, SupportInboxTab } from '@/components/admin/OperationsTabs'
 import ProductForm, { emptyFormData, type ProductFormData } from '@/components/ui/ProductForm'
+import {
+  parseVariantList,
+  type ProductVariant,
+} from '@/lib/productVariants'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type TabId = 'dashboard' | 'orders' | 'users' | 'products' | 'vendors' | 'analytics' | 'inventory' | 'support' | 'marketing' | 'audit' | 'settings'
@@ -46,7 +50,7 @@ interface VendorProduct {
   price: number; status: 'pending' | 'approved' | 'featured' | 'removed'; createdAt: string
   originalPrice?: number; description?: string; shortDesc?: string; images?: string[]; video?: string
   inStock?: boolean; stockCount?: number; badge?: 'new' | 'sale' | 'hot' | 'bestseller' | ''
-  whatsapp?: string; features?: string[]; variants?: { label: string; options: string[] }[]; active?: boolean
+  whatsapp?: string; features?: string[]; variants?: ProductVariant[]; active?: boolean
 }
 interface RemoteOrderRow {
   order_id: string
@@ -430,23 +434,6 @@ function mapRemoteAdminProduct(row: RemoteAdminProductRow): VendorProduct {
       return []
     }
   }
-  const parseVariants = (value: string | null | undefined): { label: string; options: string[] }[] => {
-    if (!value) return []
-    try {
-      const parsed = JSON.parse(value)
-      if (!Array.isArray(parsed)) return []
-      return parsed
-        .filter((entry): entry is { label?: unknown; options?: unknown } => typeof entry === 'object' && entry !== null)
-        .map(entry => ({
-          label: typeof entry.label === 'string' ? entry.label : '',
-          options: Array.isArray(entry.options) ? entry.options.map(option => String(option)).filter(Boolean) : [],
-        }))
-        .filter(entry => entry.label)
-    } catch {
-      return []
-    }
-  }
-
   return {
     id: row.id,
     name: row.name || 'Untitled Product',
@@ -466,7 +453,7 @@ function mapRemoteAdminProduct(row: RemoteAdminProductRow): VendorProduct {
     badge: (row.badge as VendorProduct['badge']) || '',
     whatsapp: row.whatsapp || undefined,
     features: parseList(row.features_json),
-    variants: parseVariants(row.variants_json),
+    variants: parseVariantList(row.variants_json),
     active: row.active === 0 ? false : Boolean(row.active ?? true),
   }
 }
@@ -1428,7 +1415,17 @@ function ProductsManagementTab() {
       .filter(v => v.label.trim())
       .map(v => ({
         label: v.label.trim(),
-        options: v.options.split(',').map(option => option.trim()).filter(Boolean),
+        options: v.options
+          .split(',')
+          .map(option => option.trim())
+          .filter(Boolean)
+          .map((option, index) => {
+            const price = v.prices.split(',').map(entry => entry.trim())[index]
+            const numericPrice = Number(price)
+            return price && Number.isFinite(numericPrice) && numericPrice > 0
+              ? { value: option, price: numericPrice }
+              : { value: option }
+          }),
       }))
 
     const response = await apiRequest('/admin/products', {

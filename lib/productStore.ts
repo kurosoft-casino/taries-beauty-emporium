@@ -1,4 +1,5 @@
 // SSR-safe localStorage helpers for vendor products and admin overrides
+import type { ProductVariant } from './productVariants'
 
 export interface VendorProduct {
   id: string
@@ -12,7 +13,7 @@ export interface VendorProduct {
   description: string
   shortDesc?: string
   features: string[]
-  variants?: { label: string; options: string[] }[]
+  variants?: ProductVariant[]
   inStock: boolean
   stockCount?: number
   whatsapp: string

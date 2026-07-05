@@ -20,6 +20,7 @@ import toast from 'react-hot-toast'
 import { getCatalogProductBySlug, getStorefrontProducts } from '@/lib/catalog'
 import { withApiBase } from '@/lib/site'
 import { isValidEmail, normalizeEmail } from '@/lib/validation'
+import { getSelectedVariantPrice, getVariantOptionLabel, getVariantOptionPrice } from '@/lib/productVariants'
 
 export default function ProductDetail({ slug }: { slug: string }) {
   const productData = getCatalogProductBySlug(slug)
@@ -77,7 +78,8 @@ export default function ProductDetail({ slug }: { slug: string }) {
       toast.error('This item is currently out of stock')
       return
     }
-    for (let i = 0; i < qty; i++) addItem(product, selectedVars)
+    const cartProduct = displayPrice === product.price ? product : { ...product, price: displayPrice }
+    for (let i = 0; i < qty; i++) addItem(cartProduct, selectedVars)
     toast.success('✨ Added to your cart!', { duration: 2500 })
     openCart()
   }
@@ -107,6 +109,9 @@ export default function ProductDetail({ slug }: { slug: string }) {
 
   const allVarsSelected = !product.variants || product.variants.every(v => selectedVars[v.label])
   const addToCartDisabled = !allVarsSelected || !product.inStock
+  const selectedVariantPrice = getSelectedVariantPrice(product.variants, selectedVars)
+  const displayPrice = selectedVariantPrice ?? product.price
+  const displayOriginalPrice = product.originalPrice && product.originalPrice > displayPrice ? product.originalPrice : undefined
 
   return (
     <div className="min-h-screen bg-brand-black pt-28 pb-20">
@@ -233,13 +238,13 @@ export default function ProductDetail({ slug }: { slug: string }) {
               </div>
 
               <div className="flex items-baseline gap-3 mb-6">
-                <span className="font-display text-2xl sm:text-4xl font-bold gold-text">{formatPrice(product.price, currency)}</span>
-                {product.originalPrice && (
-                  <span className="font-body text-lg text-brand-cream/30 line-through">{formatPrice(product.originalPrice, currency)}</span>
+                <span className="font-display text-2xl sm:text-4xl font-bold gold-text">{formatPrice(displayPrice, currency)}</span>
+                {displayOriginalPrice && (
+                  <span className="font-body text-lg text-brand-cream/30 line-through">{formatPrice(displayOriginalPrice, currency)}</span>
                 )}
-                {product.originalPrice && (
+                {displayOriginalPrice && (
                   <span className="font-body text-sm font-bold text-green-400">
-                    Save {Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}%
+                    Save {Math.round(((displayOriginalPrice - displayPrice) / displayOriginalPrice) * 100)}%
                   </span>
                 )}
               </div>
@@ -270,19 +275,24 @@ export default function ProductDetail({ slug }: { slug: string }) {
                     {variant.label}: <span className="text-brand-cream">{selectedVars[variant.label] || 'Select'}</span>
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    {variant.options.map(opt => (
-                      <button
-                        key={opt}
-                        onClick={() => setSelectedVars(prev => ({ ...prev, [variant.label]: opt }))}
-                        className={`px-3 py-1.5 text-xs font-body font-semibold border transition-all duration-200 ${
-                          selectedVars[variant.label] === opt
-                            ? 'bg-gold-gradient text-brand-black border-transparent'
-                            : 'border-brand-gold/30 text-brand-cream/70 hover:border-brand-gold hover:text-brand-cream'
-                        }`}
-                      >
-                        {opt}
-                      </button>
-                    ))}
+                    {variant.options.map(option => {
+                      const optionLabel = getVariantOptionLabel(option)
+                      const optionPrice = getVariantOptionPrice(option)
+                      return (
+                        <button
+                          key={`${variant.label}-${optionLabel}`}
+                          onClick={() => setSelectedVars(prev => ({ ...prev, [variant.label]: optionLabel }))}
+                          className={`px-3 py-1.5 text-xs font-body font-semibold border transition-all duration-200 ${
+                            selectedVars[variant.label] === optionLabel
+                              ? 'bg-gold-gradient text-brand-black border-transparent'
+                              : 'border-brand-gold/30 text-brand-cream/70 hover:border-brand-gold hover:text-brand-cream'
+                          }`}
+                        >
+                          <span>{optionLabel}</span>
+                          {optionPrice ? <span className="ml-1 opacity-80">· {formatPrice(optionPrice, currency)}</span> : null}
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
               ))}
