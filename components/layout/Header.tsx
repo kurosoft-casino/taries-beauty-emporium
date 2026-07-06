@@ -500,7 +500,7 @@ export default function Header() {
                 animate={{ x: 0 }}
                 exit={{ x: '100%' }}
                 transition={{ type: 'tween', duration: 0.3 }}
-                className="fixed inset-y-0 right-0 z-[130] w-[min(360px,_calc(100vw-24px))] rounded-l-2xl border-l border-brand-gold/25 bg-brand-black/95 backdrop-blur-xl flex flex-col pt-24 px-6 pb-[calc(env(safe-area-inset-bottom)+2rem)] overflow-y-auto shadow-gold-lg"
+                className="fixed inset-y-0 right-0 z-[130] w-[min(360px,_calc(100vw-24px))] rounded-l-2xl border-l border-brand-gold/25 bg-brand-black/95 backdrop-blur-xl flex flex-col pt-24 px-6 pb-[calc(env(safe-area-inset-bottom)+5rem)] overflow-y-auto shadow-gold-lg"
               >
             <div className="flex flex-col gap-2">
               {navLinks.map((link, i) => (
@@ -614,14 +614,16 @@ export default function Header() {
               </div>
             </div>
 
-            <a
-              href="https://wa.me/2349035412919"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-8 btn-gold text-center block"
-            >
-               {lang === 'ZH' ? '💬 WhatsApp 联系我们' : '💬 WhatsApp Us'}
+            <div className="sticky bottom-0 -mx-6 mt-8 bg-gradient-to-t from-brand-black via-brand-black/95 to-transparent px-6 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-4">
+              <a
+                href="https://wa.me/2349035412919"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-gold inline-flex min-h-[54px] w-full items-center justify-center rounded-xl px-4 text-center leading-tight"
+              >
+                {lang === 'ZH' ? '💬 WhatsApp 联系我们' : '💬 WhatsApp Us'}
               </a>
+            </div>
             </motion.div>
           </>
         )}

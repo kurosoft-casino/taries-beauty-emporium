@@ -1,19 +1,26 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { usePathname } from 'next/navigation'
 import { X, Gift, Copy, CheckCheck } from 'lucide-react'
+import { shouldHideEngagementUi } from '@/lib/engagementVisibility'
 
 export default function FirstTimeBuyerBanner() {
   const [visible, setVisible] = useState(false)
   const [copied, setCopied] = useState(false)
+  const pathname = usePathname()
+  const hidden = shouldHideEngagementUi(pathname)
 
   useEffect(() => {
+    if (hidden) return
     // Only show once, not on first render — wait 6 seconds
     const seen = localStorage.getItem('taries-welcome-seen')
     if (seen) return
     const t = setTimeout(() => setVisible(true), 6000)
     return () => clearTimeout(t)
-  }, [])
+  }, [hidden])
+
+  if (hidden) return null
 
   function dismiss() {
     localStorage.setItem('taries-welcome-seen', '1')

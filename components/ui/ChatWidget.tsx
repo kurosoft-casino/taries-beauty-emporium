@@ -1,8 +1,10 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { usePathname } from 'next/navigation'
 import { MessageCircle, X, Send } from 'lucide-react'
 import { getCurrentUser } from '@/lib/auth'
+import { shouldHideEngagementUi } from '@/lib/engagementVisibility'
 
 interface ChatMessage {
   id: string
@@ -67,14 +69,17 @@ export default function ChatWidget() {
   const [mounted, setMounted] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const pathname = usePathname()
+  const hidden = shouldHideEngagementUi(pathname)
 
   useEffect(() => {
+    if (hidden) return
     setMounted(true)
     const user = getCurrentUser()
     const uid = user?.id || 'guest'
     setUserId(uid)
     setMessages(loadMessages(uid))
-  }, [])
+  }, [hidden])
 
   useEffect(() => {
     if (open) {
@@ -134,7 +139,7 @@ export default function ChatWidget() {
 
   const showQuickReplies = messages.length === 1 && messages[0].id === 'greeting'
 
-  if (!mounted) return null
+  if (hidden || !mounted) return null
 
   return (
     <>

@@ -1,20 +1,27 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { Cookie, X } from 'lucide-react'
+import { shouldHideEngagementUi } from '@/lib/engagementVisibility'
 
 const KEY = 'taries-cookie-consent'
 
 export default function CookieConsent() {
   const [show, setShow] = useState(false)
+  const pathname = usePathname()
+  const hidden = shouldHideEngagementUi(pathname)
 
   useEffect(() => {
+    if (hidden) return
     if (!localStorage.getItem(KEY)) {
       const t = setTimeout(() => setShow(true), 1500)
       return () => clearTimeout(t)
     }
-  }, [])
+  }, [hidden])
+
+  if (hidden) return null
 
   function accept() {
     localStorage.setItem(KEY, 'accepted')

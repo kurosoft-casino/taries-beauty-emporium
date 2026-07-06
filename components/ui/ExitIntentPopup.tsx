@@ -1,9 +1,11 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { usePathname } from 'next/navigation'
 import { X, Sparkles } from 'lucide-react'
 import { logoSrc } from '@/lib/assets'
 import Image from 'next/image'
+import { shouldHideEngagementUi } from '@/lib/engagementVisibility'
 
 const SESSION_KEY = 'taries-exit-intent-shown'
 const CODE = 'TARIES10'
@@ -12,8 +14,11 @@ export default function ExitIntentPopup() {
   const [show, setShow] = useState(false)
   const [copied, setCopied] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pathname = usePathname()
+  const hidden = shouldHideEngagementUi(pathname)
 
   useEffect(() => {
+    if (hidden) return
     if (sessionStorage.getItem(SESSION_KEY)) return
 
     // Desktop: mouse leaves top of viewport
@@ -48,7 +53,9 @@ export default function ExitIntentPopup() {
       document.removeEventListener('scroll', resetTimer)
       if (timerRef.current) clearTimeout(timerRef.current)
     }
-  }, [])
+  }, [hidden])
+
+  if (hidden) return null
 
   function close() { setShow(false) }
 
