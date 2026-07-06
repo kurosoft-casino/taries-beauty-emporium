@@ -427,7 +427,7 @@ route('POST', '/auth/logout', async (req, env) => {
 
 route('GET', '/auth/me', async (req, env) => {
   const s = await getSession(req, env);
-  if (!s) return ok({ user: null });
+  if (!s) return ok({ user: null, sessionToken: null });
   const u = await env.DB.prepare('SELECT id, email, role, first_name, last_name, avatar, phone, whatsapp, created_at, metadata_json FROM users WHERE id = ?')
     .bind(s.user_id)
     .first();
@@ -438,11 +438,13 @@ route('GET', '/auth/me', async (req, env) => {
   const country = normalizeCountry((() => {
     try { return JSON.parse(u?.metadata_json || '{}').country; } catch { return 'Other'; }
   })());
+  const sessionToken = getRequestSessionToken(req);
   const headers = new Headers({ 'content-type': 'application/json' });
   const csrf = await ensureCsrfCookie(req, headers);
   return new Response(JSON.stringify({
     ok: true,
     csrfToken: csrf,
+    sessionToken,
     user: u
       ? {
           id: u.id,

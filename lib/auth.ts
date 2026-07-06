@@ -310,7 +310,9 @@ export async function syncSessionFromServer(): Promise<User | null> {
   if (typeof window === 'undefined') return null
   try {
     const payload = await requestRemoteAuth<RemoteAuthPayload>('/auth/me')
-    writeApiSessionToken(payload.sessionToken)
+    if (payload.sessionToken !== undefined) {
+      writeApiSessionToken(payload.sessionToken)
+    }
     if (!payload.user) return null
     const mapped = mapRemoteUserToLocal(payload.user)
     upsertLocalUser(mapped)
