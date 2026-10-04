@@ -40,16 +40,23 @@ export function clearWishlist(): void {
 
 /**
  * Load the wishlist for the current visitor: server-backed when signed in
- * (mirrored locally), local-only for guests.
+ * (mirrored locally), local-only for guests. Guest items are merged into the
+ * account on first load after signing in.
  */
 export async function loadWishlist(): Promise<string[]> {
   const user = getCurrentUser()
   if (user) {
     const res = await apiRequest<{ items?: { slug: string }[] }>('/wishlist')
     if (res.ok && Array.isArray(res.data?.items)) {
-      const slugs = res.data.items.map(item => item.slug)
-      writeWishlist(slugs)
-      return slugs
+      const serverSlugs = res.data.items.map(item => item.slug)
+      const local = getWishlist()
+      const missing = local.filter(slug => !serverSlugs.includes(slug))
+      for (const slug of missing) {
+        await apiRequest('/wishlist', { method: 'POST', body: JSON.stringify({ slug }) })
+      }
+      const merged = [...serverSlugs, ...missing]
+      writeWishlist(merged)
+      return merged
     }
   }
   return getWishlist()

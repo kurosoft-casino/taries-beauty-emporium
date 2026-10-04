@@ -197,17 +197,10 @@ export default function AccountPage() {
   useEffect(() => {
     if (!user) return
     const loadOrders = async () => {
-      try {
-        const response = await fetch(withApiBase('/orders/me'), {
-          method: 'GET',
-          credentials: 'include',
-          cache: 'no-store',
-        })
-        if (!response.ok) throw new Error('remote unavailable')
-        const payload = await response.json().catch(() => null) as { orders?: RemoteOrderRow[] } | null
-        if (!payload?.orders) throw new Error('invalid payload')
-        setUserOrders(payload.orders.map(mapRemoteOrder))
-      } catch {
+      const response = await apiRequest<{ orders?: RemoteOrderRow[] }>('/orders/me')
+      if (response.ok && Array.isArray(response.data?.orders)) {
+        setUserOrders(response.data.orders.map(mapRemoteOrder))
+      } else {
         setUserOrders([])
         toast.error('We could not load your order history right now. Please refresh and try again.')
       }

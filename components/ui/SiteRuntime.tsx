@@ -6,6 +6,7 @@ import { getCurrentUser, logoutUser, syncSessionFromServer, touchSession } from 
 import { readJSON, writeText } from '@/lib/storage'
 import { DEFAULT_STORE_SETTINGS, getMaintenanceMode, getStoreSettings, saveMaintenanceMode, saveStoreSettings, subscribeStoreSettings } from '@/lib/storeSettings'
 import { apiRequest } from '@/lib/remoteApi'
+import { useCartStore } from '@/lib/store'
 import { SITE_URL } from '@/lib/site'
 
 interface VendorSession {
@@ -66,6 +67,10 @@ export default function SiteRuntime() {
     setHydrated(true)
     setMaintenance(getMaintenanceMode())
     setSettings(getStoreSettings())
+
+    // Rehydrate the persisted cart only after mount so SSR and the first
+    // client render match (avoids React hydration mismatches).
+    void useCartStore.persist.rehydrate()
 
     // Mirror server-side store settings so admin updates reach every visitor.
     void (async () => {

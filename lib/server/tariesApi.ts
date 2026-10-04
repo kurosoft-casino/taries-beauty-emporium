@@ -1502,7 +1502,7 @@ async function rateLimitGuard(req: Request): Promise<Response | null> {
   const url = new URL(req.url)
   const path = url.pathname.replace(/^\/api/, '') || '/'
   const isAuth = path.startsWith('/auth/')
-  const allowed = await rateLimit(`${isAuth ? 'a' : 'g'}:${ip}`, isAuth ? 10 : 60, 1)
+  const allowed = await rateLimit(`${isAuth ? 'a' : 'g'}:${ip}`, isAuth ? 30 : 120, 1)
   if (!allowed) return err(429, 'rate limited')
   return null
 }
