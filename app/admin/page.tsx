@@ -1442,7 +1442,11 @@ function ProductsManagementTab() {
           description: formData.description.trim(),
           shortDesc: formData.shortDesc.trim(),
           images: normalizedImages,
-          video: formData.video.trim() || null,
+          videos: formData.videos.map(video => video.trim()).filter(Boolean),
+          video: formData.videos.map(video => video.trim()).find(Boolean) || null,
+          details: formData.details
+            .map(detail => ({ label: detail.label.trim(), value: detail.value.trim() }))
+            .filter(detail => detail.label || detail.value),
           inStock: formData.inStock,
           stockCount: formData.stockCount ? Number(formData.stockCount) : null,
           badge: formData.badge || null,

@@ -784,6 +784,7 @@ const PRODUCT_JSON_SPEC: JsonSpec = {
   variants_json: '[]',
   images_json: '[]',
   videos_json: '[]',
+  details_json: '[]',
 }
 
 async function listStoreProducts(filter: string, sort: string, perPage = 500) {
@@ -870,7 +871,8 @@ async function createProduct(params: {
     variants_json: Array.isArray(b.variants) ? b.variants : [],
     images_json: params.images,
     videos_json: Array.isArray(b.videos) ? b.videos : [],
-    video: b.video || null,
+    video: (Array.isArray(b.videos) ? b.videos.find((v) => typeof v === 'string' && v) : null) || b.video || null,
+    details_json: Array.isArray(b.details) ? b.details : [],
     badge: b.badge || null,
     whatsapp: b.whatsapp || null,
     in_stock: b.inStock !== false,
@@ -990,6 +992,7 @@ route('PATCH', '/vendors/me/products/:id', async (req, params) => {
     variants: { field: 'variants_json', transform: (v) => (Array.isArray(v) ? v : []) },
     images: { field: 'images_json', transform: () => normalizedImages || [] },
     videos: { field: 'videos_json', transform: (v) => (Array.isArray(v) ? v : []) },
+    details: { field: 'details_json', transform: (v) => (Array.isArray(v) ? v : []) },
     video: { field: 'video' },
     badge: { field: 'badge' },
     whatsapp: { field: 'whatsapp' },
@@ -1007,6 +1010,9 @@ route('PATCH', '/vendors/me/products/:id', async (req, params) => {
     patch[def.field] = def.transform ? def.transform(b[key], key) : b[key]
   }
   if (!Object.keys(patch).length) return err(400, 'nothing to update')
+  if (Array.isArray(patch.videos_json)) {
+    patch.video = (patch.videos_json as unknown[]).find((v) => typeof v === 'string' && v) || null
+  }
   patch.updated_at = nowIso()
   await pbUpdate(PB_COLLECTIONS.vendorProducts, params.id, patch)
   return ok()
@@ -1038,6 +1044,19 @@ route('PATCH', '/admin/products/:id', async (req, params) => {
   if (typeof b.active === 'boolean') patch.active = b.active
   if (typeof b.inStock === 'boolean') patch.in_stock = b.inStock
   if (b.stockCount !== undefined && b.stockCount !== null) patch.stock_count = Number(b.stockCount)
+  if (typeof b.price === 'number') patch.price = b.price
+  if (typeof b.description === 'string') patch.description = b.description
+  if (typeof b.shortDesc === 'string') patch.short_desc = b.shortDesc
+  if (Array.isArray(b.features)) patch.features_json = b.features
+  if (Array.isArray(b.variants)) patch.variants_json = b.variants
+  if (Array.isArray(b.images)) patch.images_json = b.images
+  if (Array.isArray(b.videos)) {
+    patch.videos_json = b.videos
+    patch.video = (b.videos as unknown[]).find((v) => typeof v === 'string' && v) || null
+  }
+  if (Array.isArray(b.details)) patch.details_json = b.details
+  if (typeof b.badge === 'string') patch.badge = b.badge
+  if (typeof b.whatsapp === 'string') patch.whatsapp = b.whatsapp
   if (!Object.keys(patch).length) return err(400, 'nothing to update')
   patch.updated_at = nowIso()
   const existing = await pbGet(PB_COLLECTIONS.vendorProducts, params.id).catch(() => null)

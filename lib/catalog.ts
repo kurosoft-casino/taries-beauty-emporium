@@ -6,6 +6,8 @@ export interface StorefrontProduct extends Product {
   source: 'catalog' | 'vendor'
   vendorEmail?: string
   contactWhatsApp?: string
+  videos?: string[]
+  details?: { label: string; value: string }[]
 }
 
 const vendorCategoryMap: Record<string, { category: Category; label: string }> = {
@@ -52,6 +54,8 @@ function toVendorStorefrontProduct(product: VendorProduct): StorefrontProduct {
     originalPrice: product.originalPrice,
     images: product.images.length > 0 ? product.images : [baseProducts[0].images[0]],
     video: product.video,
+    videos: product.videos && product.videos.length > 0 ? product.videos : product.video ? [product.video] : undefined,
+    details: product.details && product.details.length > 0 ? product.details : undefined,
     badge: product.badge || undefined,
     description: product.description,
     shortDesc: product.shortDesc || product.description.slice(0, 120),
@@ -121,6 +125,7 @@ export interface RemoteProductRow {
   variants_json?: string | null
   images_json?: string | null
   videos_json?: string | null
+  details_json?: string | null
   video?: string | null
   badge?: string | null
   whatsapp?: string | null
@@ -169,6 +174,10 @@ export function mapRemoteProductRow(row: RemoteProductRow): StorefrontProduct {
     originalPrice: row.original_price ?? undefined,
     images: parseJsonArray<string>(row.images_json),
     video: row.video ?? undefined,
+    videos: parseJsonArray<string>(row.videos_json).filter(Boolean),
+    details: parseJsonArray<{ label?: unknown; value?: unknown }>(row.details_json)
+      .map((item) => ({ label: String(item?.label ?? ''), value: String(item?.value ?? '') }))
+      .filter((item) => item.label || item.value),
     description: row.description ?? '',
     shortDesc: row.short_desc ?? undefined,
     features: parseJsonArray<string>(row.features_json),

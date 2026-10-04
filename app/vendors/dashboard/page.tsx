@@ -35,6 +35,8 @@ interface VendorProduct {
   shortDesc?: string
   images: string[]
   video?: string
+  videos?: string[]
+  details?: { label: string; value: string }[]
   inStock: boolean
   stockCount?: number
   badge?: 'new' | 'sale' | 'hot' | 'bestseller' | ''
@@ -82,6 +84,8 @@ interface RemoteProduct {
   short_desc?: string | null
   images_json?: string | null
   video?: string | null
+  videos_json?: string | null
+  details_json?: string | null
   in_stock?: number | boolean | null
   stock_count?: number | null
   badge?: VendorProduct['badge'] | null
@@ -98,6 +102,19 @@ function parseJsonList(value: string | null | undefined): string[] {
   try {
     const parsed = JSON.parse(value)
     return Array.isArray(parsed) ? parsed.map(item => String(item)) : []
+  } catch {
+    return []
+  }
+}
+
+function parseDetailList(value: string | null | undefined): { label: string; value: string }[] {
+  if (!value) return []
+  try {
+    const parsed = JSON.parse(value)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .map(item => ({ label: String(item?.label ?? ''), value: String(item?.value ?? '') }))
+      .filter(item => item.label || item.value)
   } catch {
     return []
   }
@@ -137,6 +154,8 @@ function mapProduct(remote: RemoteProduct): VendorProduct {
     badge: remote.badge || '',
     whatsapp: remote.whatsapp || undefined,
     features: parseJsonList(remote.features_json),
+    videos: parseJsonList(remote.videos_json).filter(Boolean),
+    details: parseDetailList(remote.details_json),
     variants: parseVariantList(remote.variants_json),
     active: remote.active === 0 ? false : Boolean(remote.active ?? true),
     status: remote.status || 'pending',
@@ -184,7 +203,8 @@ function ProductPanel({
         shortDesc: product.shortDesc || '',
         description: product.description,
         images: product.images,
-        video: product.video || '',
+        videos: product.videos && product.videos.length > 0 ? product.videos : product.video ? [product.video] : [],
+        details: product.details ?? [],
         inStock: product.inStock,
         stockCount: product.stockCount ? String(product.stockCount) : '',
         badge: product.badge || '',
@@ -347,7 +367,11 @@ export default function VendorDashboardPage() {
       description: form.description.trim(),
       shortDesc: form.shortDesc.trim(),
       images: normalizedImages,
-      video: form.video.trim() || null,
+      videos: form.videos.map(video => video.trim()).filter(Boolean),
+      video: form.videos.map(video => video.trim()).find(Boolean) || null,
+      details: form.details
+        .map(detail => ({ label: detail.label.trim(), value: detail.value.trim() }))
+        .filter(detail => detail.label || detail.value),
       inStock: form.inStock,
       stockCount: form.stockCount ? Number(form.stockCount) : null,
       badge: form.badge || null,

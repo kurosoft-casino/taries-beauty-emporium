@@ -12,7 +12,8 @@ export interface ProductFormData {
   shortDesc: string
   description: string
   images: string[]
-  video: string
+  videos: string[]
+  details: { label: string; value: string }[]
   inStock: boolean
   stockCount: string
   badge: string
@@ -30,7 +31,8 @@ export function emptyFormData(): ProductFormData {
     shortDesc: '',
     description: '',
     images: [],
-    video: '',
+    videos: [],
+    details: [],
     inStock: true,
     stockCount: '',
     badge: '',
@@ -173,6 +175,30 @@ export default function ProductForm({
 
   function removeVariant(idx: number) {
     set('variants', form.variants.filter((_, i) => i !== idx))
+  }
+
+  function addVideo() {
+    set('videos', [...form.videos, ''])
+  }
+
+  function updateVideo(idx: number, value: string) {
+    set('videos', form.videos.map((v, i) => (i === idx ? value : v)))
+  }
+
+  function removeVideo(idx: number) {
+    set('videos', form.videos.filter((_, i) => i !== idx))
+  }
+
+  function addDetail() {
+    set('details', [...form.details, { label: '', value: '' }])
+  }
+
+  function updateDetail(idx: number, key: 'label' | 'value', value: string) {
+    set('details', form.details.map((d, i) => (i === idx ? { ...d, [key]: value } : d)))
+  }
+
+  function removeDetail(idx: number) {
+    set('details', form.details.filter((_, i) => i !== idx))
   }
 
   return (
@@ -371,16 +397,77 @@ export default function ProductForm({
               className="overflow-hidden"
             >
               <div className="space-y-5 pt-5">
-                {/* Video URL */}
+                {/* Custom product details */}
                 <div>
-                  <FieldLabel optional>Video URL (YouTube)</FieldLabel>
-                  <input
-                    type="url"
-                    value={form.video}
-                    onChange={e => set('video', e.target.value)}
-                    placeholder="https://youtube.com/watch?v=…"
-                    className={inputCls()}
-                  />
+                  <FieldLabel optional>Extra Product Details</FieldLabel>
+                  <p className="text-brand-cream/35 text-xs mb-3">
+                    Add any details your product needs, e.g. <span className="text-brand-cream/60">Colours</span> → <span className="text-brand-cream/60">Red, Black, Blue</span> or <span className="text-brand-cream/60">Material</span> → <span className="text-brand-cream/60">Human hair</span>.
+                  </p>
+                  <div className="space-y-2">
+                    {form.details.map((detail, i) => (
+                      <div key={i} className="flex gap-2 items-start">
+                        <input
+                          value={detail.label}
+                          onChange={e => updateDetail(i, 'label', e.target.value)}
+                          placeholder="Detail name (e.g. Colours)"
+                          className={`${inputCls()} flex-1`}
+                        />
+                        <input
+                          value={detail.value}
+                          onChange={e => updateDetail(i, 'value', e.target.value)}
+                          placeholder="Values (e.g. Red, Black)"
+                          className={`${inputCls()} flex-1`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeDetail(i)}
+                          className="mt-2.5 text-red-400/50 hover:text-red-400 transition-colors flex-shrink-0"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={addDetail}
+                      className="btn-outline-gold !text-xs !py-2 flex items-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add Detail
+                    </button>
+                  </div>
+                </div>
+
+                {/* Videos */}
+                <div>
+                  <FieldLabel optional>Product Videos (YouTube URLs)</FieldLabel>
+                  <div className="space-y-2">
+                    {form.videos.map((video, i) => (
+                      <div key={i} className="flex gap-2 items-center">
+                        <input
+                          type="url"
+                          value={video}
+                          onChange={e => updateVideo(i, e.target.value)}
+                          placeholder={`https://youtube.com/watch?v=… (video ${i + 1})`}
+                          className={`${inputCls()} flex-1`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeVideo(i)}
+                          className="text-red-400/50 hover:text-red-400 transition-colors flex-shrink-0"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={addVideo}
+                      className="btn-outline-gold !text-xs !py-2 flex items-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add Video
+                    </button>
+                  </div>
+                  <p className="text-brand-cream/25 text-xs mt-2">The first video is shown first on the product page.</p>
                 </div>
 
                 {/* Features tag input */}

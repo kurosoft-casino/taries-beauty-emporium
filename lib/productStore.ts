@@ -10,6 +10,8 @@ export interface VendorProduct {
   originalPrice?: number
   images: string[]       // URLs or base64 data URIs
   video?: string         // YouTube URL
+  videos?: string[]      // multiple YouTube URLs
+  details?: { label: string; value: string }[]
   description: string
   shortDesc?: string
   features: string[]

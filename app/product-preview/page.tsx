@@ -96,17 +96,17 @@ function ProductPreviewContent() {
               </span>
               <span className="text-xs text-brand-cream/40">Ships from {product.shipsFrom}</span>
             </div>
-            {product.video && (
-              <div className="mb-6 border border-brand-gold/20 p-3 bg-brand-black-2">
+            {(product.videos && product.videos.length > 0 ? product.videos : product.video ? [product.video] : []).filter(Boolean).map((videoUrl, index) => (
+              <div key={videoUrl} className="mb-6 border border-brand-gold/20 p-3 bg-brand-black-2">
                 <div className="flex items-center gap-2 text-brand-gold-2 text-xs uppercase tracking-widest mb-3">
                   <Video size={14} />
-                  Product video
+                  Product video{(product.videos?.length ?? 0) > 1 ? ` ${index + 1}` : ''}
                 </div>
                 <div className="aspect-video overflow-hidden">
-                  <iframe src={product.video} title={`${product.name} video`} className="w-full h-full" allowFullScreen />
+                  <iframe src={videoUrl} title={`${product.name} video ${index + 1}`} className="w-full h-full" allowFullScreen />
                 </div>
               </div>
-            )}
+            ))}
             {product.variants?.map(variant => (
               <div key={variant.label} className="mb-5">
                 <p className="font-body text-xs tracking-widest text-brand-gold-2 uppercase mb-3">
@@ -181,6 +181,19 @@ function ProductPreviewContent() {
                   <li key={feature} className="text-sm text-brand-cream/60">• {feature}</li>
                 ))}
               </ul>
+              {product.details && product.details.length > 0 && (
+                <div className="mt-5 border-t border-brand-gold/15 pt-4">
+                  <h3 className="font-heading text-sm text-brand-gold uppercase tracking-wider mb-3">Additional Information</h3>
+                  <dl className="space-y-2">
+                    {product.details.map(detail => (
+                      <div key={`${detail.label}-${detail.value}`} className="flex gap-3 text-sm">
+                        <dt className="text-brand-cream/45 min-w-[110px]">{detail.label}</dt>
+                        <dd className="text-brand-cream/75">{detail.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              )}
             </div>
           </div>
         </div>
