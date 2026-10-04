@@ -2021,22 +2021,114 @@ function InventoryTab() {
   const [inventory, setInventoryState] = useState<Record<string, InventoryItem>>({})
   const [search, setSearch] = useState('')
   const [editingNotes, setEditingNotes] = useState<{ slug: string; value: string } | null>(null)
+  const [remoteRows, setRemoteRows] = useState<Array<{ id: string; slug: string; name: string; category: string; price: number; in_stock: boolean; stock_count: number | null }>>([])
+  const [catalogStock, setCatalogStock] = useState<Record<string, boolean>>({})
 
-  useEffect(() => { setInventoryState(getInventory()) }, [])
+  useEffect(() => {
+    setInventoryState(getInventory())
+    void (async () => {
+      const [productsRes, overridesRes] = await Promise.all([
+        apiRequest<{ products?: Array<Record<string, unknown>> }>('/admin/products'),
+        apiRequest<{ overrides?: Array<Record<string, unknown>> }>('/products/overrides'),
+      ])
+      if (productsRes.ok && Array.isArray(productsRes.data?.products)) {
+        setRemoteRows(productsRes.data.products.map(row => ({
+          id: String(row.id ?? ''),
+          slug: String(row.slug ?? ''),
+          name: String(row.name ?? ''),
+          category: String(row.category ?? ''),
+          price: Number(row.price ?? 0),
+          in_stock: row.in_stock === 0 ? false : Boolean(row.in_stock ?? true),
+          stock_count: row.stock_count == null ? null : Number(row.stock_count),
+        })))
+      }
+      if (overridesRes.ok && Array.isArray(overridesRes.data?.overrides)) {
+        const map: Record<string, boolean> = {}
+        for (const row of overridesRes.data.overrides) {
+          if (row.in_stock !== undefined && row.in_stock !== null) {
+            map[String(row.slug)] = row.in_stock === 0 ? false : Boolean(row.in_stock)
+          }
+        }
+        setCatalogStock(map)
+      }
+    })()
+  }, [])
+
+  type InventoryRow = {
+    key: string
+    id?: string
+    source: 'catalog' | 'vendor'
+    slug: string
+    name: string
+    image: string
+    category: string
+    price: number
+    sku: string
+    inStock: boolean
+    stockCount: number | null
+  }
+
+  const rows = useMemo<InventoryRow[]>(() => {
+    const catalogRows: InventoryRow[] = products.map(prod => ({
+      key: `catalog:${prod.slug}`,
+      source: 'catalog',
+      slug: prod.slug,
+      name: prod.name,
+      image: prod.images[0],
+      category: prod.categoryLabel ?? prod.category,
+      price: prod.price,
+      sku: prod.id,
+      inStock: catalogStock[prod.slug] ?? prod.inStock,
+      stockCount: null,
+    }))
+    const vendorRows: InventoryRow[] = remoteRows.map(row => ({
+      key: `vendor:${row.id}`,
+      id: row.id,
+      source: 'vendor',
+      slug: row.slug,
+      name: row.name,
+      image: '',
+      category: row.category,
+      price: row.price,
+      sku: row.id,
+      inStock: row.in_stock,
+      stockCount: row.stock_count,
+    }))
+    return [...catalogRows, ...vendorRows]
+  }, [catalogStock, remoteRows])
 
   const filtered = useMemo(() => {
-    if (!search) return products
+    if (!search) return rows
     const q = search.toLowerCase()
-    return products.filter(p => p.name.toLowerCase().includes(q) || p.slug.toLowerCase().includes(q))
-  }, [search])
+    return rows.filter(p => p.name.toLowerCase().includes(q) || p.slug.toLowerCase().includes(q))
+  }, [rows, search])
 
-  function handleStockToggle(slug: string) {
-    const cur = inventory[slug] ?? { inStock: true, notes: '' }
-    const updated: InventoryItem = { ...cur, inStock: !cur.inStock }
-    setInventoryItem(slug, updated)
-    setInventoryState(prev => ({ ...prev, [slug]: updated }))
-    toast.success(`Stock ${updated.inStock ? 'enabled' : 'disabled'}`)
+  async function handleStockToggle(row: InventoryRow) {
+    const next = !row.inStock
+    if (row.source === 'vendor' && row.id) {
+      const res = await apiRequest(`/admin/products/${encodeURIComponent(row.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ inStock: next }),
+      })
+      if (!res.ok) {
+        toast.error(res.error ?? 'Could not update stock')
+        return
+      }
+      setRemoteRows(prev => prev.map(r => (r.id === row.id ? { ...r, in_stock: next } : r)))
+    } else {
+      const res = await apiRequest('/admin/product-overrides', {
+        method: 'POST',
+        body: JSON.stringify({ slug: row.slug, inStock: next }),
+      })
+      if (!res.ok) {
+        toast.error(res.error ?? 'Could not update stock')
+        return
+      }
+      setCatalogStock(prev => ({ ...prev, [row.slug]: next }))
+    }
+    toast.success(`Stock ${next ? 'enabled' : 'disabled'}`)
   }
+
   function saveNotes(slug: string) {
     if (!editingNotes) return
     const cur = inventory[slug] ?? { inStock: true, notes: '' }
@@ -2072,21 +2164,28 @@ function InventoryTab() {
               const inv = inventory[prod.slug] ?? { inStock: prod.inStock, notes: '' }
               const isEditing = editingNotes?.slug === prod.slug
               return (
-                <motion.tr key={prod.slug} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.02 }}
+                <motion.tr key={prod.key} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.02 }}
                   className="border-t border-white/5 hover:bg-brand-black-3/50">
                   <td className="p-3">
                     <div className="flex items-center gap-2">
-                      <img src={prod.images[0]} alt={prod.name} className="w-8 h-8 rounded-lg object-cover" />
+                      {prod.image ? (
+                        <img src={prod.image} alt={prod.name} className="w-8 h-8 rounded-lg object-cover" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-lg bg-brand-black-3 border border-brand-gold/20" />
+                      )}
                       <span className="text-white text-sm">{prod.name}</span>
+                      {prod.source === 'vendor' && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-brand-gold/10 text-brand-gold/80">vendor</span>
+                      )}
                     </div>
                   </td>
-                  <td className="p-3 text-white/60">{prod.categoryLabel}</td>
+                  <td className="p-3 text-white/60">{prod.category}</td>
                   <td className="p-3 text-white">${prod.price.toFixed(2)}</td>
-                  <td className="p-3 font-mono text-xs text-white/40">{prod.id}</td>
+                  <td className="p-3 font-mono text-xs text-white/40">{prod.sku}</td>
                   <td className="p-3 text-center">
-                    <button onClick={() => handleStockToggle(prod.slug)}
-                      className={`relative w-10 h-6 rounded-full transition-all ${inv.inStock ? 'bg-green-500' : 'bg-red-500/50'}`}>
-                      <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${inv.inStock ? 'left-5' : 'left-1'}`} />
+                    <button onClick={() => void handleStockToggle(prod)}
+                      className={`relative w-10 h-6 rounded-full transition-all ${prod.inStock ? 'bg-green-500' : 'bg-red-500/50'}`}>
+                      <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${prod.inStock ? 'left-5' : 'left-1'}`} />
                     </button>
                   </td>
                   <td className="p-3">
@@ -2123,15 +2222,54 @@ function SettingsTab() {
   useEffect(() => {
     setSettings(getStoreSettings())
     setMaintenance(getMaintenanceMode())
+    void (async () => {
+      const res = await apiRequest<{ settings?: Record<string, unknown> }>('/settings')
+      if (res.ok && res.data?.settings) {
+        const s = res.data.settings
+        const remote: StoreSettings = {
+          storeName: String(s.store_name ?? DEFAULT_STORE_SETTINGS.storeName),
+          announcement: String(s.announcement ?? ''),
+          whatsapp: String(s.whatsapp ?? ''),
+          email: String(s.email ?? ''),
+        }
+        setSettings(remote)
+        saveStoreSettings(remote)
+        const m = Boolean(s.maintenance_mode)
+        setMaintenance(m)
+        saveMaintenanceMode(m)
+      }
+    })()
   }, [])
 
-  function handleSaveSettings() {
+  async function handleSaveSettings() {
+    const res = await apiRequest('/admin/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        storeName: settings.storeName,
+        announcement: settings.announcement,
+        whatsapp: settings.whatsapp,
+        email: settings.email,
+      }),
+    })
+    if (!res.ok) {
+      toast.error(res.error ?? 'Could not save settings right now.')
+      return
+    }
     saveStoreSettings(settings)
     setSaved(true); setTimeout(() => setSaved(false), 2000)
     toast.success('Settings saved')
   }
-  function handleMaintenanceToggle() {
-    const next = !maintenance; setMaintenance(next)
+  async function handleMaintenanceToggle() {
+    const next = !maintenance
+    const res = await apiRequest('/admin/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ maintenanceMode: next }),
+    })
+    if (!res.ok) {
+      toast.error(res.error ?? 'Could not update maintenance mode.')
+      return
+    }
+    setMaintenance(next)
     saveMaintenanceMode(next)
     toast.success(`Maintenance mode ${next ? 'enabled' : 'disabled'}`)
   }

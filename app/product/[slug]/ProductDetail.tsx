@@ -11,19 +11,22 @@ import ProductCard from '@/components/shop/ProductCard'
 import ProductReviews from '@/components/shop/ProductReviews'
 import { useCartStore } from '@/lib/store'
 import { incrementView } from '@/lib/views'
-import { toggleWishlist, isWishlisted } from '@/lib/wishlist'
-import { getAverageRating, getReviewCount, seedReviewsIfEmpty } from '@/lib/reviews'
+import { loadWishlist, toggleWishlistForUser } from '@/lib/wishlist'
+import { fetchProductReviews, getAverageRating } from '@/lib/reviews'
 import { addRecentlyViewed } from '@/lib/recentlyViewed'
 import FlashSaleTimer from '@/components/shop/FlashSaleTimer'
 import RecentlyViewedBar from '@/components/shop/RecentlyViewedBar'
 import toast from 'react-hot-toast'
 import { getCatalogProductBySlug, getStorefrontProducts } from '@/lib/catalog'
+import { useStorefrontCatalog } from '@/lib/useStorefrontCatalog'
 import { withApiBase } from '@/lib/site'
 import { isValidEmail, normalizeEmail } from '@/lib/validation'
 import { getSelectedVariantPrice, getVariantOptionLabel, getVariantOptionPrice } from '@/lib/productVariants'
 
 export default function ProductDetail({ slug }: { slug: string }) {
-  const productData = getCatalogProductBySlug(slug)
+  const liveCatalog = useStorefrontCatalog()
+  const productData =
+    liveCatalog.find(p => p.source === 'catalog' && p.slug === slug) ?? getCatalogProductBySlug(slug)
   if (!productData) notFound()
   const product = productData!
 
@@ -42,23 +45,29 @@ export default function ProductDetail({ slug }: { slug: string }) {
   const shareRef = useRef<HTMLDivElement>(null)
 
   const { addItem, openCart, currency } = useCartStore()
-  const related = getStorefrontProducts().filter(p => p.category === product.category && p.id !== product.id).slice(0, 4)
+  const catalogNow = liveCatalog.length > 0 ? liveCatalog : getStorefrontProducts()
+  const related = catalogNow.filter(p => p.category === product.category && p.id !== product.id).slice(0, 4)
   const bundles = getBundlesForProduct(slug)
   const bundleProducts = bundles.map(bundle => ({
     ...bundle,
-    items: getStorefrontProducts().filter(productItem => bundle.productSlugs.includes(productItem.slug)),
+    items: catalogNow.filter(productItem => bundle.productSlugs.includes(productItem.slug)),
   })).filter(bundle => bundle.items.length > 0)
 
-  // Track product view on mount, seed reviews, init wishlist, record recently viewed
+  // Track product view on mount, load live reviews, init wishlist, record recently viewed
   useEffect(() => {
     incrementView(slug)
     addRecentlyViewed(slug)
-    seedReviewsIfEmpty()
-    setWished(isWishlisted(slug))
-    const avg = getAverageRating(slug)
-    const cnt = getReviewCount(slug)
-    if (avg > 0) setLiveRating(avg)
-    if (cnt > 0) setLiveCount(cnt)
+    void (async () => {
+      const list = await loadWishlist()
+      setWished(list.includes(slug))
+    })()
+    void (async () => {
+      const list = await fetchProductReviews(slug)
+      if (list.length > 0) {
+        setLiveRating(getAverageRating(list))
+        setLiveCount(list.length)
+      }
+    })()
   }, [slug])
 
   // Close share dropdown on outside click
@@ -324,7 +333,7 @@ export default function ProductDetail({ slug }: { slug: string }) {
                   {!product.inStock ? 'Sold Out' : allVarsSelected ? 'Add to Cart' : 'Select Options'}
                 </motion.button>
                 <motion.button
-                  onClick={() => setWished(toggleWishlist(slug))}
+                  onClick={async () => setWished(await toggleWishlistForUser(slug))}
                   whileTap={{ scale: 0.9 }}
                   className="w-14 h-14 border border-brand-gold/30 flex items-center justify-center text-brand-cream hover:border-brand-gold hover:text-brand-gold-3 transition-all duration-200"
                 >

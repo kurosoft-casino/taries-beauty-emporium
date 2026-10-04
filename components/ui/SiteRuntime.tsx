@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { getCurrentUser, logoutUser, syncSessionFromServer, touchSession } from '@/lib/auth'
 import { readJSON, writeText } from '@/lib/storage'
-import { DEFAULT_STORE_SETTINGS, getMaintenanceMode, getStoreSettings, subscribeStoreSettings } from '@/lib/storeSettings'
+import { DEFAULT_STORE_SETTINGS, getMaintenanceMode, getStoreSettings, saveMaintenanceMode, saveStoreSettings, subscribeStoreSettings } from '@/lib/storeSettings'
+import { apiRequest } from '@/lib/remoteApi'
 import { SITE_URL } from '@/lib/site'
 
 interface VendorSession {
@@ -65,6 +66,22 @@ export default function SiteRuntime() {
     setHydrated(true)
     setMaintenance(getMaintenanceMode())
     setSettings(getStoreSettings())
+
+    // Mirror server-side store settings so admin updates reach every visitor.
+    void (async () => {
+      const res = await apiRequest<{ settings?: Record<string, unknown> }>('/settings')
+      if (res.ok && res.data?.settings) {
+        const s = res.data.settings
+        saveStoreSettings({
+          ...getStoreSettings(),
+          storeName: String(s.store_name ?? DEFAULT_STORE_SETTINGS.storeName),
+          announcement: String(s.announcement ?? ''),
+          whatsapp: String(s.whatsapp ?? ''),
+          email: String(s.email ?? ''),
+        })
+        saveMaintenanceMode(Boolean(s.maintenance_mode))
+      }
+    })()
 
     const refreshRuntime = () => {
       setMaintenance(getMaintenanceMode())

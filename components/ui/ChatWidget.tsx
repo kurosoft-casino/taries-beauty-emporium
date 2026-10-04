@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { usePathname } from 'next/navigation'
 import { MessageCircle, X, Send } from 'lucide-react'
 import { getCurrentUser } from '@/lib/auth'
+import { apiRequest } from '@/lib/remoteApi'
 import { shouldHideEngagementUi } from '@/lib/engagementVisibility'
 
 interface ChatMessage {
@@ -13,10 +14,18 @@ interface ChatMessage {
   timestamp: number
 }
 
+interface RemoteMessageRow {
+  id: string
+  sender_role: string
+  body: string | null
+  kind?: string | null
+  created_at: string
+}
+
 const GREETING: ChatMessage = {
   id: 'greeting',
   role: 'support',
-  text: "Hi! 👑 Welcome to Taries Beauty Emporium. How can we help you today? Browse our wigs, bundles, or custom wigs — or ask us anything!",
+  text: "Hi! 👑 Welcome to Taries Beauty Emporium. How can we help you today? Send us a message and our team will reply right here.",
   timestamp: Date.now(),
 }
 
@@ -36,26 +45,39 @@ const AUTO_RESPONSES: Record<string, string> = {
 
 const DEFAULT_RESPONSE = "Thanks for your message! 💛 Our team will get back to you shortly. For urgent enquiries, WhatsApp us at +234 903 541 2919."
 
-function getChatKey(userId: string) {
+function guestChatKey(userId: string) {
   return `taries-chat-${userId}`
 }
 
-function loadMessages(userId: string): ChatMessage[] {
+function conversationKey(userId: string) {
+  return `taries-support-conversation-${userId}`
+}
+
+function loadGuestMessages(userId: string): ChatMessage[] {
   if (typeof window === 'undefined') return [GREETING]
   try {
-    const raw = localStorage.getItem(getChatKey(userId))
+    const raw = localStorage.getItem(guestChatKey(userId))
     return raw ? JSON.parse(raw) : [GREETING]
   } catch {
     return [GREETING]
   }
 }
 
-function saveMessages(userId: string, msgs: ChatMessage[]) {
+function saveGuestMessages(userId: string, msgs: ChatMessage[]) {
   if (typeof window === 'undefined') return
   try {
-    localStorage.setItem(getChatKey(userId), JSON.stringify(msgs))
+    localStorage.setItem(guestChatKey(userId), JSON.stringify(msgs))
   } catch {
     // ignore
+  }
+}
+
+function mapRemoteMessage(row: RemoteMessageRow): ChatMessage {
+  return {
+    id: row.id,
+    role: row.sender_role === 'customer' ? 'user' : 'support',
+    text: row.body || '',
+    timestamp: new Date(row.created_at).getTime(),
   }
 }
 
@@ -66,11 +88,15 @@ export default function ChatWidget() {
   const [typing, setTyping] = useState(false)
   const [unread, setUnread] = useState(0)
   const [userId, setUserId] = useState('guest')
+  const [conversationId, setConversationId] = useState<string | null>(null)
+  const [sending, setSending] = useState(false)
   const [mounted, setMounted] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const lastCreatedAtRef = useRef<string>('1970-01-01T00:00:00.000Z')
   const pathname = usePathname()
   const hidden = shouldHideEngagementUi(pathname)
+  const isGuest = userId === 'guest'
 
   useEffect(() => {
     if (hidden) return
@@ -78,8 +104,75 @@ export default function ChatWidget() {
     const user = getCurrentUser()
     const uid = user?.id || 'guest'
     setUserId(uid)
-    setMessages(loadMessages(uid))
+    if (uid === 'guest') {
+      setMessages(loadGuestMessages(uid))
+    }
   }, [hidden])
+
+  // Resolve the support conversation for signed-in customers.
+  useEffect(() => {
+    if (isGuest || !userId) return
+    try {
+      const stored = localStorage.getItem(conversationKey(userId))
+      if (stored) setConversationId(stored)
+    } catch {
+      // ignore
+    }
+  }, [isGuest, userId])
+
+  // Load existing messages when the conversation is known / panel opens.
+  useEffect(() => {
+    if (isGuest || !conversationId || !open) return
+    let active = true
+    void (async () => {
+      const res = await apiRequest<{ messages?: RemoteMessageRow[] }>(
+        `/conversations/${encodeURIComponent(conversationId)}/messages`
+      )
+      if (!active) return
+      const rows = res.ok && Array.isArray(res.data?.messages) ? res.data.messages : []
+      if (rows.length > 0) {
+        const mapped = rows.map(mapRemoteMessage)
+        lastCreatedAtRef.current = rows[rows.length - 1].created_at
+        setMessages(mapped)
+      } else {
+        setMessages(prev => (prev.length > 0 ? prev : [GREETING]))
+      }
+      void apiRequest(`/conversations/${encodeURIComponent(conversationId)}/read`, { method: 'PATCH' })
+    })()
+    return () => {
+      active = false
+    }
+  }, [conversationId, open, isGuest])
+
+  // Long-poll for new replies while the panel is open.
+  useEffect(() => {
+    if (isGuest || !conversationId || !open) return
+    let active = true
+    void (async () => {
+      while (active) {
+        const res = await apiRequest<{ messages?: RemoteMessageRow[]; typing?: { user_id: string } | null }>(
+          `/conversations/${encodeURIComponent(conversationId)}/poll?since=${encodeURIComponent(lastCreatedAtRef.current)}`
+        )
+        if (!active) break
+        if (res.ok && Array.isArray(res.data?.messages) && res.data.messages.length > 0) {
+          const rows = res.data.messages
+          lastCreatedAtRef.current = rows[rows.length - 1].created_at
+          setMessages(prev => {
+            const base = prev.filter(m => !m.id.startsWith('local_'))
+            const seen = new Set(base.map(m => m.id))
+            const additions = rows.map(mapRemoteMessage).filter(m => !seen.has(m.id))
+            return additions.length > 0 ? [...base, ...additions] : base
+          })
+          setTyping(false)
+        }
+        if (!active) break
+        if (res.data?.typing) setTyping(true)
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [conversationId, open, isGuest])
 
   useEffect(() => {
     if (open) {
@@ -92,7 +185,7 @@ export default function ChatWidget() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, typing])
 
-  const addSupportMessage = useCallback((uid: string, text: string, isOpen: boolean) => {
+  const addGuestSupportMessage = useCallback((uid: string, text: string, isOpen: boolean) => {
     const msg: ChatMessage = {
       id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       role: 'support',
@@ -101,43 +194,80 @@ export default function ChatWidget() {
     }
     setMessages(prev => {
       const updated = [...prev, msg]
-      saveMessages(uid, updated)
+      saveGuestMessages(uid, updated)
       return updated
     })
     if (!isOpen) setUnread(u => u + 1)
   }, [])
 
-  const sendMessage = useCallback((text: string) => {
-    if (!text.trim()) return
-    const userMsg: ChatMessage = {
-      id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      role: 'user',
-      text: text.trim(),
-      timestamp: Date.now(),
-    }
-    setMessages(prev => {
-      const updated = [...prev, userMsg]
-      saveMessages(userId, updated)
-      return updated
+  async function ensureConversation(firstMessage: string): Promise<string | null> {
+    if (conversationId) return conversationId
+    const res = await apiRequest<{ id?: string }>('/conversations', {
+      method: 'POST',
+      body: JSON.stringify({ kind: 'support', subject: 'Website chat', initial_message: firstMessage }),
     })
+    const id = res.ok ? res.data?.id ?? null : null
+    if (id) {
+      try {
+        localStorage.setItem(conversationKey(userId), id)
+      } catch {
+        // ignore
+      }
+      setConversationId(id)
+    }
+    return id
+  }
+
+  const sendMessage = useCallback(async (text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed || sending) return
     setInput('')
 
-    // Show typing indicator then auto-respond
-    setTyping(true)
-    setTimeout(() => {
-      setTyping(false)
-      const response = AUTO_RESPONSES[text.trim()] || DEFAULT_RESPONSE
-      addSupportMessage(userId, response, open)
-    }, 1500)
-  }, [userId, open, addSupportMessage])
+    const userMsg: ChatMessage = {
+      id: `local_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      role: 'user',
+      text: trimmed,
+      timestamp: Date.now(),
+    }
+    setMessages(prev => [...prev, userMsg])
+
+    if (isGuest) {
+      const updated = [...messages, userMsg]
+      saveGuestMessages(userId, updated)
+      setTyping(true)
+      setTimeout(() => {
+        setTyping(false)
+        const response = AUTO_RESPONSES[trimmed] || DEFAULT_RESPONSE
+        addGuestSupportMessage(userId, response, open)
+      }, 1500)
+      return
+    }
+
+    setSending(true)
+    try {
+      const id = await ensureConversation(trimmed)
+      if (!id) throw new Error('unavailable')
+      if (conversationId) {
+        const res = await apiRequest(`/conversations/${encodeURIComponent(id)}/messages`, {
+          method: 'POST',
+          body: JSON.stringify({ kind: 'text', body: trimmed }),
+        })
+        if (!res.ok) throw new Error('unavailable')
+      }
+    } catch {
+      addGuestSupportMessage(userId, 'We could not deliver your message right now. Please try again or WhatsApp us at +234 903 541 2919.', open)
+    } finally {
+      setSending(false)
+    }
+  }, [addGuestSupportMessage, conversationId, isGuest, messages, open, sending, userId])
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter' && input.trim()) {
-      sendMessage(input)
+      void sendMessage(input)
     }
   }
 
-  const showQuickReplies = messages.length === 1 && messages[0].id === 'greeting'
+  const showQuickReplies = messages.length <= 1 && (messages.length === 0 || messages[0].id === 'greeting')
 
   if (hidden || !mounted) return null
 
@@ -215,7 +345,7 @@ export default function ChatWidget() {
                   {QUICK_REPLIES.map(chip => (
                     <button
                       key={chip}
-                      onClick={() => sendMessage(chip)}
+                      onClick={() => void sendMessage(chip)}
                       className="font-body text-xs px-3 py-1.5 rounded-full border border-brand-gold/30 text-brand-gold/80 hover:bg-brand-gold/10 hover:border-brand-gold/60 hover:text-brand-gold transition-all"
                     >
                       {chip}
@@ -236,14 +366,14 @@ export default function ChatWidget() {
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Type a message..."
+                  placeholder={isGuest ? 'Type a message...' : 'Message Taries support...'}
                   className="flex-1 bg-brand-black-2 border border-brand-gold/20 rounded-xl px-3 py-2 font-body text-sm text-brand-cream placeholder-brand-cream/30 focus:outline-none focus:border-brand-gold transition-colors"
                 />
                 <button
-                  onClick={() => sendMessage(input)}
-                  disabled={!input.trim()}
+                  onClick={() => void sendMessage(input)}
+                  disabled={!input.trim() || sending}
                   className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
-                    input.trim()
+                    input.trim() && !sending
                       ? 'bg-gold-gradient text-brand-black hover:opacity-90'
                       : 'bg-brand-black-3 text-brand-cream/20'
                   }`}
@@ -251,16 +381,18 @@ export default function ChatWidget() {
                   <Send size={15} />
                 </button>
               </div>
-              <div className="mt-2 text-center">
-                <a
-                  href="https://wa.me/2349035412919"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-body text-xs text-brand-gold/60 hover:text-brand-gold transition-colors"
-                >
-                  💬 Chat live on WhatsApp →
-                </a>
-              </div>
+              {isGuest && (
+                <div className="mt-2 text-center">
+                  <a
+                    href="https://wa.me/2349035412919"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-body text-xs text-brand-gold/60 hover:text-brand-gold transition-colors"
+                  >
+                    💬 Chat live on WhatsApp → or sign in to message the team
+                  </a>
+                </div>
+              )}
             </div>
           </motion.div>
         )}

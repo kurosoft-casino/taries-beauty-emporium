@@ -3,9 +3,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Star, ThumbsUp, CheckCircle2, ChevronDown, PenLine, MessageSquare } from 'lucide-react'
 import {
-  getReviews, addReview, markHelpful, getAverageRating, getReviewCount, seedReviewsIfEmpty,
-  type Review,
+  fetchProductReviews, getAverageRating, submitProductReview, type Review,
 } from '@/lib/reviews'
+import Link from 'next/link'
 
 type SortOption = 'newest' | 'highest' | 'helpful'
 
@@ -70,27 +70,30 @@ interface Props {
 
 export default function ProductReviews({ slug }: Props) {
   const [reviews, setReviews] = useState<Review[]>([])
+  const [loading, setLoading] = useState(true)
   const [sort, setSort] = useState<SortOption>('newest')
   const [showForm, setShowForm] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+  const [requiresAuth, setRequiresAuth] = useState(false)
   const [helpfulClicked, setHelpfulClicked] = useState<Set<string>>(new Set())
 
   const [form, setForm] = useState({
-    name: '',
-    location: '',
     rating: 0,
     title: '',
     body: '',
   })
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
-  const loadReviews = useCallback(() => {
-    setReviews(getReviews(slug))
+  const loadReviews = useCallback(async () => {
+    const list = await fetchProductReviews(slug)
+    setReviews(list)
+    setLoading(false)
   }, [slug])
 
   useEffect(() => {
-    seedReviewsIfEmpty()
-    loadReviews()
+    void loadReviews()
     try {
       const stored = localStorage.getItem('taries-helpful-clicked')
       if (stored) setHelpfulClicked(new Set(JSON.parse(stored)))
@@ -103,8 +106,8 @@ export default function ProductReviews({ slug }: Props) {
     return b.helpfulCount - a.helpfulCount
   })
 
-  const avgRating = getAverageRating(slug)
-  const count = getReviewCount(slug)
+  const avgRating = getAverageRating(reviews)
+  const count = reviews.length
 
   const distrib = [5, 4, 3, 2, 1].map(star => {
     const n = reviews.filter(r => r.rating === star).length
@@ -113,18 +116,15 @@ export default function ProductReviews({ slug }: Props) {
 
   function handleHelpful(reviewId: string) {
     if (helpfulClicked.has(reviewId)) return
-    markHelpful(reviewId, slug)
     const updated = new Set(helpfulClicked).add(reviewId)
     setHelpfulClicked(updated)
     try {
       localStorage.setItem('taries-helpful-clicked', JSON.stringify([...updated]))
     } catch {}
-    loadReviews()
   }
 
   function validateForm() {
     const errs: Record<string, string> = {}
-    if (!form.name.trim()) errs.name = 'Name is required'
     if (form.rating === 0) errs.rating = 'Please select a star rating'
     if (!form.title.trim()) errs.title = 'Review title is required'
     if (form.body.trim().length < 20) errs.body = 'Review must be at least 20 characters'
@@ -132,26 +132,30 @@ export default function ProductReviews({ slug }: Props) {
     return Object.keys(errs).length === 0
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!validateForm()) return
-    addReview({
-      slug,
-      name: form.name.trim(),
-      location: form.location.trim() || 'Nigeria',
+    setSubmitting(true)
+    setSubmitError('')
+    setRequiresAuth(false)
+    const result = await submitProductReview(slug, {
       rating: form.rating,
       title: form.title.trim(),
       body: form.body.trim(),
-      verified: false,
     })
-    loadReviews()
+    setSubmitting(false)
+    if (!result.ok) {
+      setSubmitError(result.error ?? 'Could not submit your review right now.')
+      setRequiresAuth(Boolean(result.requiresAuth))
+      return
+    }
     setSubmitted(true)
-    setForm({ name: '', location: '', rating: 0, title: '', body: '' })
+    setForm({ rating: 0, title: '', body: '' })
     setFormErrors({})
     setTimeout(() => {
       setSubmitted(false)
       setShowForm(false)
-    }, 3000)
+    }, 4000)
   }
 
   return (
@@ -243,37 +247,20 @@ export default function ProductReviews({ slug }: Props) {
                     className="flex items-center gap-3 p-4 bg-green-500/10 border border-green-500/30 rounded-xl mb-4"
                   >
                     <CheckCircle2 size={18} className="text-green-400 shrink-0" />
-                    <p className="font-body text-sm text-green-400">Thank you! Your review has been posted.</p>
+                    <p className="font-body text-sm text-green-400">Thank you! Your review was submitted and will appear once approved.</p>
                   </motion.div>
                 )}
               </AnimatePresence>
 
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="font-body text-xs uppercase tracking-wider text-brand-cream/50 block mb-1.5">
-                      Your Name <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      value={form.name}
-                      onChange={e => { setForm(f => ({ ...f, name: e.target.value })); delete formErrors.name; setFormErrors({ ...formErrors }) }}
-                      placeholder="e.g. Chidinma O."
-                      className={`w-full bg-brand-black-3 border rounded-lg px-4 py-2.5 text-brand-cream text-sm placeholder:text-brand-cream/20 focus:outline-none transition-colors ${formErrors.name ? 'border-red-500' : 'border-brand-gold/20 focus:border-brand-gold/50'}`}
-                    />
-                    {formErrors.name && <p className="text-red-400 text-xs mt-1">{formErrors.name}</p>}
+                {submitError && (
+                  <div className="flex items-start justify-between gap-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                    <p className="font-body text-sm text-red-400">{submitError}</p>
+                    {requiresAuth && (
+                      <Link href="/login" className="font-body text-sm text-brand-gold underline whitespace-nowrap">Sign in</Link>
+                    )}
                   </div>
-                  <div>
-                    <label className="font-body text-xs uppercase tracking-wider text-brand-cream/50 block mb-1.5">
-                      Location
-                    </label>
-                    <input
-                      value={form.location}
-                      onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
-                      placeholder="e.g. Lagos, Nigeria"
-                      className="w-full bg-brand-black-3 border border-brand-gold/20 rounded-lg px-4 py-2.5 text-brand-cream text-sm placeholder:text-brand-cream/20 focus:outline-none focus:border-brand-gold/50 transition-colors"
-                    />
-                  </div>
-                </div>
+                )}
 
                 <div>
                   <label className="font-body text-xs uppercase tracking-wider text-brand-cream/50 block mb-2">
@@ -329,9 +316,10 @@ export default function ProductReviews({ slug }: Props) {
                   <motion.button
                     type="submit"
                     whileTap={{ scale: 0.97 }}
-                    className="flex-1 btn-gold !py-2.5"
+                    disabled={submitting}
+                    className="flex-1 btn-gold !py-2.5 disabled:opacity-60"
                   >
-                    Submit Review
+                    {submitting ? 'Submitting…' : 'Submit Review'}
                   </motion.button>
                 </div>
               </form>
@@ -374,7 +362,7 @@ export default function ProductReviews({ slug }: Props) {
                   </div>
                   <div>
                     <p className="font-body text-sm font-semibold text-brand-cream leading-none">{review.name}</p>
-                    <p className="font-body text-xs text-brand-cream/40 mt-0.5">{review.location}</p>
+                    {review.location && <p className="font-body text-xs text-brand-cream/40 mt-0.5">{review.location}</p>}
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
@@ -404,7 +392,7 @@ export default function ProductReviews({ slug }: Props) {
                   }`}
                 >
                   <ThumbsUp size={11} />
-                  Helpful ({review.helpfulCount})
+                  Helpful{review.helpfulCount > 0 ? ` (${review.helpfulCount})` : ''}
                 </motion.button>
               </div>
             </motion.div>

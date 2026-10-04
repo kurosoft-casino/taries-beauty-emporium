@@ -22,6 +22,7 @@ import { categories, formatPrice } from '@/lib/products'
 import { useCartStore } from '@/lib/store'
 import { getAllViewsSorted } from '@/lib/views'
 import { getProductHref, getStorefrontProducts, type StorefrontProduct } from '@/lib/catalog'
+import { useStorefrontCatalog } from '@/lib/useStorefrontCatalog'
 import FallbackImage from '@/components/ui/FallbackImage'
 
 const ITEMS_PER_PAGE = 12
@@ -198,6 +199,11 @@ function ShopContent() {
   const [badge, setBadge] = useState<BadgeFilter>('all')
   const [maxPrice, setMaxPrice] = useState(500)
   const [page, setPage] = useState(1)
+  const liveCatalog = useStorefrontCatalog()
+
+  useEffect(() => {
+    if (liveCatalog.length > 0) setAllProducts(liveCatalog)
+  }, [liveCatalog])
 
   useEffect(() => {
     const products = getStorefrontProducts()

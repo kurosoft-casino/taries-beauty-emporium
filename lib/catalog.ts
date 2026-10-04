@@ -1,5 +1,6 @@
 import { products as baseProducts, type Product, type Category } from './products'
 import { getAllVendorProducts, getProductOverrides, type ProductOverride, type VendorProduct } from './productStore'
+import type { ProductVariant } from './productVariants'
 
 export interface StorefrontProduct extends Product {
   source: 'catalog' | 'vendor'
@@ -102,4 +103,112 @@ export function getProductHref(product: Pick<StorefrontProduct, 'source' | 'slug
   return product.source === 'vendor'
     ? `/product-preview?id=${encodeURIComponent(product.id)}`
     : `/product/${product.slug}`
+}
+
+// ---------- remote (API-backed) catalog merge ----------
+
+export interface RemoteProductRow {
+  id: string
+  vendor_id?: string | null
+  slug: string
+  name: string
+  category?: string | null
+  price: number
+  original_price?: number | null
+  description?: string | null
+  short_desc?: string | null
+  features_json?: string | null
+  variants_json?: string | null
+  images_json?: string | null
+  videos_json?: string | null
+  video?: string | null
+  badge?: string | null
+  whatsapp?: string | null
+  in_stock?: boolean | number | null
+  stock_count?: number | null
+  weight_kg?: number | null
+  sensitive?: boolean | null
+  model_3d?: string | null
+  active?: boolean | number | null
+  status?: string | null
+  added_at?: string | null
+  vendor_email?: string | null
+  vendor_whatsapp?: string | null
+  brand_name?: string | null
+}
+
+export interface RemoteOverrideRow {
+  slug: string
+  name?: string | null
+  price?: number | null
+  original_price?: number | null
+  in_stock?: boolean | number | null
+  badge?: string | null
+  images_json?: string | null
+  description?: string | null
+  short_desc?: string | null
+}
+
+function parseJsonArray<T>(value: string | null | undefined): T[] {
+  if (!value) return []
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? (parsed as T[]) : []
+  } catch {
+    return []
+  }
+}
+
+export function mapRemoteProductRow(row: RemoteProductRow): StorefrontProduct {
+  const vendorProduct: VendorProduct = {
+    id: row.id,
+    vendorEmail: row.vendor_email ?? '',
+    name: row.name,
+    category: row.category ?? 'beauty',
+    price: Number(row.price || 0),
+    originalPrice: row.original_price ?? undefined,
+    images: parseJsonArray<string>(row.images_json),
+    video: row.video ?? undefined,
+    description: row.description ?? '',
+    shortDesc: row.short_desc ?? undefined,
+    features: parseJsonArray<string>(row.features_json),
+    variants: parseJsonArray<ProductVariant>(row.variants_json),
+    inStock: row.in_stock === 0 ? false : Boolean(row.in_stock ?? true),
+    stockCount: row.stock_count ?? undefined,
+    whatsapp: row.vendor_whatsapp ?? row.whatsapp ?? '',
+    badge: (row.badge as VendorProduct['badge']) ?? '',
+    addedAt: row.added_at ?? new Date().toISOString(),
+    active: row.active === 0 ? false : Boolean(row.active ?? true),
+    status: (row.status as VendorProduct['status']) ?? 'approved',
+  }
+  return toVendorStorefrontProduct(vendorProduct)
+}
+
+export function mapRemoteOverrideRow(row: RemoteOverrideRow): ProductOverride {
+  return {
+    slug: row.slug,
+    name: row.name ?? undefined,
+    price: row.price ?? undefined,
+    originalPrice: row.original_price ?? undefined,
+    inStock: row.in_stock === 0 ? false : row.in_stock == null ? undefined : Boolean(row.in_stock),
+    badge: (row.badge as ProductOverride['badge']) ?? undefined,
+    images: row.images_json ? parseJsonArray<string>(row.images_json) : undefined,
+    description: row.description ?? undefined,
+    shortDesc: row.short_desc ?? undefined,
+  }
+}
+
+export function mergeStorefrontProducts(
+  remoteProducts: StorefrontProduct[],
+  remoteOverrides: Record<string, ProductOverride>,
+): StorefrontProduct[] {
+  const effectiveOverrides = { ...getProductOverrides(), ...remoteOverrides }
+  const catalogProducts = baseProducts.map(product => applyOverride(product, effectiveOverrides[product.slug]))
+  if (typeof window === 'undefined') return catalogProducts
+  const remoteIds = new Set(remoteProducts.map(product => product.id))
+  const localVendorProducts = getAllVendorProducts()
+    .filter(product => isVisibleVendorProduct(product))
+    .map(product => toVendorStorefrontProduct(product))
+    .filter(product => !remoteIds.has(product.id))
+  return [...catalogProducts, ...remoteProducts, ...localVendorProducts]
 }

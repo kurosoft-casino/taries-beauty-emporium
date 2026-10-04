@@ -12,6 +12,7 @@ import { getWishlist } from '@/lib/wishlist'
 import { getCurrentUser, isAdminUser, subscribeAuthStateChange } from '@/lib/auth'
 import type { User as AuthUser } from '@/lib/auth'
 import { getProductHref, getStorefrontProducts, type StorefrontProduct } from '@/lib/catalog'
+import { useStorefrontCatalog } from '@/lib/useStorefrontCatalog'
 import { DEFAULT_STORE_SETTINGS, getStoreSettings, subscribeStoreSettings } from '@/lib/storeSettings'
 
 export default function Header() {
@@ -24,6 +25,11 @@ export default function Header() {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null)
   const [settings, setSettings] = useState(DEFAULT_STORE_SETTINGS)
   const [catalogProducts, setCatalogProducts] = useState<StorefrontProduct[]>([])
+  const liveCatalog = useStorefrontCatalog()
+
+  useEffect(() => {
+    if (liveCatalog.length > 0) setCatalogProducts(liveCatalog)
+  }, [liveCatalog])
   const searchRef = useRef<HTMLInputElement>(null)
 
   const { getTotalItems, openCart, currency, setCurrency } = useCartStore()

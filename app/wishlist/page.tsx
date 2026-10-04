@@ -4,8 +4,10 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Heart, ShoppingBag, X, Trash2, ArrowLeft } from 'lucide-react'
-import { getWishlist, toggleWishlist, clearWishlist } from '@/lib/wishlist'
+import { getWishlist, loadWishlist, toggleWishlistForUser, clearWishlistForUser } from '@/lib/wishlist'
 import { products, formatPrice } from '@/lib/products'
+import { getProductHref, type StorefrontProduct } from '@/lib/catalog'
+import { useStorefrontCatalog } from '@/lib/useStorefrontCatalog'
 import { useCartStore } from '@/lib/store'
 import toast from 'react-hot-toast'
 
@@ -13,34 +15,40 @@ export default function WishlistPage() {
   const [slugs, setSlugs] = useState<string[]>([])
   const [mounted, setMounted] = useState(false)
   const { addItem, openCart, currency } = useCartStore()
+  const catalog = useStorefrontCatalog()
 
   useEffect(() => {
     setMounted(true)
-    setSlugs(getWishlist())
+    void (async () => {
+      setSlugs(await loadWishlist())
+    })()
   }, [])
 
-  function handleRemove(slug: string) {
-    toggleWishlist(slug)
+  async function handleRemove(slug: string) {
+    await toggleWishlistForUser(slug)
     setSlugs(getWishlist())
   }
 
-  function handleClearAll() {
-    clearWishlist()
+  async function handleClearAll() {
+    await clearWishlistForUser()
     setSlugs([])
     toast.success('Wishlist cleared')
   }
 
-  function handleAddToCart(slug: string) {
-    const product = products.find(p => p.slug === slug)
-    if (!product) return
+  function resolveProduct(slug: string): StorefrontProduct | undefined {
+    return catalog.find(p => p.slug === slug)
+      ?? (products.find(p => p.slug === slug) as StorefrontProduct | undefined)
+  }
+
+  function handleAddToCart(product: StorefrontProduct) {
     addItem(product, {})
     toast.success(`✨ ${product.name.split(' ').slice(0, 3).join(' ')}... added!`, { duration: 2500 })
     openCart()
   }
 
   const wishlisted = slugs
-    .map(slug => products.find(p => p.slug === slug))
-    .filter((p): p is NonNullable<typeof p> => !!p)
+    .map(slug => resolveProduct(slug))
+    .filter((p): p is StorefrontProduct => !!p)
 
   if (!mounted) return null
 
@@ -108,7 +116,7 @@ export default function WishlistPage() {
                   className="bg-brand-black-2 border border-brand-gold/15 hover:border-brand-gold/35 rounded-xl overflow-hidden group transition-colors duration-300"
                 >
                   {/* Image */}
-                  <Link href={`/product/${product.slug}`} className="block relative aspect-[3/4] overflow-hidden bg-brand-black-3">
+                  <Link href={getProductHref(product)} className="block relative aspect-[3/4] overflow-hidden bg-brand-black-3">
                     <Image
                       src={product.images[0]}
                       alt={product.name}
@@ -119,7 +127,7 @@ export default function WishlistPage() {
                     <div className="absolute inset-0 bg-gradient-to-t from-brand-black/60 via-transparent to-transparent" />
                     {/* Remove button */}
                     <motion.button
-                      onClick={e => { e.preventDefault(); handleRemove(product.slug) }}
+                      onClick={e => { e.preventDefault(); void handleRemove(product.slug) }}
                       whileTap={{ scale: 0.8 }}
                       className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full glass-dark flex items-center justify-center text-red-400 hover:text-red-300 transition-colors"
                       title="Remove from wishlist"
@@ -133,7 +141,7 @@ export default function WishlistPage() {
                     <p className="font-body text-[10px] tracking-widest text-brand-gold-2/70 uppercase mb-1">
                       {product.categoryLabel}
                     </p>
-                    <Link href={`/product/${product.slug}`}>
+                    <Link href={getProductHref(product)}>
                       <h3 className="font-heading text-sm font-semibold text-brand-cream mb-2 line-clamp-2 hover:text-brand-gold-3 transition-colors">
                         {product.name}
                       </h3>
@@ -144,7 +152,7 @@ export default function WishlistPage() {
 
                     <div className="flex gap-2">
                       <motion.button
-                        onClick={() => handleAddToCart(product.slug)}
+                        onClick={() => handleAddToCart(product)}
                         whileTap={{ scale: 0.97 }}
                         className="flex-1 btn-gold flex items-center justify-center gap-1.5 !py-2 !text-xs"
                       >
@@ -152,7 +160,7 @@ export default function WishlistPage() {
                         Add to Cart
                       </motion.button>
                       <motion.button
-                        onClick={() => handleRemove(product.slug)}
+                        onClick={() => void handleRemove(product.slug)}
                         whileTap={{ scale: 0.9 }}
                         className="w-9 h-9 flex items-center justify-center border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded transition-all duration-200"
                         title="Remove"

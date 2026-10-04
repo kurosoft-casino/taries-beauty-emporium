@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { Printer, Download, ArrowLeft, CheckCircle, Clock, Package } from 'lucide-react'
 import { getOrder, formatOrderDate, paymentMethodLabel } from '@/lib/orders'
+import { mapRemoteOrder } from '@/lib/remoteOrders'
 import type { Order } from '@/lib/orders'
 import { formatPrice, EXCHANGE_RATES } from '@/lib/products'
 import { getCurrentUser } from '@/lib/auth'
@@ -44,7 +45,7 @@ export default function InvoiceClient() {
     })
     const payload = await response.json().catch(() => null)
     if (!response.ok || !payload?.ok || !payload?.order) return null
-    return payload.order as Order
+    return mapRemoteOrder(payload.order, payload.items ?? [])
   }
 
   useEffect(() => {

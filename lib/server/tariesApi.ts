@@ -1027,12 +1027,51 @@ route('PATCH', '/admin/products/:id', async (req, params) => {
   const patch: Record<string, unknown> = {}
   if (b.status) patch.status = b.status
   if (typeof b.active === 'boolean') patch.active = b.active
+  if (typeof b.inStock === 'boolean') patch.in_stock = b.inStock
+  if (b.stockCount !== undefined && b.stockCount !== null) patch.stock_count = Number(b.stockCount)
   if (!Object.keys(patch).length) return err(400, 'nothing to update')
   patch.updated_at = nowIso()
   const existing = await pbGet(PB_COLLECTIONS.vendorProducts, params.id).catch(() => null)
   if (!existing) return err(404, 'not found')
   await pbUpdate(PB_COLLECTIONS.vendorProducts, params.id, patch)
   return ok()
+})
+
+// Admin overrides for the static catalogue (price/in-stock/description etc.)
+route('POST', '/admin/product-overrides', async (req) => {
+  const a = await requireAuth(req, 'admin')
+  if (a.error) return a.error
+  const b = (await req.json().catch(() => ({}))) as Record<string, unknown>
+  const slug = String(b.slug || '').trim()
+  if (!slug) return err(400, 'slug required')
+
+  const existing = await pbFirst<PBRecord>(PB_COLLECTIONS.productOverrides, `slug = ${pbQuote(slug)}`)
+  const payload: Record<string, unknown> = {
+    slug,
+    name: b.name ?? existing?.name ?? null,
+    price: b.price ?? existing?.price ?? null,
+    original_price: b.originalPrice ?? existing?.original_price ?? null,
+    in_stock: typeof b.inStock === 'boolean' ? b.inStock : existing?.in_stock ?? null,
+    badge: b.badge ?? existing?.badge ?? null,
+    images_json: Array.isArray(b.images) ? b.images : existing?.images_json ?? null,
+    description: b.description ?? existing?.description ?? null,
+    short_desc: b.shortDesc ?? existing?.short_desc ?? null,
+    updated_at: nowIso(),
+  }
+  if (existing) {
+    await pbUpdate(PB_COLLECTIONS.productOverrides, existing.id, payload)
+  } else {
+    await pbCreate(PB_COLLECTIONS.productOverrides, payload)
+  }
+  return ok({ slug })
+})
+
+// Admin audit log (written by audit() across the API).
+route('GET', '/admin/audit', async (req) => {
+  const a = await requireAuth(req, 'admin')
+  if (a.error) return a.error
+  const events = await pbListAll<PBRecord>(PB_COLLECTIONS.auditLog, { sort: '-created_at', perPage: 100 })
+  return ok({ events: events.slice(0, 500).map((e) => legacyRow(e, { meta_json: null })) })
 })
 
 // ----- orders -----

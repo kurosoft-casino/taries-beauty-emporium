@@ -1,3 +1,6 @@
+import { apiRequest } from './remoteApi'
+import { getCurrentUser } from './auth'
+
 const KEY = 'taries-wishlist'
 
 export function getWishlist(): string[] {
@@ -9,22 +12,22 @@ export function getWishlist(): string[] {
   }
 }
 
-export function toggleWishlist(slug: string): boolean {
-  if (typeof window === 'undefined') return false
+function writeWishlist(list: string[]): void {
+  if (typeof window === 'undefined') return
   try {
-    const list = getWishlist()
-    const idx = list.indexOf(slug)
-    let updated: string[]
-    if (idx === -1) {
-      updated = [...list, slug]
-    } else {
-      updated = list.filter(s => s !== slug)
-    }
-    localStorage.setItem(KEY, JSON.stringify(updated))
-    return updated.includes(slug)
+    localStorage.setItem(KEY, JSON.stringify(list))
   } catch {
-    return false
+    // ignore
   }
+}
+
+/** Guest-only toggle (local storage). Prefer toggleWishlistForUser. */
+export function toggleWishlist(slug: string): boolean {
+  const list = getWishlist()
+  const idx = list.indexOf(slug)
+  const updated = idx === -1 ? [...list, slug] : list.filter(s => s !== slug)
+  writeWishlist(updated)
+  return updated.includes(slug)
 }
 
 export function isWishlisted(slug: string): boolean {
@@ -32,10 +35,57 @@ export function isWishlisted(slug: string): boolean {
 }
 
 export function clearWishlist(): void {
-  if (typeof window === 'undefined') return
-  try {
-    localStorage.setItem(KEY, '[]')
-  } catch {
-    // ignore
+  writeWishlist([])
+}
+
+/**
+ * Load the wishlist for the current visitor: server-backed when signed in
+ * (mirrored locally), local-only for guests.
+ */
+export async function loadWishlist(): Promise<string[]> {
+  const user = getCurrentUser()
+  if (user) {
+    const res = await apiRequest<{ items?: { slug: string }[] }>('/wishlist')
+    if (res.ok && Array.isArray(res.data?.items)) {
+      const slugs = res.data.items.map(item => item.slug)
+      writeWishlist(slugs)
+      return slugs
+    }
   }
+  return getWishlist()
+}
+
+/**
+ * Toggle a wishlist item. Signed-in users sync to their account; guests keep
+ * the local behaviour.
+ */
+export async function toggleWishlistForUser(slug: string): Promise<boolean> {
+  const user = getCurrentUser()
+  const currently = getWishlist().includes(slug)
+
+  if (!user) return toggleWishlist(slug)
+
+  const res = currently
+    ? await apiRequest(`/wishlist/${encodeURIComponent(slug)}`, { method: 'DELETE' })
+    : await apiRequest('/wishlist', { method: 'POST', body: JSON.stringify({ slug }) })
+
+  if (!res.ok) return currently
+
+  const updated = currently ? getWishlist().filter(s => s !== slug) : [...getWishlist(), slug]
+  writeWishlist(updated)
+  return updated.includes(slug)
+}
+
+/** Clear the wishlist (server + local for signed-in users). */
+export async function clearWishlistForUser(): Promise<void> {
+  const user = getCurrentUser()
+  if (user) {
+    const res = await apiRequest<{ items?: { slug: string }[] }>('/wishlist')
+    if (res.ok && Array.isArray(res.data?.items)) {
+      for (const item of res.data.items) {
+        await apiRequest(`/wishlist/${encodeURIComponent(item.slug)}`, { method: 'DELETE' })
+      }
+    }
+  }
+  writeWishlist([])
 }

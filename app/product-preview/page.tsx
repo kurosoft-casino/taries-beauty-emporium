@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -9,24 +9,41 @@ import toast from 'react-hot-toast'
 import { useCartStore } from '@/lib/store'
 import { formatPrice } from '@/lib/products'
 import { getVendorProductById } from '@/lib/catalog'
+import { useStorefrontCatalog } from '@/lib/useStorefrontCatalog'
 import { getSelectedVariantPrice, getVariantOptionLabel, getVariantOptionPrice } from '@/lib/productVariants'
 
 function ProductPreviewContent() {
   const searchParams = useSearchParams()
   const id = searchParams.get('id') ?? ''
-  const product = useMemo(() => getVendorProductById(id), [id])
+  const liveCatalog = useStorefrontCatalog()
+  const product = useMemo(
+    () => liveCatalog.find(p => p.source === 'vendor' && p.id === id) ?? getVendorProductById(id),
+    [liveCatalog, id]
+  )
+  const [waited, setWaited] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setWaited(true), 2500)
+    return () => clearTimeout(timer)
+  }, [])
   const [activeImg, setActiveImg] = useState(0)
   const [selectedVars, setSelectedVars] = useState<Record<string, string>>({})
   const [qty, setQty] = useState(1)
   const { addItem, openCart, currency } = useCartStore()
 
   if (!product) {
+    if (!waited) {
+      return (
+        <div className="min-h-screen bg-brand-black flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-brand-gold border-t-transparent rounded-full animate-spin" />
+        </div>
+      )
+    }
     return (
       <div className="min-h-screen bg-brand-black flex items-center justify-center px-4 text-center">
         <div>
           <p className="section-label mb-3">Marketplace</p>
           <h1 className="font-display text-3xl gold-text mb-3">Product Not Available</h1>
-          <p className="font-body text-brand-cream/60 mb-6">This vendor product could not be found on this device.</p>
+          <p className="font-body text-brand-cream/60 mb-6">This vendor product could not be found.</p>
           <Link href="/shop" className="btn-gold">Back to Shop</Link>
         </div>
       </div>

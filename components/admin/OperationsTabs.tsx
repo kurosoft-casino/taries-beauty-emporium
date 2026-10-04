@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Download, MessageCircle, Send, AlertTriangle, Eye } from 'lucide-react'
 import { categories, type Category } from '@/lib/products'
 import { getAllOrders, type Order } from '@/lib/orders'
@@ -9,18 +9,14 @@ import { getAdminCouponList } from '@/lib/coupons'
 import { getManagedPromos, removeManagedPromo, saveManagedPromos, type ManagedPromo, upsertManagedPromo } from '@/lib/adminPromos'
 import {
   appendAuditEvent,
-  appendSupportReply,
   readAuditEvents,
   readBroadcasts,
-  readSupportThreads,
   saveBroadcasts,
-  updateSupportThreadMeta,
   type AdminBroadcast,
   type AuditEvent,
-  type SupportPriority,
-  type SupportStatus,
 } from '@/lib/adminConsole'
 import { getStoreSettings, saveStoreSettings } from '@/lib/storeSettings'
+import { apiRequest } from '@/lib/remoteApi'
 
 function exportBlob(data: string, filename: string, type: string): void {
   const blob = new Blob([data], { type })
@@ -42,47 +38,119 @@ function readUsers(): User[] {
   }
 }
 
+interface RemoteConversationRow {
+  id: string
+  kind?: string | null
+  customer_id?: string | null
+  vendor_id?: string | null
+  admin_id?: string | null
+  subject?: string | null
+  last_message_at?: string | null
+  unread_admin?: number | null
+  created_at: string
+  customer_first_name?: string | null
+  customer_last_name?: string | null
+  customer_email?: string | null
+}
+
+interface RemoteMessageRow {
+  id: string
+  sender_role: string
+  body: string | null
+  created_at: string
+}
+
 export function SupportInboxTab({ adminEmail }: { adminEmail: string }) {
-  const [users, setUsers] = useState<User[]>([])
-  const [orders, setOrders] = useState<Order[]>([])
-  const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
+  const [conversations, setConversations] = useState<RemoteConversationRow[]>([])
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const [messages, setMessages] = useState<RemoteMessageRow[]>([])
   const [reply, setReply] = useState('')
-  const [refreshToken, setRefreshToken] = useState(0)
+  const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState('')
+  const [loading, setLoading] = useState(true)
+  const lastCreatedAtRef = useRef('1970-01-01T00:00:00.000Z')
+
+  const activeConversation = conversations.find(c => c.id === activeId) ?? null
+
+  async function loadConversations() {
+    const res = await apiRequest<{ conversations?: RemoteConversationRow[] }>('/admin/conversations')
+    if (res.ok && Array.isArray(res.data?.conversations)) {
+      setConversations(res.data.conversations)
+    }
+    setLoading(false)
+  }
 
   useEffect(() => {
-    setUsers(readUsers())
-    setOrders(getAllOrders())
-  }, [refreshToken])
+    void loadConversations()
+  }, [])
 
-  const threads = useMemo(() => readSupportThreads(users, orders), [orders, users, refreshToken])
-  const activeThread = threads.find(thread => thread.id === activeThreadId) ?? threads[0] ?? null
-  const stats = {
-    total: threads.length,
-    open: threads.filter(thread => thread.status === 'open').length,
-    pending: threads.filter(thread => thread.status === 'pending').length,
-    resolved: threads.filter(thread => thread.status === 'resolved').length,
-  }
+  useEffect(() => {
+    if (!activeId && conversations.length > 0) setActiveId(conversations[0].id)
+  }, [conversations, activeId])
 
-  function handleStatusChange(status: SupportStatus) {
-    if (!activeThread) return
-    updateSupportThreadMeta(activeThread.id, { status })
-    appendAuditEvent({ actor: adminEmail, action: 'Support status updated', target: activeThread.email, detail: status })
-    setRefreshToken(value => value + 1)
-  }
+  useEffect(() => {
+    if (!activeId) return
+    let mountedFlag = true
 
-  function handlePriorityChange(priority: SupportPriority) {
-    if (!activeThread) return
-    updateSupportThreadMeta(activeThread.id, { priority })
-    appendAuditEvent({ actor: adminEmail, action: 'Support priority updated', target: activeThread.email, detail: priority })
-    setRefreshToken(value => value + 1)
-  }
+    async function loadThread() {
+      const res = await apiRequest<{ messages?: RemoteMessageRow[] }>(
+        `/conversations/${encodeURIComponent(activeId as string)}/messages`
+      )
+      if (!mountedFlag) return
+      if (res.ok && Array.isArray(res.data?.messages)) {
+        const rows = res.data.messages
+        setMessages(rows)
+        if (rows.length > 0) lastCreatedAtRef.current = rows[rows.length - 1].created_at
+      }
+      void apiRequest(`/conversations/${encodeURIComponent(activeId as string)}/read`, { method: 'PATCH' })
+      void loadConversations()
+    }
 
-  function handleSendReply() {
-    if (!activeThread || !reply.trim()) return
-    appendSupportReply(activeThread.userId, reply.trim())
-    appendAuditEvent({ actor: adminEmail, action: 'Support reply sent', target: activeThread.email, detail: reply.trim().slice(0, 80) })
+    void loadThread()
+    const interval = window.setInterval(() => {
+      void loadThread()
+    }, 8000)
+    return () => {
+      mountedFlag = false
+      window.clearInterval(interval)
+    }
+  }, [activeId])
+
+  async function handleSendReply() {
+    if (!activeId || !reply.trim() || sending) return
+    setSending(true)
+    setSendError('')
+    const res = await apiRequest(`/conversations/${encodeURIComponent(activeId)}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ kind: 'text', body: reply.trim() }),
+    })
+    setSending(false)
+    if (!res.ok) {
+      setSendError(res.error ?? 'Could not send the reply. Please try again.')
+      return
+    }
     setReply('')
-    setRefreshToken(value => value + 1)
+    const refresh = await apiRequest<{ messages?: RemoteMessageRow[] }>(
+      `/conversations/${encodeURIComponent(activeId)}/messages`
+    )
+    if (refresh.ok && Array.isArray(refresh.data?.messages)) {
+      const rows = refresh.data.messages
+      setMessages(rows)
+      if (rows.length > 0) lastCreatedAtRef.current = rows[rows.length - 1].created_at
+    }
+    void loadConversations()
+  }
+
+  const stats = {
+    total: conversations.length,
+    unread: conversations.filter(c => Number(c.unread_admin || 0) > 0).length,
+    support: conversations.filter(c => (c.kind ?? 'support') === 'support').length,
+    vendor: conversations.filter(c => c.kind === 'vendor').length,
+  }
+
+  function customerName(row: RemoteConversationRow): string {
+    const name = `${row.customer_first_name ?? ''} ${row.customer_last_name ?? ''}`.trim()
+    return name || row.customer_email || 'Customer'
   }
 
   return (
@@ -90,7 +158,7 @@ export function SupportInboxTab({ adminEmail }: { adminEmail: string }) {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h1 className="font-display text-2xl gold-text">Support Inbox</h1>
         <button
-          onClick={() => exportBlob(JSON.stringify(threads, null, 2), 'taries-support-inbox.json', 'application/json')}
+          onClick={() => exportBlob(JSON.stringify(conversations, null, 2), 'taries-support-inbox.json', 'application/json')}
           className="btn-outline-gold text-sm flex items-center gap-2"
         >
           <Download className="w-4 h-4" /> Export Inbox
@@ -100,9 +168,9 @@ export function SupportInboxTab({ adminEmail }: { adminEmail: string }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: 'Threads', value: stats.total },
-          { label: 'Open', value: stats.open },
-          { label: 'Pending', value: stats.pending },
-          { label: 'Resolved', value: stats.resolved },
+          { label: 'Unread', value: stats.unread },
+          { label: 'Support', value: stats.support },
+          { label: 'Vendor chats', value: stats.vendor },
         ].map(item => (
           <div key={item.label} className="bg-brand-black-2 border border-brand-gold/20 rounded-xl p-4 text-center">
             <p className="text-2xl font-bold text-white">{item.value}</p>
@@ -115,31 +183,33 @@ export function SupportInboxTab({ adminEmail }: { adminEmail: string }) {
         <div className="bg-brand-black-2 border border-brand-gold/20 rounded-xl overflow-hidden">
           <div className="px-4 py-3 border-b border-brand-gold/10 text-xs uppercase tracking-wider text-brand-gold">Customer Threads</div>
           <div className="max-h-[640px] overflow-y-auto">
-            {threads.length === 0 && (
+            {!loading && conversations.length === 0 && (
               <div className="p-6 text-center text-white/40">
                 <MessageCircle className="w-10 h-10 mx-auto mb-2 opacity-30" />
                 No support threads yet
               </div>
             )}
-            {threads.map(thread => (
+            {conversations.map(row => (
               <button
-                key={thread.id}
-                onClick={() => setActiveThreadId(thread.id)}
-                className={`w-full text-left px-4 py-4 border-b border-white/5 transition-colors ${activeThread?.id === thread.id ? 'bg-brand-gold/10' : 'hover:bg-brand-black-3/60'}`}
+                key={row.id}
+                onClick={() => setActiveId(row.id)}
+                className={`w-full text-left px-4 py-4 border-b border-white/5 transition-colors ${activeId === row.id ? 'bg-brand-gold/10' : 'hover:bg-brand-black-3/60'}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm text-white truncate">{thread.customerName}</p>
-                    <p className="text-xs text-white/40 truncate">{thread.email}</p>
+                    <p className="text-sm text-white truncate">{customerName(row)}</p>
+                    <p className="text-xs text-white/40 truncate">{row.customer_email ?? ''}</p>
                   </div>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase ${thread.status === 'resolved' ? 'bg-green-500/20 text-green-400' : thread.priority === 'high' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
-                    {thread.status}
-                  </span>
+                  {Number(row.unread_admin || 0) > 0 && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] bg-red-500/20 text-red-400">
+                      {row.unread_admin} new
+                    </span>
+                  )}
                 </div>
-                <p className="text-xs text-white/50 mt-2 line-clamp-2">{thread.messages[thread.messages.length - 1]?.text}</p>
+                <p className="text-xs text-white/50 mt-2 line-clamp-2">{row.subject || 'Support request'}</p>
                 <div className="mt-2 flex items-center justify-between text-[10px] text-white/35">
-                  <span>{thread.source === 'chat' ? 'Live chat' : 'Order enquiry'}</span>
-                  <span>{new Date(thread.updatedAt).toLocaleString()}</span>
+                  <span>{row.kind === 'vendor' ? 'Vendor chat' : 'Live chat'}</span>
+                  <span>{row.last_message_at ? new Date(row.last_message_at).toLocaleString() : new Date(row.created_at).toLocaleString()}</span>
                 </div>
               </button>
             ))}
@@ -147,31 +217,29 @@ export function SupportInboxTab({ adminEmail }: { adminEmail: string }) {
         </div>
 
         <div className="bg-brand-black-2 border border-brand-gold/20 rounded-xl p-5 min-h-[520px] flex flex-col">
-          {!activeThread ? (
+          {!activeConversation ? (
             <div className="flex-1 flex items-center justify-center text-white/40">Select a thread to reply</div>
           ) : (
             <>
               <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-brand-gold/10">
                 <div>
-                  <h2 className="font-heading text-white text-lg">{activeThread.customerName}</h2>
-                  <p className="text-sm text-white/45">{activeThread.email}</p>
+                  <h2 className="font-heading text-white text-lg">{customerName(activeConversation)}</h2>
+                  <p className="text-sm text-white/45">{activeConversation.customer_email ?? ''}</p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <select value={activeThread.status} onChange={e => handleStatusChange(e.target.value as SupportStatus)} className="px-3 py-2 bg-brand-black-3 border border-brand-gold/20 rounded-lg text-sm text-white">
-                    {(['open', 'pending', 'resolved'] as const).map(option => <option key={option} value={option}>{option}</option>)}
-                  </select>
-                  <select value={activeThread.priority} onChange={e => handlePriorityChange(e.target.value as SupportPriority)} className="px-3 py-2 bg-brand-black-3 border border-brand-gold/20 rounded-lg text-sm text-white">
-                    {(['low', 'normal', 'high'] as const).map(option => <option key={option} value={option}>{option}</option>)}
-                  </select>
-                </div>
+                <span className="px-3 py-1 rounded-full text-xs bg-brand-black-3 text-white/60">
+                  {activeConversation.kind === 'vendor' ? 'Vendor chat' : 'Support'}
+                </span>
               </div>
 
               <div className="flex-1 overflow-y-auto py-4 space-y-3">
-                {activeThread.messages.map(message => (
-                  <div key={message.id} className={`flex ${message.role === 'support' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm ${message.role === 'support' ? 'bg-brand-gold/15 border border-brand-gold/30 text-brand-cream rounded-br-none' : 'bg-brand-black-3 text-brand-cream/85 rounded-bl-none'}`}>
-                      <p>{message.text}</p>
-                      <p className="mt-1 text-[10px] text-brand-cream/35">{new Date(message.timestamp).toLocaleString()}</p>
+                {messages.length === 0 && (
+                  <div className="text-center text-white/35 text-sm py-10">No messages in this thread yet</div>
+                )}
+                {messages.map(message => (
+                  <div key={message.id} className={`flex ${message.sender_role !== 'customer' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm ${message.sender_role !== 'customer' ? 'bg-brand-gold/15 border border-brand-gold/30 text-brand-cream rounded-br-none' : 'bg-brand-black-3 text-brand-cream/85 rounded-bl-none'}`}>
+                      <p>{message.body}</p>
+                      <p className="mt-1 text-[10px] text-brand-cream/35">{new Date(message.created_at).toLocaleString()}</p>
                     </div>
                   </div>
                 ))}
@@ -182,13 +250,15 @@ export function SupportInboxTab({ adminEmail }: { adminEmail: string }) {
                   <input
                     value={reply}
                     onChange={e => setReply(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && reply.trim()) void handleSendReply() }}
                     placeholder="Send a reply to this customer..."
                     className="flex-1 px-3 py-3 bg-brand-black-3 border border-brand-gold/20 rounded-xl text-sm text-white placeholder-white/30 focus:outline-none focus:border-brand-gold/50"
                   />
-                  <button onClick={handleSendReply} className="btn-gold flex items-center gap-2 shrink-0">
-                    <Send className="w-4 h-4" /> Reply
+                  <button onClick={() => void handleSendReply()} disabled={sending || !reply.trim()} className="btn-gold flex items-center gap-2 shrink-0 disabled:opacity-60">
+                    <Send className="w-4 h-4" /> {sending ? 'Sending…' : 'Reply'}
                   </button>
                 </div>
+                {sendError && <p className="text-xs text-red-400 mt-2">{sendError}</p>}
               </div>
             </>
           )}
@@ -247,10 +317,12 @@ export function MarketingTab({ adminEmail }: { adminEmail: string }) {
     if (current?.channel === 'banner' && current.status === 'live') {
       const settings = getStoreSettings()
       saveStoreSettings({ ...settings, announcement: current.message })
+      void apiRequest('/admin/settings', { method: 'PATCH', body: JSON.stringify({ announcement: current.message }) })
     } else if (current?.channel === 'banner') {
       const settings = getStoreSettings()
       if (settings.announcement === current.message) {
         saveStoreSettings({ ...settings, announcement: '' })
+        void apiRequest('/admin/settings', { method: 'PATCH', body: JSON.stringify({ announcement: '' }) })
       }
     }
     appendAuditEvent({ actor: adminEmail, action: 'Broadcast updated', target: current?.title ?? id, detail: status })
@@ -265,9 +337,26 @@ export function MarketingTab({ adminEmail }: { adminEmail: string }) {
       const settings = getStoreSettings()
       if (settings.announcement === current.message) {
         saveStoreSettings({ ...settings, announcement: '' })
+        void apiRequest('/admin/settings', { method: 'PATCH', body: JSON.stringify({ announcement: '' }) })
       }
     }
     appendAuditEvent({ actor: adminEmail, action: 'Broadcast deleted', target: current?.title ?? id })
+  }
+
+  async function sendBroadcastEmail(item: AdminBroadcast) {
+    const res = await apiRequest<{ sent?: number }>('/admin/newsletter/broadcast', {
+      method: 'POST',
+      body: JSON.stringify({
+        subject: item.title,
+        html: item.message.replace(/\n/g, '<br/>'),
+      }),
+    })
+    if (!res.ok) {
+      appendAuditEvent({ actor: adminEmail, action: 'Broadcast email failed', target: item.title, detail: res.error ?? 'error' })
+      return
+    }
+    updateBroadcastStatus(item.id, 'sent')
+    appendAuditEvent({ actor: adminEmail, action: 'Broadcast emailed', target: item.title, detail: `${res.data?.sent ?? 0} subscribers` })
   }
 
   function createPromo() {
@@ -362,6 +451,7 @@ export function MarketingTab({ adminEmail }: { adminEmail: string }) {
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {item.status !== 'live' && <button onClick={() => updateBroadcastStatus(item.id, 'live')} className="px-3 py-1.5 text-xs rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/35 transition-all">Go Live</button>}
+                    <button onClick={() => void sendBroadcastEmail(item)} className="px-3 py-1.5 text-xs rounded-lg bg-brand-gold/20 text-brand-gold hover:bg-brand-gold/35 transition-all">Email Subscribers</button>
                     {item.status !== 'sent' && <button onClick={() => updateBroadcastStatus(item.id, 'sent')} className="px-3 py-1.5 text-xs rounded-lg bg-brand-gold/20 text-brand-gold hover:bg-brand-gold/35 transition-all">Mark Sent</button>}
                     <button onClick={() => updateBroadcastStatus(item.id, 'draft')} className="px-3 py-1.5 text-xs rounded-lg bg-white/10 text-white/65 hover:bg-white/15 transition-all">Save as Draft</button>
                     <button onClick={() => removeBroadcast(item.id)} className="px-3 py-1.5 text-xs rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/35 transition-all">Delete</button>
@@ -447,6 +537,23 @@ export function AuditLogTab() {
 
   useEffect(() => {
     setEvents(readAuditEvents())
+    void (async () => {
+      const res = await apiRequest<{ events?: Array<Record<string, unknown>> }>('/admin/audit')
+      if (res.ok && Array.isArray(res.data?.events)) {
+        setEvents(res.data.events.map(row => ({
+          id: String(row.id ?? ''),
+          actor: String(row.user_id ?? 'system'),
+          action: String(row.action ?? ''),
+          target: String(row.target_id ?? row.target_type ?? ''),
+          detail: typeof row.meta_json === 'string'
+            ? row.meta_json
+            : row.meta_json
+              ? JSON.stringify(row.meta_json)
+              : undefined,
+          createdAt: String(row.created_at ?? ''),
+        })))
+      }
+    })()
   }, [])
 
   const filtered = useMemo(() => {

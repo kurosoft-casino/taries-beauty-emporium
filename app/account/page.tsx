@@ -11,8 +11,9 @@ import {
   type User, type SavedAddress,
 } from '@/lib/auth'
 import { formatOrderDate, type Order } from '@/lib/orders'
-import { getWishlist, toggleWishlist } from '@/lib/wishlist'
+import { getWishlist, loadWishlist, toggleWishlistForUser } from '@/lib/wishlist'
 import { products, formatPrice } from '@/lib/products'
+import { useStorefrontCatalog } from '@/lib/useStorefrontCatalog'
 import { useCartStore } from '@/lib/store'
 import { getRecentlyViewed } from '@/lib/recentlyViewed'
 import { withApiBase } from '@/lib/site'
@@ -140,6 +141,7 @@ export default function AccountPage() {
 
   // Wishlist
   const [wishlistSlugs, setWishlistSlugs] = useState<string[]>([])
+  const liveCatalog = useStorefrontCatalog()
 
   // Address form
   const [showAddressForm, setShowAddressForm] = useState(false)
@@ -179,11 +181,17 @@ export default function AccountPage() {
     const u = refreshUser()
     setAuthChecked(true)
     if (!u) router.push('/login')
-    setWishlistSlugs(getWishlist())
+    void (async () => {
+      setWishlistSlugs(await loadWishlist())
+    })()
   }, [router, refreshUser])
 
   useEffect(() => {
-    if (activeTab === 'wishlist') setWishlistSlugs(getWishlist())
+    if (activeTab === 'wishlist') {
+      void (async () => {
+        setWishlistSlugs(await loadWishlist())
+      })()
+    }
   }, [activeTab])
 
   useEffect(() => {
@@ -276,11 +284,12 @@ export default function AccountPage() {
     ? getRecentlyViewed().length
     : 0
 
-  const wishlistProducts = products.filter(p => wishlistSlugs.includes(p.slug))
+  const catalogForWishlist = liveCatalog.length > 0 ? liveCatalog : (products as typeof liveCatalog)
+  const wishlistProducts = catalogForWishlist.filter(p => wishlistSlugs.includes(p.slug))
   const vendorTotalViews = 0
 
-  function handleRemoveWishlist(slug: string) {
-    toggleWishlist(slug)
+  async function handleRemoveWishlist(slug: string) {
+    await toggleWishlistForUser(slug)
     setWishlistSlugs(getWishlist())
     toast.success('Removed from wishlist')
   }

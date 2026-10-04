@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Search, Package, Truck, CheckCircle, Clock, MapPin, ShoppingBag, ArrowLeft } from 'lucide-react'
 import { getOrder, formatOrderDate } from '@/lib/orders'
 import type { Order } from '@/lib/orders'
+import { fetchRemoteOrder } from '@/lib/remoteOrders'
 import { formatPrice } from '@/lib/products'
 
 const STATUS_STEPS: { key: Order['status']; label: string; icon: React.ElementType; desc: string }[] = [
@@ -37,24 +38,30 @@ export default function TrackOrderPage() {
   const [result, setResult] = useState<Order | null | 'not-found' | 'email-mismatch'>(null)
   const [loading, setLoading] = useState(false)
 
-  function handleTrack(e: React.FormEvent) {
+  async function handleTrack(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    setTimeout(() => {
-      try {
-        const order = getOrder(orderId.trim().toUpperCase())
-        if (!order) {
-          setResult('not-found')
-        } else if (order.customer.email.toLowerCase() !== email.trim().toLowerCase()) {
-          setResult('email-mismatch')
+    try {
+      const id = orderId.trim().toUpperCase()
+      const emailNorm = email.trim()
+      const remote = await fetchRemoteOrder(id, emailNorm)
+      if (remote.status === 'ok') {
+        setResult(remote.order)
+      } else if (remote.status === 'email-mismatch') {
+        setResult('email-mismatch')
+      } else {
+        // Fall back to this device's local copy (offline / API unavailable).
+        const local = getOrder(id)
+        if (local) {
+          setResult(local.customer.email.toLowerCase() === emailNorm.toLowerCase() ? local : 'email-mismatch')
         } else {
-          setResult(order)
+          setResult('not-found')
         }
-      } catch {
-        setResult('not-found')
       }
-      setLoading(false)
-    }, 600)
+    } catch {
+      setResult('not-found')
+    }
+    setLoading(false)
   }
 
   const order = result && result !== 'not-found' && result !== 'email-mismatch' ? result : null
