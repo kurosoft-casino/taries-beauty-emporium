@@ -1144,6 +1144,17 @@ async function pbDeleteWhereItems(orderId: string) {
 const ORDER_JSON_SPEC: JsonSpec = { customer_json: null, shipping_json: null }
 const ORDER_ITEM_JSON_SPEC: JsonSpec = { selected_variants_json: '{}', product_snapshot_json: null }
 
+route('GET', '/orders/me', async (req) => {
+  const a = await requireAuth(req)
+  if (a.error) return a.error
+  const session = a.session as SessionInfo
+  const orders = await pbListAll<PBRecord>(PB_COLLECTIONS.orders, {
+    filter: `user_id = ${pbQuote(session.user_id)}`,
+    sort: '-created_at',
+  })
+  return ok({ orders: orders.map((o) => legacyRow(o, ORDER_JSON_SPEC)) })
+})
+
 route('GET', '/orders/:id', async (req, params) => {
   const url = new URL(req.url)
   const emailQuery = lower(url.searchParams.get('email') || '')
@@ -1164,17 +1175,6 @@ route('GET', '/orders/:id', async (req, params) => {
     order: legacyRow(o, ORDER_JSON_SPEC),
     items: items.map((i) => legacyRow(i, ORDER_ITEM_JSON_SPEC)),
   })
-})
-
-route('GET', '/orders/me', async (req) => {
-  const a = await requireAuth(req)
-  if (a.error) return a.error
-  const session = a.session as SessionInfo
-  const orders = await pbListAll<PBRecord>(PB_COLLECTIONS.orders, {
-    filter: `user_id = ${pbQuote(session.user_id)}`,
-    sort: '-created_at',
-  })
-  return ok({ orders: orders.map((o) => legacyRow(o, ORDER_JSON_SPEC)) })
 })
 
 route('GET', '/admin/orders', async (req) => {
