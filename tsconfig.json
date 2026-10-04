@@ -31,7 +31,6 @@
   "include": [
     "next-env.d.ts",
     "custom.d.ts",
-    "cloudflare-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
@@ -40,7 +39,6 @@
   "exclude": [
     "node_modules",
     "android-app",
-    "desktop-app",
-    "api"
+    "desktop-app"
   ]
 }

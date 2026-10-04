@@ -24,6 +24,12 @@ export const PB_COLLECTIONS = {
   chatThreads: 'tbe_chat_threads',
   chatMessages: 'tbe_chat_messages',
   presenceHeartbeats: 'tbe_presence_heartbeats',
+  conversations: 'tbe_conversations',
+  messages: 'tbe_messages',
+  wishlists: 'tbe_wishlists',
+  productReviews: 'tbe_product_reviews',
+  stockMovements: 'tbe_stock_movements',
+  auditLog: 'tbe_audit_log',
 } as const
 
 export type PBCollectionName = (typeof PB_COLLECTIONS)[keyof typeof PB_COLLECTIONS]
@@ -188,7 +194,7 @@ export async function pbListAll<T = PBRecord>(
 
 export async function pbFirst<T = PBRecord>(
   collection: PBCollectionName | string,
-  filter: string,
+  filter = '',
   sort?: string,
 ): Promise<T | null> {
   const result = await pbList<T>(collection, { filter, sort, perPage: 1 })

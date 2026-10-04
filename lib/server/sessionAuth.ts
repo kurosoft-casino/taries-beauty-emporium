@@ -1,8 +1,9 @@
 import 'server-only'
 
-import { hashSecret, randomSalt } from '@/lib/security'
+import { randomSalt } from '@/lib/security'
 import type { SupportedCountry } from '@/lib/phoneCountries'
 import { normalizeEmail } from '@/lib/validation'
+import { createPassword, verifyPassword } from './passwords'
 import {
   PB_COLLECTIONS,
   pbCreate,
@@ -182,13 +183,13 @@ export async function requireRemoteAdmin(request: Request): Promise<RemoteUser |
 }
 
 export async function verifyRemotePassword(row: UserRow, password: string): Promise<boolean> {
-  if (!row.password_hash || !row.password_salt) return false
-  const hash = await hashSecret(`${normalizeEmail(row.email)}::${password}`, row.password_salt)
-  return hash === row.password_hash
+  return verifyPassword(
+    { hash: row.password_hash, salt: row.password_salt, version: row.password_version },
+    normalizeEmail(row.email),
+    password
+  )
 }
 
-export async function createRemotePassword(email: string, password: string): Promise<{ hash: string; salt: string; version: number }> {
-  const salt = randomSalt()
-  const hash = await hashSecret(`${normalizeEmail(email)}::${password}`, salt)
-  return { hash, salt, version: 2 }
+export async function createRemotePassword(_email: string, password: string): Promise<{ hash: string; salt: string; version: number }> {
+  return createPassword(password)
 }

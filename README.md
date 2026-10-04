@@ -1,126 +1,80 @@
 # Taries Beauty Emporium
 
-Luxury hair and beauty e-commerce site built with Next.js 16, Tailwind CSS, and Framer Motion.
+Luxury hair and beauty e-commerce site — Next.js (App Router), Tailwind CSS, and Framer Motion, with a self-hosted PocketBase backend.
 
-**Live site:** <https://www.tariesbeauty.com>  
-**Also available at:** <http://tariesbeauty.com> (until apex SSL is fully provisioned)
+**Live site:** <https://www.tariesbeauty.com>
 
-> This repository is a Taries-only project. The live storefront can be statically exported, but dynamic commerce, account, vendor, and admin features must run through the Taries Cloudflare Worker mounted at `/api/*`.
+## Stack
+
+- **Storefront + admin:** Next.js running on Node (VPS, behind Caddy)
+- **API:** Next.js route handlers — `app/api/[[...path]]/route.ts` → `lib/server/tariesApi.ts`
+- **Data:** PocketBase on the VPS (`hub.kurosofthub.com`), collections prefixed `tbe_*`
+- **Payments:** Flutterwave (server-side initialize/verify + webhook)
+- **Email:** Resend (transactional; disabled when `RESEND_API_KEY` is unset)
+- **Media:** stored in PocketBase (`tbe_media_assets`) and served via `/api/media/:id`
+
+No Cloudflare, Firebase, Supabase or Fly.io services are used anywhere in this project.
 
 ## Development
 
 ```bash
 npm install
+cp .env.local.example .env.local   # fill in the values
 npm run dev
-```
-
-## Production build
-
-```bash
-npm run build
 ```
 
 ## Environment
 
-Create `.env.local` only if you need to override the default same-origin API routing:
+Server-side only (never expose to the browser):
+
+| Variable | Purpose |
+|---|---|
+| `PB_URL` | PocketBase base URL (e.g. `https://hub.kurosofthub.com`) |
+| `PB_SUPERUSER_EMAIL` / `PB_SUPERUSER_PASSWORD` | Dedicated PocketBase service account |
+| `FLW_SECRET_KEY` | Flutterwave secret key |
+| `FLW_WEBHOOK_HASH` | Flutterwave webhook signature hash |
+| `RESEND_API_KEY` | Resend API key for transactional email |
+| `ALLOWED_ORIGINS` | Comma-separated CORS allow-list for the API |
+| `PUBLIC_SITE_URL` | Public site URL used for payment redirects |
+
+Public:
+
+- `NEXT_PUBLIC_API_BASE_URL=/api`
+- `NEXT_PUBLIC_SITE_URL=https://www.tariesbeauty.com`
+
+## PocketBase schema
+
+Schema lives in `pb_migrations/*.js` and is applied by PocketBase itself
+(pending migrations run on service start on the VPS). Local development talks
+to the same instance unless `PB_URL` is overridden.
+
+## Production
 
 ```bash
-NEXT_PUBLIC_API_BASE_URL=/api
-NEXT_PUBLIC_SITE_URL=https://www.tariesbeauty.com
+npm run build
+npm run start        # Node server; put Caddy in front
 ```
 
-Set Worker secrets for the standalone `api/` Cloudflare Worker (server-side only, never commit these):
+## Sub-projects
 
-```bash
-cd api
-wrangler secret put FLW_SECRET_KEY
-wrangler secret put FLW_WEBHOOK_HASH
-```
+- `android-app/` — Capacitor Android wrapper
+- `desktop-app/` — Electron desktop wrapper
 
-Optional (if your callback domain differs):
+Root TypeScript checks intentionally exclude `android-app/` and `desktop-app/`
+so `npm run build` validates the Next.js app without each subproject's
+dependency set.
 
-```bash
-wrangler secret put PUBLIC_SITE_URL
-```
+## Flutterwave payments
 
-## Monorepo surfaces
-
-The standalone repo now contains:
-
-- `app/` (main Next.js storefront/admin)
-- `api/` (Cloudflare Worker API)
-- `android-app/` (Capacitor Android wrapper)
-- `desktop-app/` (Electron desktop wrapper)
-
-Root TypeScript checks intentionally exclude `api/`, `android-app/`, and `desktop-app/` so `npm run build` validates the Next.js app without requiring each subproject dependency set.
-
-## Deployment
-
-Production architecture:
-
-- Frontend storefront: GitHub Pages static export on `https://www.tariesbeauty.com`
-- Dynamic API: Cloudflare Worker on `https://www.tariesbeauty.com/api/*`
-
-The frontend should use same-origin API calls in production:
-
-```bash
-NEXT_PUBLIC_API_BASE_URL=/api
-```
-
-Deploy the API worker:
-
-```bash
-cd api
-npm run deploy
-```
-
-Deploy the storefront:
-
-```bash
-npm run build:static
-```
-
-The static export flow temporarily moves `app/api` out of the app tree so the Pages build stays frontend-only. Live commerce/account/admin flows continue to work through the branded Cloudflare `/api/*` route.
-
-```bash
-tmp=.pages-temp-api
-rm -rf "$tmp"
-if [ -d app/api ]; then mv app/api "$tmp"; fi
-npm run build:static
-status=$?
-if [ -d "$tmp" ]; then mv "$tmp" app/api; fi
-exit $status
-```
-
-## Flutterwave payments (live)
-
-The checkout now uses server-side Flutterwave Standard initialization:
-
-- Frontend creates order in API (`POST /orders`)
-- API initializes hosted checkout (`POST /payments/flutterwave/initialize`)
+- Frontend creates the order (`POST /api/orders`)
+- API initializes hosted checkout (`POST /api/payments/flutterwave/initialize`)
 - Flutterwave redirects to `/checkout/complete`
-- API verifies transaction (`GET /payments/flutterwave/verify`)
-- Webhook fallback endpoint: `POST /payments/flutterwave/webhook`
+- API verifies the transaction (`GET /api/payments/flutterwave/verify`)
+- Webhook fallback: `POST /api/payments/flutterwave/webhook`
 
-Configure Flutterwave dashboard:
-
-1. Webhook URL: `https://www.tariesbeauty.com/payments/flutterwave/webhook`
-2. Secret hash: same value as `FLW_WEBHOOK_HASH`
-3. Enable needed payment channels (card, bank transfer, mobile money)
-
-Important: if any secret key was exposed publicly, rotate it in Flutterwave immediately and update Worker secrets.
-
-## Domain and SSL
-
-GitHub Pages serves the storefront on `www.tariesbeauty.com`, while Cloudflare handles TLS, CDN, and the `/api/*` Worker routes.
-
-Required DNS records for apex + www:
-
-- `A` for `tariesbeauty.com` -> `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`
-- `AAAA` for `tariesbeauty.com` -> `2606:50c0:8000::153`, `2606:50c0:8001::153`, `2606:50c0:8002::153`, `2606:50c0:8003::153` (or remove incorrect AAAA records)
-- `CNAME` for `www` -> `kurosoft1.github.io`
-
-After DNS is correct, GitHub Pages will issue/refresh the certificate for the storefront origin and Cloudflare will continue proxying the public domain plus API routes.
+Configure the Flutterwave dashboard webhook URL to
+`https://www.tariesbeauty.com/api/payments/flutterwave/webhook` and set
+`FLW_WEBHOOK_HASH` accordingly. Rotate the secret key if it was ever exposed.
 
 ## Git commit identity (recommended)
 
