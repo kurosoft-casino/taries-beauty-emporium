@@ -335,6 +335,7 @@ export default function ProductDetail({ slug }: { slug: string }) {
                 <motion.button
                   onClick={async () => setWished(await toggleWishlistForUser(slug))}
                   whileTap={{ scale: 0.9 }}
+                  aria-label={wished ? 'Remove from wishlist' : 'Add to wishlist'}
                   className="w-14 h-14 border border-brand-gold/30 flex items-center justify-center text-brand-cream hover:border-brand-gold hover:text-brand-gold-3 transition-all duration-200"
                 >
                   <Heart size={18} className={wished ? 'fill-red-500 text-red-500' : ''} />

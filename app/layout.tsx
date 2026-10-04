@@ -68,7 +68,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Taries Beauty" />
-        <link rel="apple-touch-icon" href={withBasePath('/images/logo.jpg')} />
+        <link rel="apple-touch-icon" href={withBasePath('/images/icon-192.png')} />
       </head>
       <body id="top" className="bg-brand-black font-body text-brand-cream antialiased overflow-x-hidden min-h-screen">
         <LangProvider>

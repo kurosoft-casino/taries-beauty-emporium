@@ -110,6 +110,7 @@ export default function CartDrawer() {
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => updateQuantity(item.product.id, item.quantity - 1, item.selectedVariants)}
+                              aria-label="Decrease quantity"
                               className="w-7 h-7 rounded border border-brand-gold/30 flex items-center justify-center text-brand-gold-2 hover:bg-brand-gold/10 transition-colors"
                             >
                               <Minus size={12} />
@@ -117,6 +118,7 @@ export default function CartDrawer() {
                             <span className="font-body text-sm font-semibold text-brand-cream w-5 text-center">{item.quantity}</span>
                             <button
                               onClick={() => updateQuantity(item.product.id, item.quantity + 1, item.selectedVariants)}
+                              aria-label="Increase quantity"
                               className="w-7 h-7 rounded border border-brand-gold/30 flex items-center justify-center text-brand-gold-2 hover:bg-brand-gold/10 transition-colors"
                             >
                               <Plus size={12} />
@@ -129,6 +131,7 @@ export default function CartDrawer() {
                       </div>
                       <button
                         onClick={() => removeItem(item.product.id, item.selectedVariants)}
+                        aria-label="Remove item"
                         className="text-brand-cream/30 hover:text-red-400 transition-colors shrink-0 p-1"
                       >
                         <Trash2 size={16} />

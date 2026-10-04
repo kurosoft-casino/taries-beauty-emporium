@@ -412,15 +412,24 @@ const MAIL_FROM = 'Taries Beauty Emporium <no-reply@tariesbeauty.com>'
 
 async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
   const key = apiEnv().resendApiKey
-  if (!key) return false
+  if (!key) {
+    console.warn('[email] skipped (RESEND_API_KEY not set):', subject)
+    return false
+  }
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'content-type': 'application/json' },
       body: JSON.stringify({ from: MAIL_FROM, to: [to], subject, html }),
     })
-    return r.ok
-  } catch {
+    if (!r.ok) {
+      const detail = await r.text().catch(() => '')
+      console.warn('[email] Resend rejected:', r.status, detail.slice(0, 200), '| subject:', subject)
+      return false
+    }
+    return true
+  } catch (error) {
+    console.warn('[email] send failed:', error instanceof Error ? error.message : error)
     return false
   }
 }

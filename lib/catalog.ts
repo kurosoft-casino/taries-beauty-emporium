@@ -185,17 +185,16 @@ export function mapRemoteProductRow(row: RemoteProductRow): StorefrontProduct {
 }
 
 export function mapRemoteOverrideRow(row: RemoteOverrideRow): ProductOverride {
-  return {
-    slug: row.slug,
-    name: row.name ?? undefined,
-    price: row.price ?? undefined,
-    originalPrice: row.original_price ?? undefined,
-    inStock: row.in_stock === 0 ? false : row.in_stock == null ? undefined : Boolean(row.in_stock),
-    badge: (row.badge as ProductOverride['badge']) ?? undefined,
-    images: row.images_json ? parseJsonArray<string>(row.images_json) : undefined,
-    description: row.description ?? undefined,
-    shortDesc: row.short_desc ?? undefined,
-  }
+  const override: ProductOverride = { slug: row.slug }
+  if (row.name != null && row.name !== '') override.name = row.name
+  if (row.price != null) override.price = row.price
+  if (row.original_price != null) override.originalPrice = row.original_price
+  if (row.in_stock != null) override.inStock = row.in_stock === 0 ? false : Boolean(row.in_stock)
+  if (row.badge != null && row.badge !== '') override.badge = row.badge as ProductOverride['badge']
+  if (row.images_json) override.images = parseJsonArray<string>(row.images_json)
+  if (row.description != null && row.description !== '') override.description = row.description
+  if (row.short_desc != null && row.short_desc !== '') override.shortDesc = row.short_desc
+  return override
 }
 
 export function mergeStorefrontProducts(
