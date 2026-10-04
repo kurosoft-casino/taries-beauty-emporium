@@ -1,6 +1,15 @@
 import 'server-only'
 
-import { requireDatabase } from './cloudflare'
+import {
+  PB_COLLECTIONS,
+  pbCreate,
+  pbDeleteWhere,
+  pbFirst,
+  pbListAll,
+  pbQuote,
+  pbUpdate,
+  type PBRecord,
+} from './pocketbase'
 
 export interface PersistedOrderItem {
   productId: string
@@ -42,7 +51,7 @@ export interface PersistedOrder {
   items: PersistedOrderItem[]
 }
 
-interface OrderRow {
+interface OrderRecord extends PBRecord {
   order_id: string
   user_id: string | null
   date: string
@@ -55,121 +64,116 @@ interface OrderRow {
   grand_total_usd: number
   discount_usd: number | null
   coupon_code: string | null
-  customer_json: string
-  shipping_json: string
+  customer_json: PersistedOrder['customer']
+  shipping_json: PersistedOrder['shipping']
   notes: string | null
   gift_message: string | null
 }
 
-interface OrderItemRow {
+interface OrderItemRecord extends PBRecord {
+  order_id: string
   product_id: string
   product_name: string
   unit_price_usd: number
   quantity: number
-  selected_variants_json: string
-  product_snapshot_json: string
+  selected_variants_json: Record<string, string> | null
+  product_snapshot_json: Record<string, unknown> | null
+  position: number | null
 }
 
 export async function saveRemoteOrder(order: PersistedOrder): Promise<void> {
-  const db = await requireDatabase()
   const now = new Date().toISOString()
+  const existing = await pbFirst<OrderRecord>(
+    PB_COLLECTIONS.orders,
+    `order_id = ${pbQuote(order.orderId)}`,
+  )
 
-  const statements = [
-    db.prepare(`
-      INSERT OR REPLACE INTO orders (
-        order_id, user_id, date, status, payment_status, payment_method, currency,
-        subtotal_usd, shipping_usd, grand_total_usd, discount_usd, coupon_code,
-        customer_json, shipping_json, notes, gift_message, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM orders WHERE order_id = ?), ?), ?)
-    `).bind(
-      order.orderId,
-      order.userId ?? null,
-      order.date,
-      order.status,
-      order.paymentStatus,
-      order.paymentMethod,
-      order.currency,
-      order.subtotalUSD,
-      order.shippingUSD,
-      order.grandTotalUSD,
-      order.discountUSD ?? 0,
-      order.couponCode ?? null,
-      JSON.stringify(order.customer),
-      JSON.stringify(order.shipping),
-      order.notes ?? null,
-      order.giftMessage ?? null,
-      order.orderId,
-      now,
-      now,
-    ),
-    db.prepare('DELETE FROM order_items WHERE order_id = ?').bind(order.orderId),
-    ...order.items.map((item, index) =>
-      db.prepare(`
-        INSERT INTO order_items (
-          id, order_id, product_id, product_name, unit_price_usd, quantity,
-          selected_variants_json, product_snapshot_json, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(
-        `${order.orderId}-${index + 1}`,
-        order.orderId,
-        item.productId,
-        item.productName,
-        item.unitPriceUSD,
-        item.quantity,
-        JSON.stringify(item.selectedVariants),
-        JSON.stringify(item.productSnapshot),
-        now,
-      )
-    ),
-  ]
+  const payload = {
+    order_id: order.orderId,
+    user_id: order.userId ?? null,
+    date: order.date,
+    status: order.status,
+    payment_status: order.paymentStatus,
+    payment_method: order.paymentMethod,
+    currency: order.currency,
+    subtotal_usd: order.subtotalUSD,
+    shipping_usd: order.shippingUSD,
+    grand_total_usd: order.grandTotalUSD,
+    discount_usd: order.discountUSD ?? 0,
+    coupon_code: order.couponCode ?? null,
+    customer_json: order.customer,
+    shipping_json: order.shipping,
+    notes: order.notes ?? null,
+    gift_message: order.giftMessage ?? null,
+    updated_at: now,
+    ...(existing ? {} : { created_at: now }),
+  }
 
-  await db.batch(statements)
+  if (existing) {
+    await pbUpdate(PB_COLLECTIONS.orders, existing.id, payload)
+  } else {
+    await pbCreate(PB_COLLECTIONS.orders, payload)
+  }
+
+  await pbDeleteWhere(PB_COLLECTIONS.orderItems, `order_id = ${pbQuote(order.orderId)}`)
+
+  for (let index = 0; index < order.items.length; index += 1) {
+    const item = order.items[index]
+    await pbCreate(PB_COLLECTIONS.orderItems, {
+      order_id: order.orderId,
+      product_id: item.productId,
+      product_name: item.productName,
+      unit_price_usd: item.unitPriceUSD,
+      quantity: item.quantity,
+      selected_variants_json: item.selectedVariants,
+      product_snapshot_json: item.productSnapshot,
+      position: index + 1,
+      created_at: now,
+    })
+  }
 }
 
 export async function getRemoteOrder(orderId: string, email?: string): Promise<PersistedOrder | null> {
-  const db = await requireDatabase()
-  const query = email
-    ? `
-        SELECT * FROM orders
-        WHERE order_id = ? AND LOWER(json_extract(customer_json, '$.email')) = LOWER(?)
-        LIMIT 1
-      `
-    : 'SELECT * FROM orders WHERE order_id = ? LIMIT 1'
+  const record = await pbFirst<OrderRecord>(
+    PB_COLLECTIONS.orders,
+    `order_id = ${pbQuote(orderId)}`,
+  )
+  if (!record) return null
 
-  const row = await db.prepare(query).bind(...(email ? [orderId, email] : [orderId])).first<OrderRow>()
-  if (!row) return null
+  if (email) {
+    const recordEmail = String(record.customer_json?.email ?? '').toLowerCase()
+    if (recordEmail !== email.toLowerCase()) return null
+  }
 
-  const itemsResult = await db.prepare(`
-    SELECT product_id, product_name, unit_price_usd, quantity, selected_variants_json, product_snapshot_json
-    FROM order_items
-    WHERE order_id = ?
-    ORDER BY id ASC
-  `).bind(orderId).all<OrderItemRow>()
+  const items = await pbListAll<OrderItemRecord>(PB_COLLECTIONS.orderItems, {
+    filter: `order_id = ${pbQuote(orderId)}`,
+    sort: 'position,created_at',
+  })
 
   return {
-    orderId: row.order_id,
-    userId: row.user_id,
-    date: row.date,
-    status: row.status,
-    paymentStatus: row.payment_status,
-    paymentMethod: row.payment_method,
-    currency: row.currency,
-    subtotalUSD: row.subtotal_usd,
-    shippingUSD: row.shipping_usd,
-    grandTotalUSD: row.grand_total_usd,
-    discountUSD: row.discount_usd ?? undefined,
-    couponCode: row.coupon_code ?? undefined,
-    customer: JSON.parse(row.customer_json),
-    shipping: JSON.parse(row.shipping_json),
-    notes: row.notes ?? undefined,
-    giftMessage: row.gift_message ?? undefined,
-    items: (itemsResult.results ?? []).map(item => ({
+    orderId: record.order_id,
+    userId: record.user_id ?? null,
+    date: record.date,
+    status: record.status,
+    paymentStatus: record.payment_status,
+    paymentMethod: record.payment_method,
+    currency: record.currency,
+    subtotalUSD: record.subtotal_usd,
+    shippingUSD: record.shipping_usd,
+    grandTotalUSD: record.grand_total_usd,
+    discountUSD: record.discount_usd ?? undefined,
+    couponCode: record.coupon_code ?? undefined,
+    customer: record.customer_json,
+    shipping: record.shipping_json,
+    notes: record.notes ?? undefined,
+    giftMessage: record.gift_message ?? undefined,
+    items: items.map((item) => ({
       productId: item.product_id,
       productName: item.product_name,
       unitPriceUSD: item.unit_price_usd,
       quantity: item.quantity,
-      selectedVariants: JSON.parse(item.selected_variants_json || '{}'),
-      productSnapshot: JSON.parse(item.product_snapshot_json),
+      selectedVariants: item.selected_variants_json ?? {},
+      productSnapshot: item.product_snapshot_json ?? {},
     })),
   }
 }

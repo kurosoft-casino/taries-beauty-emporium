@@ -1,4 +1,4 @@
-import { requireDatabase } from '@/lib/server/cloudflare'
+import { PB_COLLECTIONS, pbFirst, pbQuote, type PBRecord } from '@/lib/server/pocketbase'
 import { createRemoteSession, toRemoteUser, type UserRow, verifyRemotePassword } from '@/lib/server/sessionAuth'
 import { isValidEmail, normalizeEmail } from '@/lib/validation'
 
@@ -16,13 +16,10 @@ export async function POST(request: Request) {
   if (!password) return Response.json({ error: 'Password is required.' }, { status: 400 })
 
   try {
-    const db = await requireDatabase()
-    const row = await db.prepare(`
-      SELECT id, first_name, last_name, email, phone, role, avatar, created_at, password_hash, password_salt, password_version, metadata_json
-      FROM users
-      WHERE LOWER(email) = LOWER(?)
-      LIMIT 1
-    `).bind(email).first<UserRow>()
+    const row = await pbFirst<UserRow & PBRecord>(
+      PB_COLLECTIONS.users,
+      `email = ${pbQuote(email)}`,
+    )
 
     if (!row) return Response.json({ error: 'No account found with that email address.' }, { status: 404 })
     const valid = await verifyRemotePassword(row, password)

@@ -3,7 +3,16 @@ import 'server-only'
 import { hashSecret, randomSalt } from '@/lib/security'
 import type { SupportedCountry } from '@/lib/phoneCountries'
 import { normalizeEmail } from '@/lib/validation'
-import { requireDatabase } from './cloudflare'
+import {
+  PB_COLLECTIONS,
+  pbCreate,
+  pbDelete,
+  pbFirst,
+  pbGet,
+  pbQuote,
+  pbUpdate,
+  type PBRecord,
+} from './pocketbase'
 
 const SESSION_COOKIE = 'tbe_session'
 const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60
@@ -21,11 +30,12 @@ export interface RemoteUser {
   role?: 'admin'
 }
 
-interface SessionRow {
-  id: string
+interface SessionRecord extends PBRecord {
   user_id: string
   token_hash: string
+  role: string
   expires_at: string
+  last_seen_at: string
 }
 
 export interface UserRow {
@@ -40,7 +50,7 @@ export interface UserRow {
   password_hash: string | null
   password_salt: string | null
   password_version: number | null
-  metadata_json: string | null
+  metadata_json: unknown
 }
 
 function getCookie(request: Request, name: string): string | null {
@@ -55,13 +65,17 @@ function getCookie(request: Request, name: string): string | null {
   return null
 }
 
-function safeJsonParse<T>(value: string | null, fallback: T): T {
-  if (!value) return fallback
-  try {
-    return JSON.parse(value) as T
-  } catch {
-    return fallback
+function safeJsonParse<T>(value: unknown, fallback: T): T {
+  if (value === null || value === undefined || value === '') return fallback
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value) as T
+    } catch {
+      return fallback
+    }
   }
+  if (typeof value === 'object') return value as T
+  return fallback
 }
 
 function mapCountry(raw: string): SupportedCountry {
@@ -101,65 +115,63 @@ function buildSessionClearCookie(request: Request): string {
   return `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${withSecureSuffix(request)}`
 }
 
+function requestIp(request: Request): string | null {
+  const forwarded = request.headers.get('x-forwarded-for')
+  if (forwarded) return forwarded.split(',')[0]?.trim() || null
+  return request.headers.get('x-real-ip') ?? null
+}
+
 export async function createRemoteSession(userId: string, role: string, request: Request): Promise<string> {
-  const db = await requireDatabase()
   const token = randomSalt(32)
   const tokenHash = await sha256Hex(token)
   const now = new Date().toISOString()
   const expiresAt = new Date(Date.now() + SESSION_TTL_SECONDS * 1000).toISOString()
-  await db.prepare(`
-    INSERT INTO sessions (
-      id, user_id, token_hash, role, created_at, expires_at, last_seen_at, ip_address, user_agent
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    `ses_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    userId,
-    tokenHash,
+
+  await pbCreate(PB_COLLECTIONS.sessions, {
+    user_id: userId,
+    token_hash: tokenHash,
     role,
-    now,
-    expiresAt,
-    now,
-    request.headers.get('cf-connecting-ip') ?? null,
-    request.headers.get('user-agent') ?? null,
-  ).run()
+    created_at: now,
+    expires_at: expiresAt,
+    last_seen_at: now,
+    ip_address: requestIp(request),
+    user_agent: request.headers.get('user-agent') ?? null,
+  })
+
   return buildSessionCookie(token, request)
 }
 
 export async function clearRemoteSession(request: Request): Promise<string> {
-  const db = await requireDatabase()
   const token = getCookie(request, SESSION_COOKIE)
   if (!token) return buildSessionClearCookie(request)
   const tokenHash = await sha256Hex(token)
-  await db.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(tokenHash).run()
+  const session = await pbFirst<SessionRecord>(
+    PB_COLLECTIONS.sessions,
+    `token_hash = ${pbQuote(tokenHash)}`,
+  )
+  if (session) await pbDelete(PB_COLLECTIONS.sessions, session.id)
   return buildSessionClearCookie(request)
 }
 
 export async function getRemoteSessionUser(request: Request): Promise<RemoteUser | null> {
-  const db = await requireDatabase()
   const token = getCookie(request, SESSION_COOKIE)
   if (!token) return null
 
   const tokenHash = await sha256Hex(token)
-  const session = await db.prepare(`
-    SELECT id, user_id, token_hash, expires_at
-    FROM sessions
-    WHERE token_hash = ?
-    LIMIT 1
-  `).bind(tokenHash).first<SessionRow>()
-
+  const session = await pbFirst<SessionRecord>(
+    PB_COLLECTIONS.sessions,
+    `token_hash = ${pbQuote(tokenHash)}`,
+  )
   if (!session) return null
+
   if (new Date(session.expires_at).getTime() <= Date.now()) {
-    await db.prepare('DELETE FROM sessions WHERE id = ?').bind(session.id).run()
+    await pbDelete(PB_COLLECTIONS.sessions, session.id)
     return null
   }
 
-  await db.prepare('UPDATE sessions SET last_seen_at = ? WHERE id = ?').bind(new Date().toISOString(), session.id).run()
-  const user = await db.prepare(`
-    SELECT id, first_name, last_name, email, phone, role, avatar, created_at, password_hash, password_salt, password_version, metadata_json
-    FROM users
-    WHERE id = ?
-    LIMIT 1
-  `).bind(session.user_id).first<UserRow>()
+  await pbUpdate(PB_COLLECTIONS.sessions, session.id, { last_seen_at: new Date().toISOString() })
+
+  const user = await pbGet<UserRow & PBRecord>(PB_COLLECTIONS.users, session.user_id).catch(() => null)
   return user ? toRemoteUser(user) : null
 }
 

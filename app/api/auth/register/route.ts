@@ -1,4 +1,4 @@
-import { requireDatabase } from '@/lib/server/cloudflare'
+import { PB_COLLECTIONS, pbCreate, pbFirst, pbQuote, type PBRecord } from '@/lib/server/pocketbase'
 import { createRemotePassword, createRemoteSession, toRemoteUser, type UserRow } from '@/lib/server/sessionAuth'
 import { isValidEmail, normalizeEmail, sanitizeInlineText, sanitizePhone } from '@/lib/validation'
 import type { SupportedCountry } from '@/lib/phoneCountries'
@@ -30,45 +30,29 @@ export async function POST(request: Request) {
   if (password.length < 8) return Response.json({ error: 'Password must be at least 8 characters.' }, { status: 400 })
 
   try {
-    const db = await requireDatabase()
-    const existing = await db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1').bind(email).first<{ id: string }>()
+    const existing = await pbFirst<PBRecord>(PB_COLLECTIONS.users, `email = ${pbQuote(email)}`)
     if (existing) return Response.json({ error: 'An account with this email already exists.' }, { status: 409 })
 
     const now = new Date().toISOString()
-    const userId = `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     const passwordData = await createRemotePassword(email, password)
     const role = email === 'tarimoboere18@gmail.com' ? 'admin' : 'customer'
 
-    await db.prepare(`
-      INSERT INTO users (
-        id, role, first_name, last_name, email, phone, password_hash, password_salt, password_version,
-        avatar, created_at, updated_at, metadata_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      userId,
+    const created = await pbCreate<UserRow & PBRecord>(PB_COLLECTIONS.users, {
       role,
-      firstName,
-      lastName,
+      first_name: firstName,
+      last_name: lastName,
       email,
       phone,
-      passwordData.hash,
-      passwordData.salt,
-      passwordData.version,
-      sanitizeInlineText(body?.avatar ?? '') || null,
-      now,
-      now,
-      JSON.stringify({ country }),
-    ).run()
+      password_hash: passwordData.hash,
+      password_salt: passwordData.salt,
+      password_version: passwordData.version,
+      avatar: sanitizeInlineText(body?.avatar ?? '') || null,
+      created_at: now,
+      updated_at: now,
+      metadata_json: { country },
+    })
 
-    const row = await db.prepare(`
-      SELECT id, first_name, last_name, email, phone, role, avatar, created_at, password_hash, password_salt, password_version, metadata_json
-      FROM users
-      WHERE id = ?
-      LIMIT 1
-    `).bind(userId).first<UserRow>()
-
-    if (!row) return Response.json({ error: 'Could not create account right now.' }, { status: 500 })
-    const user = toRemoteUser(row)
+    const user = toRemoteUser(created)
     const setCookie = await createRemoteSession(user.id, user.role === 'admin' ? 'admin' : 'customer', request)
 
     return Response.json({ ok: true, user }, { headers: { 'Set-Cookie': setCookie } })

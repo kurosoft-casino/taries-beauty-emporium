@@ -1,4 +1,4 @@
-import { requireDatabase } from '@/lib/server/cloudflare'
+import { PB_COLLECTIONS, pbList, type PBRecord } from '@/lib/server/pocketbase'
 import { requireRemoteAdmin, toRemoteUser, type UserRow } from '@/lib/server/sessionAuth'
 
 export async function GET(request: Request) {
@@ -6,15 +6,12 @@ export async function GET(request: Request) {
     const admin = await requireRemoteAdmin(request)
     if (!admin) return Response.json({ error: 'Admin access required.' }, { status: 403 })
 
-    const db = await requireDatabase()
-    const rows = await db.prepare(`
-      SELECT id, first_name, last_name, email, phone, role, avatar, created_at, password_hash, password_salt, password_version, metadata_json
-      FROM users
-      ORDER BY created_at DESC
-      LIMIT 1000
-    `).all<UserRow>()
+    const result = await pbList<UserRow & PBRecord>(PB_COLLECTIONS.users, {
+      sort: '-created_at',
+      perPage: 1000,
+    })
 
-    const users = (rows.results ?? []).map(row => toRemoteUser(row))
+    const users = result.items.map(row => toRemoteUser(row))
     return Response.json({ ok: true, users })
   } catch (error) {
     return Response.json(

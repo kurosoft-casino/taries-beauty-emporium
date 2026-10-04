@@ -1,4 +1,4 @@
-import { requireDatabase } from '@/lib/server/cloudflare'
+import { PB_COLLECTIONS, pbCreate, pbFirst, pbQuote, type PBRecord } from '@/lib/server/pocketbase'
 import { isValidEmail, normalizeEmail } from '@/lib/validation'
 
 export async function POST(request: Request) {
@@ -15,16 +15,17 @@ export async function POST(request: Request) {
   }
 
   try {
-    const db = await requireDatabase()
-    await db.prepare(`
-      INSERT OR IGNORE INTO stock_alert_requests (id, slug, email, created_at)
-      VALUES (?, ?, ?, ?)
-    `).bind(
-      `stock-alert-${slug}-${email}`,
-      slug,
-      email,
-      new Date().toISOString(),
-    ).run()
+    const existing = await pbFirst<PBRecord>(
+      PB_COLLECTIONS.stockAlertRequests,
+      `slug = ${pbQuote(slug)} && email = ${pbQuote(email)}`,
+    )
+    if (!existing) {
+      await pbCreate(PB_COLLECTIONS.stockAlertRequests, {
+        slug,
+        email,
+        created_at: new Date().toISOString(),
+      })
+    }
 
     return Response.json({ ok: true, slug, email })
   } catch (error) {

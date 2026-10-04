@@ -1,4 +1,4 @@
-import { requireDatabase } from '@/lib/server/cloudflare'
+import { PB_COLLECTIONS, pbCreate, pbFirst, pbQuote, type PBRecord } from '@/lib/server/pocketbase'
 import { isValidEmail, normalizeEmail } from '@/lib/validation'
 
 export async function POST(request: Request) {
@@ -10,11 +10,17 @@ export async function POST(request: Request) {
   }
 
   try {
-    const db = await requireDatabase()
-    await db.prepare(`
-      INSERT OR IGNORE INTO newsletter_subscribers (email, source, created_at)
-      VALUES (?, 'footer', ?)
-    `).bind(email, new Date().toISOString()).run()
+    const existing = await pbFirst<PBRecord>(
+      PB_COLLECTIONS.newsletterSubscribers,
+      `email = ${pbQuote(email)}`,
+    )
+    if (!existing) {
+      await pbCreate(PB_COLLECTIONS.newsletterSubscribers, {
+        email,
+        source: 'footer',
+        created_at: new Date().toISOString(),
+      })
+    }
 
     return Response.json({ ok: true, email })
   } catch (error) {

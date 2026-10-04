@@ -1,13 +1,12 @@
-import { requireDatabase } from '@/lib/server/cloudflare'
+import { PB_COLLECTIONS, pbList } from '@/lib/server/pocketbase'
 
 export async function GET() {
   try {
-    const db = await requireDatabase()
-    await db.prepare('SELECT 1 as ok').first<{ ok: number }>()
-    return Response.json({ ok: true, services: { d1: true } })
+    await pbList(PB_COLLECTIONS.users, { perPage: 1, fields: 'id' })
+    return Response.json({ ok: true, services: { pocketbase: true } })
   } catch (error) {
     return Response.json(
-      { ok: false, error: error instanceof Error ? error.message : 'Cloudflare services are not configured.' },
+      { ok: false, error: error instanceof Error ? error.message : 'PocketBase is not configured or unreachable.' },
       { status: 503 }
     )
   }
