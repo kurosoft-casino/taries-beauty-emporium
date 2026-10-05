@@ -7,7 +7,7 @@ import toast from 'react-hot-toast'
 import { useCartStore } from '@/lib/store'
 import { formatPrice } from '@/lib/products'
 import { saveOrder } from '@/lib/orders'
-import { estimateWeight, calcShipping, getCargoType, getDeliveryEstimate } from '@/lib/shipping'
+import { estimateWeight, calcShipping, getCargoType, getDeliveryEstimate, qualifiesForFreeShipping, FREE_SHIPPING_THRESHOLD_USD } from '@/lib/shipping'
 import { COUNTRY_SELECT_GROUPS } from '@/lib/africa'
 import { getPhonePlaceholder, type SupportedCountry } from '@/lib/phoneCountries'
 import { calculateCouponDiscount, clearAppliedCoupon, getAppliedCoupon } from '@/lib/coupons'
@@ -39,10 +39,11 @@ export default function CheckoutPage() {
   const cargoType = getCargoType(items)
   const weightKg = estimateWeight(items)
   const shippingCalc = calcShipping(weightKg, cargoType, form.country)
-  const shipping = items.length > 0 ? shippingCalc.totalUsdEquiv : 0
   const appliedCoupon = getAppliedCoupon()
   const discount = calculateCouponDiscount(items, appliedCoupon)
   const discountedSubtotal = total - discount
+  const freeShipping = items.length > 0 && qualifiesForFreeShipping(discountedSubtotal)
+  const shipping = items.length > 0 ? (freeShipping ? 0 : shippingCalc.totalUsdEquiv) : 0
   const grandTotal = discountedSubtotal + shipping
 
   function update(k: string, v: string) { setForm(f => ({ ...f, [k]: v })) }
@@ -460,9 +461,16 @@ export default function CheckoutPage() {
                       ? `$${shippingCalc.usd.toFixed(2)} USD + ₦${shippingCalc.ngn.toLocaleString()} NGN`
                       : `$${shippingCalc.usd.toFixed(2)} USD freight + $${shippingCalc.localUsd.toFixed(2)} local delivery`}
                   </p>
+                  {freeShipping && (
+                    <p className="font-body text-xs text-green-400">
+                      🎉 Free standard shipping unlocked — orders over {formatPrice(FREE_SHIPPING_THRESHOLD_USD, currency)} ship free.
+                    </p>
+                  )}
                   <div className="flex justify-between font-body text-sm pt-1 border-t border-brand-gold/10">
                     <span className="text-brand-cream/60">Shipping</span>
-                      <span className="text-brand-cream">{formatPrice(shipping, currency)}</span>
+                    {freeShipping
+                      ? <span className="text-green-400 font-semibold">FREE</span>
+                      : <span className="text-brand-cream">{formatPrice(shipping, currency)}</span>}
                     </div>
                   </div>
                 <div className="flex justify-between font-heading font-bold pt-2 border-t border-brand-gold/20">

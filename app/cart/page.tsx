@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Trash2, Plus, Minus, ShoppingBag, ArrowRight, ArrowLeft, CheckCircle, X, Plane, Tag } from 'lucide-react'
 import { useCartStore } from '@/lib/store'
 import { formatPrice } from '@/lib/products'
-import { estimateWeight, calcShipping, getCargoType } from '@/lib/shipping'
+import { estimateWeight, calcShipping, getCargoType, qualifiesForFreeShipping } from '@/lib/shipping'
 import AlsoBought from '@/components/shop/AlsoBought'
 import { calculateCouponDiscount, clearAppliedCoupon, getAppliedCoupon, setAppliedCoupon } from '@/lib/coupons'
 
@@ -21,7 +21,8 @@ export default function CartPage() {
   const cargoType = getCargoType(items)
   const weightKg = estimateWeight(items)
   const shippingCalc = calcShipping(weightKg, cargoType)
-  const shipping = items.length > 0 ? shippingCalc.totalUsdEquiv : 0
+  const freeShipping = items.length > 0 && qualifiesForFreeShipping(total)
+  const shipping = items.length > 0 ? (freeShipping ? 0 : shippingCalc.totalUsdEquiv) : 0
 
   const discount = calculateCouponDiscount(items, appliedCoupon)
   const discountedSubtotal = total - discount
@@ -220,7 +221,9 @@ export default function CartPage() {
                   </p>
                   <div className="flex justify-between font-body text-sm pt-1 border-t border-brand-gold/10">
                     <span className="text-brand-cream/60">Shipping</span>
-                    <span className="text-brand-cream">{formatPrice(shipping, currency)}</span>
+                    {freeShipping
+                      ? <span className="text-green-400 font-semibold">FREE</span>
+                      : <span className="text-brand-cream">{formatPrice(shipping, currency)}</span>}
                   </div>
                 </div>
 

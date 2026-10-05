@@ -10,6 +10,13 @@ export const RATES = {
 export const MIN_KG = 10
 const NGN_EXCHANGE = 1620
 
+/** Advertised offer: orders at/above this merchandise subtotal (USD) ship free (standard). */
+export const FREE_SHIPPING_THRESHOLD_USD = 200
+
+export function qualifiesForFreeShipping(subtotalUsd: number): boolean {
+  return Number.isFinite(subtotalUsd) && subtotalUsd >= FREE_SHIPPING_THRESHOLD_USD
+}
+
 /** Countries on the legacy pricing blend (USD freight + NGN local clearing) — their totals are unchanged. */
 const LEGACY_BLEND_COUNTRIES = new Set(['Nigeria', 'Ghana'])
 

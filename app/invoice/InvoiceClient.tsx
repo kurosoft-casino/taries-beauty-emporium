@@ -467,13 +467,10 @@ export default function InvoiceClient() {
               </p>
               <div className="mt-3 space-y-1">
                 <p className="font-body text-xs text-brand-cream/70 print:text-gray-700">
-                  Bank: <strong>Zenith Bank Nigeria / GCB Ghana</strong>
-                </p>
-                <p className="font-body text-xs text-brand-cream/70 print:text-gray-700">
                   Account Name: <strong>Taries Beauty Emporium</strong>
                 </p>
                 <p className="font-body text-xs text-brand-cream/70 print:text-gray-700">
-                  Account No: <strong className="text-brand-gold-3 print:text-yellow-700">0123456789</strong>
+                  Account Number: <strong className="text-brand-gold-3 print:text-yellow-700">Message us on WhatsApp to get the current transfer account for your country</strong>
                 </p>
               </div>
             </div>
@@ -503,7 +500,7 @@ export default function InvoiceClient() {
                   💬 wa.me/2349035412919
                 </p>
                 <p className="font-body text-xs text-brand-cream/50 print:text-gray-500">
-                  📧 tariesbeautye@gmail.com
+                  📧 tariesbeautyemporium@gmail.com
                 </p>
                 <p className="font-body text-xs text-brand-cream/40 print:text-gray-400">
                   {SITE_URL.replace(/^https?:\/\//, '')}

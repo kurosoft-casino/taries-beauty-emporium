@@ -36,6 +36,7 @@ const sections = [
 • Nigeria & Ghana rates: $8.70/kg (general) or $10.90/kg (beauty/care) + local clearing (₦900/kg).
 • Rest of Africa: same base rates plus a small zone adjustment and a destination delivery fee.
 • A minimum chargeable weight of 10 kg applies per shipment.
+• Orders of $200 USD or more (merchandise subtotal) qualify for FREE standard shipping.
 • Express shipping is available at an additional fee, calculated at checkout.
 • Import duties and customs fees (if applicable) are the responsibility of the buyer.`,
   },

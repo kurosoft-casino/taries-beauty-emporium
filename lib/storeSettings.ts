@@ -10,7 +10,7 @@ export interface StoreSettings {
 export const DEFAULT_STORE_SETTINGS: StoreSettings = {
   storeName: 'Taries Beauty Emporium',
   whatsapp: '+234 903 541 2919',
-  email: 'tariesbeautye@gmail.com',
+  email: 'tariesbeautyemporium@gmail.com',
   announcement: '',
 }
 
