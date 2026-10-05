@@ -17,7 +17,7 @@ const sections = [
   },
   {
     title: 'Shipping & Delivery',
-    body: 'Orders ship from Guangzhou, China to Nigeria and Ghana. Delivery windows are estimates and may be affected by customs, carrier delays, or force majeure events. Import duties, where applicable, are the customer’s responsibility.',
+    body: 'Orders ship from Guangzhou, China to all countries we serve across Africa. Delivery windows are estimates and may be affected by customs, carrier delays, or force majeure events. Import duties, where applicable, are the customer’s responsibility.',
   },
   {
     title: 'Returns',

@@ -17,7 +17,7 @@ const sections = [
   },
   {
     title: '3. Sharing Your Data',
-    body: `We do not sell, trade, or rent your personal information to third parties. We may share your shipping details with our logistics and freight partners solely for the purpose of delivering your order from Guangzhou, China to Nigeria or Ghana.`,
+    body: `We do not sell, trade, or rent your personal information to third parties. We may share your shipping details with our logistics and freight partners solely for the purpose of delivering your order from Guangzhou, China to your destination in Africa.`,
   },
   {
     title: '4. Data Storage & Security',
@@ -29,7 +29,7 @@ const sections = [
   },
   {
     title: '6. Your Rights (NDPA Compliance)',
-    body: `Under the Nigeria Data Protection Act (NDPA) 2023 and similar legislation, you have the right to: access the personal data we hold about you; request correction of inaccurate data; request deletion of your data; and opt out of marketing communications. To exercise any of these rights, contact us at tariesbeautye@gmail.com or WhatsApp +234 903 541 2919.`,
+    body: `Under the Nigeria Data Protection Act (NDPA) 2023 and applicable data protection laws of your country of residence, you have the right to: access the personal data we hold about you; request correction of inaccurate data; request deletion of your data; and opt out of marketing communications. To exercise any of these rights, contact us at tariesbeautye@gmail.com or WhatsApp +234 903 541 2919.`,
   },
   {
     title: "7. Children's Privacy",

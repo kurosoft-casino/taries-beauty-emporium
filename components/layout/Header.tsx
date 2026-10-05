@@ -183,8 +183,8 @@ export default function Header() {
             {Array(4).fill(null).map((_, i) => (
               <span key={i} className="mx-8">
                 {lang === 'ZH'
-                  ? '🌟 满 $200 免运费 • 从中国发货至尼日利亚和加纳 • 7–14 个工作日送达 • 100% 真人发品质保证'
-                  : '🌟 Free shipping on orders over $200 • Ships from China to Nigeria & Ghana • 7–14 business days delivery • 100% Authentic Human Hair Guaranteed'}
+                  ? '🌟 满 $200 免运费 • 从中国发货至全非洲 • 7–18 个工作日送达 • 100% 真人发品质保证'
+                  : '🌟 Free shipping on orders over $200 • Ships from China across Africa • 7–18 business days delivery • 100% Authentic Human Hair Guaranteed'}
                 {settings.announcement ? ` • ${settings.announcement}` : ''}
               </span>
             ))}

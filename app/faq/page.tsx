@@ -39,11 +39,11 @@ const categories = [
       },
       {
         q: 'How long does delivery take?',
-        a: 'Standard air freight takes 7–14 business days to Nigeria and Ghana after order confirmation. Express options (3–5 business days) are available on request.',
+        a: 'Standard air freight takes 7–14 business days to Nigeria and Ghana, and 10–18 business days to the rest of Africa, after order confirmation. Express options are available on request.',
       },
       {
         q: 'How is shipping cost calculated?',
-        a: 'Shipping is charged by weight. General goods cost $8.70/kg and beauty/care products cost $10.90/kg from China. A minimum of 10 kg is charged per shipment. The exact cost is shown at checkout.',
+        a: 'Shipping is charged by weight: General goods from $8.70/kg and beauty/care products from $10.90/kg from China, plus a destination delivery fee for countries outside Nigeria & Ghana. A minimum of 10 kg is charged per shipment. The exact cost for your country is shown at checkout.',
       },
       {
         q: 'Do I get free shipping?',

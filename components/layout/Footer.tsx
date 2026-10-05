@@ -130,8 +130,8 @@ export default function Footer() {
              </Link>
              <p className="font-body text-sm text-brand-cream/60 leading-relaxed mb-6">
                {lang === 'ZH'
-                 ? '高端奢华美发与美妆精选，直接来自中国广州制造商，用心发往尼日利亚和加纳。'
-                 : 'Premium luxury hair & beauty. Sourced directly from manufacturers in Guangzhou, China. Shipped with love to Nigeria & Ghana.'}
+                 ? '高端奢华美发与美妆精选，直接来自中国广州制造商，用心发往全非洲。'
+                 : 'Premium luxury hair & beauty. Sourced directly from manufacturers in Guangzhou, China. Shipped with love across Africa.'}
              </p>
             <div className="flex items-center gap-3">
               {socials.map(({ icon: Icon, href, label }) => (
@@ -187,7 +187,7 @@ export default function Footer() {
             <ul className="space-y-4">
               <li className="flex items-start gap-3">
                 <MapPin size={16} className="text-brand-gold-2 mt-0.5 shrink-0" />
-                <p className="font-body text-sm text-brand-cream/60">{lang === 'ZH' ? '中国广州发货' : 'Ships from Guangzhou, China'}<br />{lang === 'ZH' ? '配送至尼日利亚和加纳' : 'Delivers to Nigeria & Ghana'}</p>
+                <p className="font-body text-sm text-brand-cream/60">{lang === 'ZH' ? '中国广州发货' : 'Ships from Guangzhou, China'}<br />{lang === 'ZH' ? '配送至全非洲' : 'Delivers Across Africa'}</p>
               </li>
               <li>
                 <a href={`https://wa.me/${settings.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 font-body text-sm text-brand-cream/60 hover:text-brand-gold-3 transition-colors">
@@ -242,7 +242,7 @@ export default function Footer() {
             © {new Date().getFullYear()} Taries Beauty Emporium. {lang === 'ZH' ? '保留所有权利。' : 'All rights reserved.'}
           </p>
           <p className="font-body text-xs text-brand-cream/40 flex items-center gap-1">
-            {lang === 'ZH' ? '中国匠心打造，献给尼日利亚与加纳的女王们' : <>Crafted with <Heart size={12} className="text-brand-gold-2 fill-current" /> in China, for queens in Nigeria & Ghana</>}
+            {lang === 'ZH' ? '中国匠心打造，献给全非洲的女王们' : <>Crafted with <Heart size={12} className="text-brand-gold-2 fill-current" /> in China, for queens across Africa</>}
           </p>
           <div className="flex items-center gap-3">
             {['visa', 'mastercard', 'flutterwave', 'transfer'].map(p => (

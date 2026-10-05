@@ -18,6 +18,7 @@ import { useCartStore } from '@/lib/store'
 import { getRecentlyViewed } from '@/lib/recentlyViewed'
 import { withApiBase } from '@/lib/site'
 import { apiRequest } from '@/lib/remoteApi'
+import { COUNTRY_SELECT_GROUPS } from '@/lib/africa'
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -803,7 +804,11 @@ export default function AccountPage() {
                           <div>
                             <label className="block font-body text-xs text-brand-gold-2 uppercase tracking-wider mb-1">Country</label>
                             <select value={addrCountry} onChange={e => setAddrCountry(e.target.value as SavedAddress['country'])} className="w-full bg-brand-black-3 border border-brand-gold/20 rounded-lg px-3 py-2 font-body text-sm text-brand-cream focus:outline-none focus:border-brand-gold">
-                              {(['Nigeria', 'Ghana', 'China', 'Other'] as const).map(c => <option key={c} value={c}>{c}</option>)}
+                              {COUNTRY_SELECT_GROUPS.map(group => (
+                                <optgroup key={group.label} label={group.label}>
+                                  {group.options.map(c => <option key={c} value={c}>{c}</option>)}
+                                </optgroup>
+                              ))}
                             </select>
                           </div>
                           <div>

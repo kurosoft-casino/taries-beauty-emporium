@@ -6,6 +6,7 @@ export interface VendorProfile {
   ownerName: string
   email: string
   phone: string
+  country?: string
   category: string
   description: string
   status: 'pending' | 'approved' | 'rejected'

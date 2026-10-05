@@ -518,7 +518,7 @@ export default function ProductDetail({ slug }: { slug: string }) {
               <div className="max-w-2xl space-y-4">
                 {[
                   { q: 'Where does this ship from?', a: `All orders ship directly from our manufacturer partners in ${product.shipsFrom}.` },
-                  { q: 'How long does delivery take?', a: `Estimated ${product.deliveryDays} to Nigeria and Ghana after order confirmation.` },
+                  { q: 'How long does delivery take?', a: `Estimated ${product.deliveryDays} to Nigeria and Ghana, and 10–18 business days across the rest of Africa, after order confirmation.` },
                   { q: 'Is there free shipping?', a: 'Yes! Orders over $200 USD (approx ₦324,000) qualify for free standard shipping.' },
                   { q: 'Do you handle customs?', a: 'We ship with all necessary customs documentation. Some orders may attract import duties payable by the recipient.' },
                   { q: 'Can I track my order?', a: 'Yes! A tracking number is provided via WhatsApp and email within 48 hours of dispatch.' },

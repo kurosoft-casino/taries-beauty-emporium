@@ -171,7 +171,7 @@ migrate((app) => {
   const settings = app.findCollectionByNameOrId('tbe_store_settings')
   const record = new Record(settings)
   record.set('store_name', 'Taries Beauty Emporium')
-  record.set('announcement', 'Luxury wigs, bundles, beauty essentials and coats shipped from Guangzhou to Nigeria & Ghana.')
+  record.set('announcement', 'Luxury wigs, bundles, beauty essentials and coats shipped from Guangzhou to Nigeria, Ghana & across Africa.')
   record.set('whatsapp', '+234 903 541 2919')
   record.set('email', 'tariesbeautyemporium@gmail.com')
   record.set('maintenance_mode', false)

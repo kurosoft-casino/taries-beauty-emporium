@@ -9,12 +9,14 @@ import toast from 'react-hot-toast'
 import { getCurrentUser } from '@/lib/auth'
 import { apiJson } from '@/lib/remoteApi'
 import { isValidEmail, normalizeEmail, sanitizeInlineText, sanitizeMultilineText, sanitizePhone } from '@/lib/validation'
+import { COUNTRY_SELECT_GROUPS } from '@/lib/africa'
 
 interface VendorForm {
   firstName:    string
   lastName:     string
   email:        string
   phone:        string
+  country:      string
   businessName: string
   category:     string
   description:  string
@@ -107,7 +109,7 @@ function Input({
 export default function VendorRegisterPage() {
   const [step, setStep]           = useState(1)
   const [form, setForm]           = useState<VendorForm>({
-    firstName: '', lastName: '', email: '', phone: '',
+    firstName: '', lastName: '', email: '', phone: '', country: 'Nigeria',
     businessName: '', category: '', description: '',
   })
   const [agreed, setAgreed]       = useState(false)
@@ -174,6 +176,7 @@ export default function VendorRegisterPage() {
           displayName: sanitizeInlineText(form.businessName),
           bio: sanitizeMultilineText(form.description),
           phone: sanitizePhone(form.phone),
+          country: sanitizeInlineText(form.country),
           ownerName: `${sanitizeInlineText(form.firstName)} ${sanitizeInlineText(form.lastName)}`,
         }),
       })
@@ -296,9 +299,22 @@ export default function VendorRegisterPage() {
                     type="tel"
                     value={form.phone}
                     onChange={e => update('phone', e.target.value)}
-                    placeholder="+234 800 000 0000"
+                    placeholder="Include country code (e.g. +234, +254)"
                     hasError={!!errors.phone}
                   />
+                </Field>
+                <Field label="Country">
+                  <select
+                    value={form.country}
+                    onChange={e => update('country', e.target.value)}
+                    className="w-full bg-brand-black-3 border border-brand-gold/20 rounded-xl px-4 py-3 text-brand-cream text-sm focus:outline-none focus:border-brand-gold/50 transition-colors"
+                  >
+                    {COUNTRY_SELECT_GROUPS.map(group => (
+                      <optgroup key={group.label} label={group.label}>
+                        {group.options.map(c => <option key={c} value={c}>{c}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
                 </Field>
               </motion.div>
             )}

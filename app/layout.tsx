@@ -39,13 +39,13 @@ export const metadata: Metadata = {
     default: 'Taries Beauty Emporium | Luxury Hair & Beauty',
     template: '%s | Taries Beauty Emporium',
   },
-  description: 'Premium 100% human hair wigs, bundles, custom wigs, hair maintenance & beauty products. Direct from manufacturers in Guangzhou, China to Nigeria & Ghana.',
-  keywords: ['human hair wigs', 'hair bundles', 'custom wigs', 'beauty products', 'Nigeria', 'Ghana', 'luxury hair', 'Taries Beauty'],
+  description: 'Premium 100% human hair wigs, bundles, custom wigs, hair maintenance & beauty products. Direct from manufacturers in Guangzhou, China to Nigeria, Ghana and across Africa.',
+  keywords: ['human hair wigs', 'hair bundles', 'custom wigs', 'beauty products', 'Nigeria', 'Ghana', 'Kenya', 'South Africa', 'Africa', 'luxury hair', 'Taries Beauty'],
   authors: [{ name: 'Taries Beauty Emporium' }],
   metadataBase: new URL(SITE_URL),
   openGraph: {
     title: 'Taries Beauty Emporium | Luxury Hair & Beauty',
-    description: 'Premium 100% human hair wigs, bundles, custom wigs & beauty products. Direct from Guangzhou, China — shipped to Nigeria & Ghana.',
+    description: 'Premium 100% human hair wigs, bundles, custom wigs & beauty products. Direct from Guangzhou, China — shipped across Africa.',
     type: 'website',
     url: SITE_URL,
     siteName: 'Taries Beauty Emporium',
@@ -54,7 +54,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Taries Beauty Emporium | Luxury Hair & Beauty',
-    description: 'Premium human hair wigs, bundles & beauty products shipped to Nigeria & Ghana.',
+    description: 'Premium human hair wigs, bundles & beauty products shipped across Africa.',
     images: [withBasePath('/images/logo.jpg')],
   },
 }

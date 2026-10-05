@@ -3,7 +3,7 @@ import Link from 'next/link'
 
 export const metadata: Metadata = {
   title: 'Shipping Policy',
-  description: 'Learn about Taries Beauty Emporium shipping times, costs and process from Guangzhou, China to Nigeria and Ghana.',
+  description: 'Learn about Taries Beauty Emporium shipping times, costs and process from Guangzhou, China to Nigeria, Ghana and across Africa.',
 }
 
 const sections = [
@@ -21,14 +21,21 @@ const sections = [
       { destination: 'Nigeria (Other states)', standard: '10–18 business days', express: '5–7 business days' },
       { destination: 'Ghana (Accra, Kumasi)', standard: '7–14 business days', express: '3–5 business days' },
       { destination: 'Ghana (Other regions)', standard: '10–18 business days', express: '5–8 business days' },
+      { destination: 'East Africa (Kenya, Tanzania, Uganda, Ethiopia…)', standard: '10–18 business days', express: '5–8 business days' },
+      { destination: 'Southern Africa (South Africa, Zambia, Zimbabwe, Botswana…)', standard: '10–18 business days', express: '5–9 business days' },
+      { destination: 'North Africa (Egypt, Morocco, Algeria, Tunisia…)', standard: '10–16 business days', express: '5–8 business days' },
+      { destination: 'Central Africa (Cameroon, DR Congo, Gabon…)', standard: '12–20 business days', express: '6–10 business days' },
+      { destination: 'Other West African countries (Benin, Togo, Senegal…)', standard: '8–15 business days', express: '4–7 business days' },
     ],
   },
   {
     icon: '💰',
     title: 'Shipping Costs',
-    content: `Shipping fees are calculated at checkout based on the weight of your order and your delivery address.
+    content: `Shipping fees are calculated at checkout based on the weight of your order and your destination country.
 
-• Orders above ₦150,000 / GH₵1,500 qualify for FREE standard shipping.
+• Nigeria & Ghana rates: $8.70/kg (general) or $10.90/kg (beauty/care) + local clearing (₦900/kg).
+• Rest of Africa: same base rates plus a small zone adjustment and a destination delivery fee.
+• A minimum chargeable weight of 10 kg applies per shipment.
 • Express shipping is available at an additional fee, calculated at checkout.
 • Import duties and customs fees (if applicable) are the responsibility of the buyer.`,
   },
@@ -63,7 +70,7 @@ export default function ShippingPage() {
             Shipping <span className="gold-text">Policy</span>
           </h1>
           <p className="font-body text-brand-cream/60 max-w-xl mx-auto">
-            We ship directly from Guangzhou, China — straight to your door in Nigeria or Ghana.
+            We ship directly from Guangzhou, China — straight to your door anywhere in Africa.
           </p>
         </div>
       </div>

@@ -371,7 +371,7 @@ export default function ProductForm({
           type="tel"
           value={form.whatsapp}
           onChange={e => set('whatsapp', e.target.value)}
-          placeholder="+234 800 000 0000"
+          placeholder="Include country code (e.g. +234, +254)"
           className={inputCls()}
         />
       </div>

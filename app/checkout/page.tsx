@@ -7,13 +7,14 @@ import toast from 'react-hot-toast'
 import { useCartStore } from '@/lib/store'
 import { formatPrice } from '@/lib/products'
 import { saveOrder } from '@/lib/orders'
-import { estimateWeight, calcShipping, getCargoType } from '@/lib/shipping'
+import { estimateWeight, calcShipping, getCargoType, getDeliveryEstimate } from '@/lib/shipping'
+import { COUNTRY_SELECT_GROUPS } from '@/lib/africa'
+import { getPhonePlaceholder, type SupportedCountry } from '@/lib/phoneCountries'
 import { calculateCouponDiscount, clearAppliedCoupon, getAppliedCoupon } from '@/lib/coupons'
 import { isValidEmail, normalizeEmail, sanitizeInlineText, sanitizeMultilineText, sanitizePhone } from '@/lib/validation'
 import { withApiBase } from '@/lib/site'
 
 const steps = ['Details', 'Payment', 'Review']
-const countries = ['Nigeria', 'Ghana']
 const ngStates = ['Abia','Adamawa','Akwa Ibom','Anambra','Bauchi','Bayelsa','Benue','Borno','Cross River','Delta','Ebonyi','Edo','Ekiti','Enugu','Gombe','Imo','Jigawa','Kaduna','Kano','Katsina','Kebbi','Kogi','Kwara','Lagos','Nasarawa','Niger','Ogun','Ondo','Osun','Oyo','Plateau','Rivers','Sokoto','Taraba','Yobe','Zamfara','FCT Abuja']
 const ghRegions = ['Greater Accra','Ashanti','Western','Eastern','Central','Volta','Northern','Upper East','Upper West','Brong-Ahafo','Western North','Ahafo','Bono East','Oti','North East','Savannah']
 const remoteOrdersPath = withApiBase('/orders')
@@ -37,7 +38,7 @@ export default function CheckoutPage() {
   const total = getTotalUSD()
   const cargoType = getCargoType(items)
   const weightKg = estimateWeight(items)
-  const shippingCalc = calcShipping(weightKg, cargoType)
+  const shippingCalc = calcShipping(weightKg, cargoType, form.country)
   const shipping = items.length > 0 ? shippingCalc.totalUsdEquiv : 0
   const appliedCoupon = getAppliedCoupon()
   const discount = calculateCouponDiscount(items, appliedCoupon)
@@ -187,7 +188,7 @@ export default function CheckoutPage() {
             <p className="font-body text-sm text-brand-cream/50 mb-6">Your order <strong className="text-brand-gold-2">{orderNum}</strong> has been received. We&apos;ll send confirmation to <strong className="text-brand-gold-2">{form.email}</strong> and WhatsApp you a tracking number within 48 hours.</p>
             <div className="bg-brand-black-2 border border-brand-gold/20 p-5 mb-8 text-left space-y-2">
               <p className="font-body text-sm text-brand-cream/60">📦 Shipping to: <span className="text-brand-cream">{form.address}, {form.city}, {form.state}, {form.country}</span></p>
-              <p className="font-body text-sm text-brand-cream/60">✈️ Estimated delivery: <span className="text-brand-cream">7–14 business days from Guangzhou</span></p>
+              <p className="font-body text-sm text-brand-cream/60">✈️ Estimated delivery: <span className="text-brand-cream">{getDeliveryEstimate(form.country)} from Guangzhou</span></p>
               <p className="font-body text-sm text-brand-cream/60">💰 Total due: <span className="text-brand-gold-3 font-bold">{formatPrice(grandTotal, currency)}</span></p>
             </div>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -247,7 +248,7 @@ export default function CheckoutPage() {
                   </div>
                   <div>
                     <label className="font-body text-xs tracking-widest text-brand-gold-2 uppercase block mb-2">Phone / WhatsApp</label>
-                    <input value={form.phone} onChange={e => update('phone', e.target.value)} placeholder="+234 or +233..."
+                    <input value={form.phone} onChange={e => update('phone', e.target.value)} placeholder={getPhonePlaceholder(form.country as SupportedCountry)}
                       className={`w-full bg-brand-black-2 border ${errors.phone ? 'border-red-500' : 'border-brand-gold/20'} text-brand-cream font-body text-sm px-4 py-3 focus:outline-none focus:border-brand-gold-2`} />
                     {errors.phone && <p className="text-red-400 text-xs mt-1">{errors.phone}</p>}
                   </div>
@@ -255,21 +256,31 @@ export default function CheckoutPage() {
                     <label className="font-body text-xs tracking-widest text-brand-gold-2 uppercase block mb-2">Country</label>
                     <select value={form.country} onChange={e => { update('country', e.target.value); update('state', '') }}
                       className="w-full bg-brand-black-2 border border-brand-gold/20 text-brand-cream font-body text-sm px-4 py-3 focus:outline-none focus:border-brand-gold-2">
-                      {countries.map(c => <option key={c} value={c} className="bg-brand-black-2">{c}</option>)}
+                      {COUNTRY_SELECT_GROUPS.map(group => (
+                        <optgroup key={group.label} label={group.label} className="bg-brand-black-2">
+                          {group.options.map(c => <option key={c} value={c} className="bg-brand-black-2">{c}</option>)}
+                        </optgroup>
+                      ))}
                     </select>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="font-body text-xs tracking-widest text-brand-gold-2 uppercase block mb-2">
-                        {form.country === 'Nigeria' ? 'State' : 'Region'}
+                        {form.country === 'Nigeria' ? 'State' : form.country === 'Ghana' ? 'Region' : 'State / Region / Province'}
                       </label>
-                      <select value={form.state} onChange={e => update('state', e.target.value)}
-                        className={`w-full bg-brand-black-2 border ${errors.state ? 'border-red-500' : 'border-brand-gold/20'} text-brand-cream font-body text-sm px-4 py-3 focus:outline-none focus:border-brand-gold-2`}>
-                        <option value="" className="bg-brand-black-2">Select...</option>
-                        {(form.country === 'Nigeria' ? ngStates : ghRegions).map(s => (
-                          <option key={s} value={s} className="bg-brand-black-2">{s}</option>
-                        ))}
-                      </select>
+                      {form.country === 'Nigeria' || form.country === 'Ghana' ? (
+                        <select value={form.state} onChange={e => update('state', e.target.value)}
+                          className={`w-full bg-brand-black-2 border ${errors.state ? 'border-red-500' : 'border-brand-gold/20'} text-brand-cream font-body text-sm px-4 py-3 focus:outline-none focus:border-brand-gold-2`}>
+                          <option value="" className="bg-brand-black-2">Select...</option>
+                          {(form.country === 'Nigeria' ? ngStates : ghRegions).map(s => (
+                            <option key={s} value={s} className="bg-brand-black-2">{s}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input value={form.state} onChange={e => update('state', e.target.value)}
+                          placeholder="State / Region / Province"
+                          className={`w-full bg-brand-black-2 border ${errors.state ? 'border-red-500' : 'border-brand-gold/20'} text-brand-cream font-body text-sm px-4 py-3 focus:outline-none focus:border-brand-gold-2`} />
+                      )}
                       {errors.state && <p className="text-red-400 text-xs mt-1">{errors.state}</p>}
                     </div>
                     <div>
@@ -432,7 +443,9 @@ export default function CheckoutPage() {
                     {cargoType === 'sensitive' ? '⚗️ Sensitive goods' : '📦 General cargo'}
                   </p>
                   <p className="font-body text-xs text-brand-cream/50">
-                    ${shippingCalc.usd.toFixed(2)} USD + ₦{shippingCalc.ngn.toLocaleString()} NGN
+                    {shippingCalc.legacyBlend
+                      ? `$${shippingCalc.usd.toFixed(2)} USD + ₦${shippingCalc.ngn.toLocaleString()} NGN`
+                      : `$${shippingCalc.usd.toFixed(2)} USD freight + $${shippingCalc.localUsd.toFixed(2)} local delivery`}
                   </p>
                   <div className="flex justify-between font-body text-sm pt-1 border-t border-brand-gold/10">
                     <span className="text-brand-cream/60">Shipping</span>

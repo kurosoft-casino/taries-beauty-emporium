@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Check, Sparkles, MessageCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { COUNTRY_SELECT_GROUPS } from '@/lib/africa'
 
 const textures   = ['Straight', 'Body Wave', 'Deep Wave', 'Kinky Curly', 'Loose Curl', 'Water Wave', 'Afro Kinky', 'Yaki Straight']
 const laceTypes  = ['HD Transparent Lace', 'Swiss Lace', 'Regular Lace']
@@ -138,18 +139,17 @@ export default function CustomWigsPage() {
             </div>
             <div>
               <label className="font-body text-xs tracking-widest text-brand-gold-2 uppercase block mb-2">WhatsApp Number *</label>
-              <input required value={form.phone} onChange={e => update('phone', e.target.value)} placeholder="+234 or +233..." className="w-full bg-brand-black border border-brand-gold/20 text-brand-cream font-body text-sm px-4 py-3 focus:outline-none focus:border-brand-gold-2" />
+              <input required value={form.phone} onChange={e => update('phone', e.target.value)} placeholder="Include country code (e.g. +234, +254)" className="w-full bg-brand-black border border-brand-gold/20 text-brand-cream font-body text-sm px-4 py-3 focus:outline-none focus:border-brand-gold-2" />
             </div>
             <div>
               <label className="font-body text-xs tracking-widest text-brand-gold-2 uppercase block mb-2">Country</label>
-              <div className="flex gap-3">
-                {['Nigeria', 'Ghana', 'Other'].map(c => (
-                  <button key={c} type="button" onClick={() => update('country', c)}
-                    className={`flex-1 py-3 font-body text-sm border transition-all ${form.country === c ? 'bg-gold-gradient text-brand-black border-transparent' : 'border-brand-gold/30 text-brand-cream/70 hover:border-brand-gold'}`}>
-                    {c}
-                  </button>
+              <select value={form.country} onChange={e => update('country', e.target.value)} className="w-full bg-brand-black border border-brand-gold/20 text-brand-cream font-body text-sm px-4 py-3 focus:outline-none focus:border-brand-gold-2">
+                {COUNTRY_SELECT_GROUPS.map(group => (
+                  <optgroup key={group.label} label={group.label} className="bg-brand-black-2">
+                    {group.options.map(c => <option key={c} value={c} className="bg-brand-black-2">{c}</option>)}
+                  </optgroup>
                 ))}
-              </div>
+              </select>
             </div>
           </Section>
 

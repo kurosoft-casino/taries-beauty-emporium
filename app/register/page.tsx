@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 import { registerUser, getCurrentUser } from '@/lib/auth'
 import { isValidEmail, normalizeEmail, sanitizeInlineText, sanitizePhone } from '@/lib/validation'
 import { getDialCode, getPhonePlaceholder, type SupportedCountry, withCountryDialCode } from '@/lib/phoneCountries'
+import { COUNTRY_SELECT_GROUPS } from '@/lib/africa'
 
 const AVATARS = ['👸🏽', '💄', '👠', '💅', '🌹', '✨', '👒', '💋', '🌸', '👑', '🎀', '💎']
 
@@ -210,9 +211,14 @@ export default function RegisterPage() {
                         className="w-full bg-brand-black-3 border border-brand-gold/20 rounded-lg px-3 py-2.5 font-body text-sm text-brand-cream focus:outline-none focus:border-brand-gold transition-colors"
                       >
                         <option value="Nigeria">Nigeria</option>
-                        <option value="Ghana">Ghana</option>
-                        <option value="China">China</option>
-                        <option value="Other">Other</option>
+                        {COUNTRY_SELECT_GROUPS.filter(group => group.label !== 'West Africa').map(group => (
+                          <optgroup key={group.label} label={group.label}>
+                            {group.options.map(c => <option key={c} value={c}>{c}</option>)}
+                          </optgroup>
+                        ))}
+                        <optgroup label="West Africa">
+                          {COUNTRY_SELECT_GROUPS.find(group => group.label === 'West Africa')?.options.filter(c => c !== 'Nigeria').map(c => <option key={c} value={c}>{c}</option>)}
+                        </optgroup>
                       </select>
                       {step1Errors.country && <p className="text-red-400 text-xs mt-1">{step1Errors.country}</p>}
                     </div>

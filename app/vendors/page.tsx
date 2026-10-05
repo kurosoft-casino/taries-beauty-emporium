@@ -10,7 +10,7 @@ const benefits = [
   {
     icon: Globe,
     title: 'Reach Thousands of Buyers',
-    desc: 'Sell to our growing audience of beauty & fashion shoppers across Nigeria and Ghana.',
+    desc: 'Sell to our growing audience of beauty & fashion shoppers across Africa.',
   },
   {
     icon: DollarSign,
@@ -91,7 +91,7 @@ export default function VendorsPage() {
             className="text-brand-cream/55 text-lg md:text-xl mb-10 max-w-2xl mx-auto leading-relaxed"
           >
             Grow your beauty &amp; fashion business by selling directly to thousands of passionate shoppers across{' '}
-            <span className="text-brand-gold">Nigeria</span> and <span className="text-brand-gold">Ghana</span>.
+            <span className="text-brand-gold">Africa</span>.
           </motion.p>
 
           <motion.div
@@ -116,7 +116,7 @@ export default function VendorsPage() {
             className="mt-16 grid grid-cols-3 gap-6 max-w-sm mx-auto"
           >
             {[
-              { value: '2+', label: 'Countries' },
+              { value: '50+', label: 'Countries' },
               { value: '24h', label: 'Review time' },
               { value: '100%', label: 'Control' },
             ].map(s => (

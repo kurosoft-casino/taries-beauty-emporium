@@ -21,7 +21,7 @@ export default function AboutPage() {
             The <span className="gold-text">Taries Beauty</span> Story
           </h1>
           <p className="font-body text-lg text-brand-cream/60 max-w-2xl mx-auto leading-relaxed">
-            Born from a passion for authentic beauty and a desire to bring world-class luxury hair directly to the queens of West Africa.
+            Born from a passion for authentic beauty and a desire to bring world-class luxury hair directly to the queens of Africa.
           </p>
         </div>
       </div>
@@ -35,7 +35,7 @@ export default function AboutPage() {
               Luxury Hair, <span className="gold-text">Direct to You</span>
             </h2>
             <div className="space-y-4 font-body text-sm text-brand-cream/60 leading-relaxed">
-              <p>Taries Beauty Emporium was founded with one powerful vision: to make world-class human hair accessible to every queen in Nigeria and Ghana — without the premium markup of local middlemen.</p>
+              <p>Taries Beauty Emporium was founded with one powerful vision: to make world-class human hair accessible to every queen across Africa — without the premium markup of local middlemen.</p>
               <p>We&apos;re based directly in Guangzhou, China, the global capital of the hair manufacturing industry. This means we work hand-in-hand with the factories that produce the hair everyone else resells — and we pass those savings directly to you.</p>
               <p>Every wig, every bundle, every custom piece goes through our rigorous quality control process before it ships. No synthetic fillers, no misleading descriptions, no compromises. Just 100% authentic human hair, curated with love.</p>
             </div>
@@ -84,6 +84,8 @@ export default function AboutPage() {
               { flag: '🇨🇳', location: 'Guangzhou, China', role: 'Manufacturing & QC Hub', sub: 'Where your luxury is born' },
               { flag: '🇳🇬', location: 'Nigeria',          role: 'Primary Market',         sub: 'Lagos, Abuja, PH & more' },
               { flag: '🇬🇭', location: 'Ghana',            role: 'Primary Market',         sub: 'Accra, Kumasi & beyond' },
+              { flag: '🇰🇪', location: 'Kenya',            role: 'Growth Market',          sub: 'Nairobi & beyond' },
+              { flag: '🇿🇦', location: 'South Africa',     role: 'Growth Market',          sub: 'Johannesburg & Cape Town' },
             ].map(loc => (
               <div key={loc.location} className="gold-border-rounded p-6 bg-brand-black-2 text-center">
                 <div className="text-4xl mb-3">{loc.flag}</div>

@@ -14,6 +14,7 @@ import {
   type PBRecord,
 } from './pocketbase'
 import { createPassword, verifyPassword } from './passwords'
+import { normalizeCountryName } from '../africa'
 
 /**
  * Taries Beauty API — full port of the former Cloudflare Worker
@@ -53,11 +54,7 @@ const nowIso = () => new Date().toISOString()
 
 const lower = (s: unknown) => (s || '').toString().trim().toLowerCase()
 const digitsOnly = (s: unknown) => (s || '').toString().replace(/\D/g, '')
-const normalizeCountry = (value: unknown) => {
-  const country = (value || '').toString().trim()
-  if (country === 'Nigeria' || country === 'Ghana' || country === 'China') return country
-  return 'Other'
-}
+const normalizeCountry = (value: unknown) => normalizeCountryName(value)
 const ADMIN_EMAILS = new Set(['tarimoboere18@gmail.com'])
 const isAdminEmail = (email: unknown) => ADMIN_EMAILS.has(lower(email))
 const getEffectiveRole = (email: unknown, role: unknown): string =>
@@ -710,6 +707,7 @@ route('POST', '/vendors/apply', async (req) => {
     business_name: body.businessName || '',
     display_name: body.displayName || '',
     bio: body.bio || '',
+    country: normalizeCountry(body.country),
     status: 'pending',
     created_at: now,
     updated_at: now,
@@ -737,6 +735,7 @@ route('PATCH', '/vendors/me', async (req) => {
     business_name: body.businessName ?? existing.business_name,
     display_name: body.displayName ?? existing.display_name,
     bio: body.bio ?? existing.bio,
+    country: body.country !== undefined ? normalizeCountry(body.country) : existing.country,
     updated_at: nowIso(),
   })
   return ok()

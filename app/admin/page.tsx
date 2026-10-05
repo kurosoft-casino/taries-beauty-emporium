@@ -21,6 +21,7 @@ import { getAdminLevel, getCurrentUser, isAdminUser, logoutUser, type AdminLevel
 import { logoSrc } from '@/lib/assets'
 import { normalizeProductImageSources } from '@/lib/mediaUpload'
 import { apiRequest } from '@/lib/remoteApi'
+import { COUNTRY_SELECT_GROUPS, normalizeCountryName } from '@/lib/africa'
 import { useLang } from '@/lib/lang'
 import { DEFAULT_STORE_SETTINGS, getMaintenanceMode, getStoreSettings, saveMaintenanceMode, saveStoreSettings } from '@/lib/storeSettings'
 import { appendAuditEvent, getAdminRoleLabel, readSupportThreads } from '@/lib/adminConsole'
@@ -226,7 +227,7 @@ function saveAdminUsers(users: AdminUser[]): void {
   try { localStorage.setItem('taries-users', JSON.stringify(users)) } catch { /* ignore */ }
 }
 function normalizeRemoteAdminUser(user: Partial<AdminUser> & { id: string; email: string }): AdminUser {
-  const country = user.country === 'Nigeria' || user.country === 'Ghana' || user.country === 'China' ? user.country : 'Other'
+  const country = normalizeCountryName(user.country)
   return {
     id: user.id,
     firstName: user.firstName ?? '',

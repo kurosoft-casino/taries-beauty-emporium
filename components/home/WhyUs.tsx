@@ -9,7 +9,7 @@ export default function WhyUs() {
     ? [
         { icon: Truck, title: '制造商直供', desc: '直接对接中国广州合作工厂，减少中间环节，让您用更合理的价格获得高品质商品。' },
         { icon: Shield, title: '100% 正品保证', desc: '每件商品都经过品质核验，无掺假、无劣质混料，真正的人发与高品质精选产品。' },
-        { icon: Globe, title: '配送至尼日利亚和加纳', desc: '稳定直达拉各斯、阿布贾、阿克拉、库马西及更多城市，通常 7–14 个工作日送达。' },
+        { icon: Globe, title: '配送至全非洲', desc: '直送拉各斯、阿布贾、阿克拉、内罗毕、约翰内斯堡等非洲各大城市，西非通常 7–14 个工作日，其他地区 10–18 个工作日送达。' },
         { icon: Headphones, title: 'WhatsApp 客服支持', desc: '通过 WhatsApp 获取产品建议、订单追踪、清关协助与售后支持。' },
         { icon: Award, title: '高端品质标准', desc: '每笔订单发货前都经过质量检查，只交付符合 Taries 标准的商品。' },
         { icon: RotateCcw, title: '轻松退货', desc: '若您不完全满意，可享受 14 天退货保障，我们对每件商品负责。' },
@@ -17,7 +17,7 @@ export default function WhyUs() {
     : [
         { icon: Truck, title: 'Direct from Manufacturers', desc: 'We source directly from our partner factories in Guangzhou, China — cutting out middlemen so you get luxury quality at fair prices.' },
         { icon: Shield, title: '100% Authenticity Guaranteed', desc: 'Every single product is certified authentic. No synthetic blends, no fillers — pure human hair, premium beauty, real luxury.' },
-        { icon: Globe, title: 'Ships to Nigeria & Ghana', desc: 'Fast, reliable delivery direct to your door in Lagos, Abuja, Accra, Kumasi and everywhere in between. 7–14 business days.' },
+        { icon: Globe, title: 'Ships Across Africa', desc: 'Fast, reliable delivery direct to your door — Lagos, Abuja, Accra, Kumasi, Nairobi, Johannesburg and beyond. 7–14 business days in West Africa, 10–18 across the rest of the continent.' },
         { icon: Headphones, title: 'WhatsApp Customer Support', desc: 'Our team is available via WhatsApp to answer every question — product advice, order tracking, customs support and more.' },
         { icon: Award, title: 'Premium Quality Standards', desc: 'Our quality control team inspects every order before it ships. We settle for nothing less than the standard we set for ourselves.' },
         { icon: RotateCcw, title: 'Hassle-Free Returns', desc: 'Not 100% happy? Our 14-day return policy has you covered. We believe in our products — and we stand behind them.' },

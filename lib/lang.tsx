@@ -24,10 +24,10 @@ export const translations = {
     // Header
     searchPlaceholder: 'Search wigs, bundles…',
     // Hero
-    heroTag: 'Luxury Hair & Beauty — Ships from China to Nigeria & Ghana',
+    heroTag: 'Luxury Hair & Beauty — Ships from China to Nigeria, Ghana & All of Africa',
     heroTitle1: 'Where Beauty',
     heroTitle2: 'Meets Royalty',
-    heroSubtitle: '100% authentic human hair wigs and bundles, custom-made with precision and shipped direct from our manufacturers in China to your door in Nigeria and Ghana.',
+    heroSubtitle: '100% authentic human hair wigs and bundles, custom-made with precision and shipped direct from our manufacturers in China to your door anywhere in Africa.',
     shopNow: 'Shop The Collection',
     customOrder: 'Order Custom Wig',
     // General
@@ -72,10 +72,10 @@ export const translations = {
     // Header
     searchPlaceholder: '搜索假发、发束…',
     // Hero
-    heroTag: '奢华美发与美妆 —— 从中国直送尼日利亚和加纳',
+    heroTag: '奢华美发与美妆 —— 从中国直送尼日利亚、加纳及全非洲',
     heroTitle1: '让美丽',
     heroTitle2: '尽显尊贵',
-    heroSubtitle: '100% 真人发假发与发束，精致定制，直接从中国制造商发货，送达尼日利亚和加纳的您手中。',
+    heroSubtitle: '100% 真人发假发与发束，精致定制，直接从中国制造商发货，送达非洲各地的您手中。',
     shopNow: '立即选购',
     customOrder: '定制专属假发',
     // General

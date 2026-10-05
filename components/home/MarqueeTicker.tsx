@@ -16,7 +16,7 @@ export default function MarqueeTicker() {
         '🧼 清洁用品',
         '🛏️ 床上用品',
         '🔌 电子产品',
-        '✈️ 发往尼日利亚和加纳',
+        '✈️ 发往全非洲',
         '🔒 正品保证',
       ]
     : [
@@ -31,7 +31,7 @@ export default function MarqueeTicker() {
         '🧼 Cleaning Products',
         '🛏️ Bedding',
         '🔌 Electronics',
-        '✈️ Ships to Nigeria & Ghana',
+        '✈️ Ships Across Africa',
         '🔒 Authentic & Guaranteed',
         '⭐ 4.9/5 Rated',
       ]

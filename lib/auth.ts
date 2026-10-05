@@ -2,6 +2,7 @@ import { hashSecret, randomSalt } from './security'
 import { readJSON, removeKey, writeJSON } from './storage'
 import { isValidEmail, normalizeEmail, sanitizeDigits, sanitizeInlineText, sanitizePhone } from './validation'
 import type { SupportedCountry } from './phoneCountries'
+import { isSupportedCountry } from './africa'
 import { withApiBase } from './site'
 
 export type AdminLevel = 'super-admin' | 'staff-admin' | 'support-admin' | 'finance-admin'
@@ -181,7 +182,7 @@ interface RemoteAuthPayload {
 }
 
 function asSupportedCountry(value: string | undefined): SupportedCountry {
-  if (value === 'Nigeria' || value === 'Ghana' || value === 'China') return value
+  if (isSupportedCountry(value)) return value as SupportedCountry
   return 'Other'
 }
 

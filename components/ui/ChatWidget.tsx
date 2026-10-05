@@ -32,14 +32,14 @@ const GREETING: ChatMessage = {
 const QUICK_REPLIES = [
   'Track my order',
   'Custom wig enquiry',
-  'Shipping to Nigeria',
+  'Shipping & delivery',
   'Product question',
 ]
 
 const AUTO_RESPONSES: Record<string, string> = {
   'Track my order': "Please visit our Track Order page or share your Order ID and we'll look it up for you right away!",
   'Custom wig enquiry': "We'd love to create your perfect wig! 💄 Visit our Custom Wigs page or WhatsApp us at +234 903 541 2919 with your requirements.",
-  'Shipping to Nigeria': "We ship via air freight from Guangzhou, China. Delivery to Nigeria takes 7–14 business days. Tracking is provided within 48 hours of dispatch.",
+  'Shipping & delivery': "We ship via air freight from Guangzhou, China. Delivery takes 7–14 business days to Nigeria & Ghana, and 10–18 business days across the rest of Africa. Tracking is provided within 48 hours of dispatch.",
   'Product question': "Ask away! Or browse our full catalogue in the Shop. Our team is also available on WhatsApp at +234 903 541 2919.",
 }
 

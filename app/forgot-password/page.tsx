@@ -7,6 +7,7 @@ import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { getCurrentUser, resetPasswordWithEmail } from '@/lib/auth'
 import { getDialCode, getPhonePlaceholder, type SupportedCountry, withCountryDialCode } from '@/lib/phoneCountries'
+import { COUNTRY_SELECT_GROUPS } from '@/lib/africa'
 import { normalizeEmail } from '@/lib/validation'
 
 export default function ForgotPasswordPage() {
@@ -90,9 +91,14 @@ export default function ForgotPasswordPage() {
                   className="w-full bg-brand-black-3 border border-brand-gold/20 rounded-lg px-3 py-2.5 font-body text-sm text-brand-cream focus:outline-none focus:border-brand-gold transition-colors"
                 >
                   <option value="Nigeria">Nigeria</option>
-                  <option value="Ghana">Ghana</option>
-                  <option value="China">China</option>
-                  <option value="Other">Other</option>
+                  {COUNTRY_SELECT_GROUPS.filter(group => group.label !== 'West Africa').map(group => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.options.map(c => <option key={c} value={c}>{c}</option>)}
+                    </optgroup>
+                  ))}
+                  <optgroup label="West Africa">
+                    {COUNTRY_SELECT_GROUPS.find(group => group.label === 'West Africa')?.options.filter(c => c !== 'Nigeria').map(c => <option key={c} value={c}>{c}</option>)}
+                  </optgroup>
                 </select>
               </div>
 
