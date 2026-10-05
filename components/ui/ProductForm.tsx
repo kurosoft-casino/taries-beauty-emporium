@@ -1,8 +1,10 @@
 'use client'
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, X, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, X, ChevronDown, ChevronUp, Sparkles, Loader2 } from 'lucide-react'
+import toast from 'react-hot-toast'
 import ImageUploader from '@/components/ui/ImageUploader'
+import { apiJson } from '@/lib/remoteApi'
 
 export interface ProductFormData {
   name: string
@@ -108,10 +110,42 @@ export default function ProductForm({
   const [featureInput, setFeatureInput] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [imagesUploading, setImagesUploading] = useState(false)
+  const [aiLoading, setAiLoading] = useState(false)
 
   function set<K extends keyof ProductFormData>(key: K, value: ProductFormData[K]) {
     setForm(f => ({ ...f, [key]: value }))
     if (errors[key]) setErrors(e => { const n = { ...e }; delete n[key]; return n })
+  }
+
+  async function generateDescription() {
+    if (!form.name.trim()) {
+      setErrors(e => ({ ...e, name: 'Add a product name first' }))
+      toast.error('Add a product name first — the AI writer uses it as the subject.')
+      return
+    }
+    if (aiLoading) return
+    setAiLoading(true)
+    try {
+      const res = await apiJson<{ description?: string }>('/ai/product-description', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          category: form.category,
+          shortDesc: form.shortDesc,
+          features: form.features,
+          variants: form.variants,
+        }),
+      })
+      const description = (res.description ?? '').trim()
+      if (!description) throw new Error('The AI writer returned an empty description. Please try again.')
+      set('description', description)
+      toast.success('Draft generated — review and edit before publishing.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not generate a description right now.')
+    } finally {
+      setAiLoading(false)
+    }
   }
 
   function validate(): boolean {
@@ -352,7 +386,18 @@ export default function ProductForm({
 
       {/* ── Section 4: Description ── */}
       <div>
-        <SectionTitle>Description</SectionTitle>
+        <div className="flex items-center justify-between">
+          <SectionTitle>Description</SectionTitle>
+          <button
+            type="button"
+            onClick={() => void generateDescription()}
+            disabled={aiLoading}
+            className="mb-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-brand-gold/30 text-brand-gold-2 text-xs font-semibold hover:bg-brand-gold/10 transition-all disabled:opacity-50"
+          >
+            {aiLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            {aiLoading ? 'Generating…' : 'Generate with AI'}
+          </button>
+        </div>
         <textarea
           value={form.description}
           onChange={e => set('description', e.target.value)}

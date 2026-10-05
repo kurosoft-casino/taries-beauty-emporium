@@ -468,6 +468,75 @@ function route(method: string, pattern: string, handler: RouteHandler) {
 // ----- health -----
 route('GET', '/health', async () => ok({ service: 'taries-beauty-api', time: nowIso() }))
 
+// ----- ai -----
+route('POST', '/ai/product-description', async (req) => {
+  const a = await requireAuth(req)
+  if (a.error) return a.error
+  const body = await req.json().catch(() => ({} as Record<string, unknown>))
+  const name = String(body.name ?? '').trim().slice(0, 120)
+  if (!name) return err(400, 'Product name is required to generate a description.')
+  const category = String(body.category ?? '').trim().slice(0, 60)
+  const shortDesc = String(body.shortDesc ?? '').trim().slice(0, 200)
+  const features = (Array.isArray(body.features) ? body.features : [])
+    .map((f: unknown) => String(f ?? '').trim())
+    .filter(Boolean)
+    .slice(0, 10)
+    .map((f: string) => f.slice(0, 90))
+  const variants = (Array.isArray(body.variants) ? body.variants : [])
+    .map((v: unknown) => {
+      const row = (v ?? {}) as Record<string, unknown>
+      const label = String(row.label ?? '').trim().slice(0, 40)
+      const options = String(row.options ?? '').trim().slice(0, 120)
+      return label && options ? `${label}: ${options}` : ''
+    })
+    .filter(Boolean)
+    .slice(0, 6)
+
+  const apiKey = (process.env.DEEPSEEK_API_KEY ?? '').trim()
+  if (!apiKey) return err(503, 'AI description is not configured on this server.')
+  const baseUrl = (process.env.DEEPSEEK_BASE_URL ?? 'https://api.deepseek.com').trim().replace(/\/+$/, '')
+  const model = (process.env.DEEPSEEK_MODEL ?? 'deepseek-chat').trim()
+
+  const details = [
+    category ? `Category: ${category}` : '',
+    shortDesc ? `Short summary: ${shortDesc}` : '',
+    features.length ? `Key features: ${features.join('; ')}` : '',
+    variants.length ? `Variants: ${variants.join('; ')}` : '',
+  ].filter(Boolean).join('\n')
+
+  try {
+    const res = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        temperature: 0.8,
+        max_tokens: 2000,
+        thinking: { type: 'disabled' },
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are the lead copywriter for Taries Beauty Emporium, a luxury human-hair and beauty store in Guangzhou, China that ships directly to Nigeria, Ghana and across Africa. Write elegant, sales-focused, honest product descriptions. Never invent prices, shipping times, certifications or claims not provided. Plain text only — no markdown, no headings, no emojis, no bullet symbols.',
+          },
+          {
+            role: 'user',
+            content: `Write a product description of 90-140 words for this product.\nProduct name: ${name}\n${details}`,
+          },
+        ],
+      }),
+      signal: AbortSignal.timeout(45000),
+    })
+    if (!res.ok) return err(502, 'The AI writer is unavailable right now. Please try again.')
+    const payload = await res.json().catch(() => null) as { choices?: { message?: { content?: string } }[] } | null
+    const description = (payload?.choices?.[0]?.message?.content ?? '').trim()
+    if (!description) return err(502, 'The AI writer returned an empty description. Please try again.')
+    return ok({ description })
+  } catch {
+    return err(502, 'The AI writer is unavailable right now. Please try again.')
+  }
+})
+
 // ----- auth -----
 route('POST', '/auth/register', async (req) => {
   const body = await req.json().catch(() => ({} as Record<string, unknown>))
