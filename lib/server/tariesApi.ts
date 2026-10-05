@@ -1181,6 +1181,9 @@ route('POST', '/orders', async (req) => {
   const grandTotalUsd = Number(b.grandTotalUsd ?? b.grandTotalUSD ?? 0)
   const discountUsd = Number(b.discountUsd ?? b.discountUSD ?? 0)
   const orderId = String(b.orderId)
+  if (!Number.isFinite(grandTotalUsd) || grandTotalUsd <= 0) {
+    return err(400, 'Order total must be greater than zero. Please add items to your bag first.')
+  }
 
   const existing = await pbFirst<PBRecord>(PB_COLLECTIONS.orders, `order_id = ${pbQuote(orderId)}`)
   const payload = {

@@ -171,7 +171,20 @@ export default function CheckoutPage() {
   }
 
   if (ordered) {
+  if (items.length === 0) {
     return (
+      <div className="min-h-screen bg-brand-black pt-32 pb-20 flex items-center justify-center px-4">
+        <div className="text-center max-w-lg">
+          <ShoppingBag size={40} className="text-brand-gold/40 mx-auto mb-4" />
+          <h1 className="font-display text-3xl gold-text mb-3">Your bag is empty</h1>
+          <p className="font-body text-sm text-brand-cream/55 mb-6">Add a few pieces to your bag before checking out.</p>
+          <Link href="/shop" className="btn-gold">Start Shopping</Link>
+        </div>
+      </div>
+    )
+  }
+
+  return (
       <div className="min-h-screen bg-brand-black pt-32 pb-20 flex items-center justify-center px-4">
         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center max-w-lg">
           <motion.div
